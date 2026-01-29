@@ -128,6 +128,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志
+### 2026_01_29_1730
+- **后端**: 优化端口管理, 启动时自动检测并释放占用端口 (支持 Windows/Linux/MacOS).
+- **后端**: 完善网络工具类 `NetUtils`, 统一中文注释与跨平台支持.
+- **后端**: 规范化 git 配置, 移除 `.env` 版本控制.
+
 ### 2026_01_29_1636
 - **后端**: 规范化环境配置加载逻辑 (`.env.example`), 明确 `PORT` 和 `ENV` 的配置方式.
 - **后端**: 重启服务并验证生产环境配置 (Port: 5789).
