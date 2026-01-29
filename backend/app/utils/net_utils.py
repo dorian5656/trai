@@ -53,7 +53,7 @@ class NetUtils:
         # 2. 根据平台处理
         if "windows" in system_platform:
             return NetUtils._release_port_windows(port)
-        elif "linux" in system_platform or "darwin" in system_platform: # Darwin is macOS
+        elif "linux" in system_platform or "darwin" in system_platform: # Darwin 即 macOS
             return NetUtils._release_port_unix(port)
         else:
             logger.warning(f"当前平台 ({system_platform}) 不支持自动释放端口，请手动处理")
