@@ -36,16 +36,54 @@ else:
     logger.warning(f"未找到环境变量文件: .env 或 .env.dev")
 
 import asyncio
+import argparse
 from backend.app.utils.net_utils import NetUtils
 from backend.app.utils.db_init import DBInitializer
 from backend.app.utils.wecom_utils import wecom_bot
 from backend.app.utils.feishu_utils import feishu_bot
 
 def main():
-    port = int(os.getenv("PORT", 5689))
-    host = os.getenv("HOST", "0.0.0.0")
-    env = os.getenv("ENV", "dev")
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="TRAI Backend Service")
+    parser.add_argument("--host", type=str, help="Bind host")
+    parser.add_argument("--port", type=int, help="Bind port")
+    parser.add_argument("--env", type=str, help="Environment (dev/prod)")
+    args, _ = parser.parse_known_args()
+
+    # 确定环境 (命令行 > 环境变量 > 默认值)
+    env = args.env or os.getenv("ENV", "dev")
     
+    # 确定 Host
+    host = args.host or os.getenv("HOST", "0.0.0.0")
+
+    # 确定 Port
+    # 优先级: 命令行 > ENV_DEV_PORT > ENV_PORT > PORT > 默认值
+    port = args.port
+    if not port:
+        # 依次尝试读取环境变量
+        port_str = os.getenv("ENV_DEV_PORT")
+        if not port_str:
+            port_str = os.getenv("ENV_PORT")
+        if not port_str:
+            port_str = os.getenv("PORT")
+            
+        logger.info(f"Port resolution: ENV_DEV_PORT={os.getenv('ENV_DEV_PORT')}, ENV_PORT={os.getenv('ENV_PORT')}, PORT={os.getenv('PORT')}, Selected={port_str}")
+
+        # 如果找到了配置，转换为整数
+        if port_str:
+            port = int(port_str)
+        else:
+            port = 5689 # 默认值
+
+    # 将解析后的端口写入环境变量，确保 Settings 能读取到一致的端口
+    os.environ["PORT"] = str(port)
+
+    # 4. 自动检查并清理端口 (支持 Windows/Linux/MacOS)
+    # 必须在启动任何服务前执行，确保端口可用
+    if not NetUtils.check_and_release_port(port):
+        logger.error(f"端口 {port} 占用且无法自动清理，服务启动终止")
+        sys.exit(1)
+
     logger.info(f"正在启动服务 - 环境: {env}")
     
     # 检查 Dify 配置

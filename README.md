@@ -17,7 +17,7 @@ conda activate trai_31014_whf
 python backend/run.py
 ```
 
-> **注意**: 启动前请确保 5689 端口未被占用。
+> **注意**: 启动脚本会自动检查端口占用情况 (读取 .env 配置)。若端口被占用，脚本会自动尝试结束占用进程 (支持 Windows/Linux/MacOS)。
 
 ### 前端 (Frontend)
 
@@ -77,7 +77,7 @@ python backend/client_app/build.py
 - **GPU**: NVIDIA GeForce RTX 3060 (12GB)
 - **Driver**: 591.74
 - **CUDA Toolkit**: 11.8 ~ 12.1 Compatible
-- **Python**: 3.10+
+- **Python**: 3.10.14
 
 #### 安装步骤
 0. conda create -n trai_31014_whf python=3.10.14
