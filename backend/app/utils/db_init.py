@@ -1,0 +1,654 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# 文件名：backend/app/utils/db_init.py
+# 作者：whf
+# 日期：2026-01-26
+# 描述：数据库初始化脚本，用于自动创建数据库和日志表
+
+import asyncpg
+import asyncio
+from backend.app.utils.logger import logger
+from backend.app.config import settings
+from backend.app.utils.security import get_password_hash
+
+class DBInitializer:
+    """
+    数据库初始化器
+    
+    职责:
+    1. 检查并创建业务数据库 (itzx)
+    2. 初始化核心表结构 (如 request_logs)
+    """
+    
+    def __init__(self):
+        self.sys_db = 'postgres'  # 系统管理库
+        self.target_db = settings.POSTGRES_DB
+        self.user = settings.POSTGRES_USER
+        self.password = settings.POSTGRES_PASSWORD
+        self.host = settings.POSTGRES_SERVER
+        self.port = settings.POSTGRES_PORT
+
+    async def check_and_create_db(self):
+        """
+        连接默认 postgres 库，检查目标数据库是否存在，不存在则创建。
+        """
+        logger.info(f"⏳ [DB: {self.target_db}] 开始数据库存在性检查...")
+        try:
+            # 连接到默认 postgres 数据库进行管理操作
+            sys_conn = await asyncpg.connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                database=self.sys_db
+            )
+            
+            # 检查目标数据库是否存在
+            exists = await sys_conn.fetchval(
+                "SELECT 1 FROM pg_database WHERE datname = $1",
+                self.target_db
+            )
+            
+            if not exists:
+                logger.info(f"🆕 数据库 '{self.target_db}' 不存在，正在创建...")
+                # create database 不能在事务块中运行
+                await sys_conn.execute(f'CREATE DATABASE "{self.target_db}"')
+                logger.success(f"✅ 数据库 '{self.target_db}' 创建成功")
+            else:
+                logger.success(f"✅ 数据库 '{self.target_db}' 已存在，跳过创建")
+                
+            await sys_conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 检查/创建数据库失败: {e}")
+            if "does not exist" in str(e) or "Connection refused" in str(e):
+                 logger.critical("无法连接到数据库服务器，请确保 PostgreSQL 已启动且配置正确。")
+            return False
+
+    async def _update_table_registry(self, conn, table_name, description):
+        """
+        更新 table_registry 总表信息
+        """
+        try:
+            # 确保 table_registry 表存在
+            create_registry_sql = """
+            CREATE TABLE IF NOT EXISTS table_registry (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                table_name VARCHAR(100) NOT NULL UNIQUE,
+                description TEXT,
+                created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+            );
+            COMMENT ON TABLE table_registry IS '数据库表注册中心，记录所有业务表信息';
+            COMMENT ON COLUMN table_registry.id IS '主键ID';
+            COMMENT ON COLUMN table_registry.table_name IS '表名';
+            COMMENT ON COLUMN table_registry.description IS '表描述';
+            COMMENT ON COLUMN table_registry.created_at IS '创建时间 (北京时间)';
+            COMMENT ON COLUMN table_registry.updated_at IS '更新时间 (北京时间)';
+            """
+            await conn.execute(create_registry_sql)
+            
+            # 尝试修复旧表结构 (如果已存在 TIMESTAMPTZ)
+            try:
+                await conn.execute("ALTER TABLE table_registry ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE table_registry ALTER COLUMN updated_at TYPE TIMESTAMP(0) USING updated_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE table_registry ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                await conn.execute("ALTER TABLE table_registry ALTER COLUMN updated_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+            except Exception as ex:
+                pass # 忽略错误，假设可能是新表
+
+            # 插入或更新表信息
+            upsert_sql = """
+            INSERT INTO table_registry (table_name, description, updated_at)
+            VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Shanghai'))
+            ON CONFLICT (table_name) 
+            DO UPDATE SET 
+                description = EXCLUDED.description,
+                updated_at = (NOW() AT TIME ZONE 'Asia/Shanghai');
+            """
+            await conn.execute(upsert_sql, table_name, description)
+            logger.info(f"📝 [Registry] 已更新表 '{table_name}' 的元数据信息")
+            
+        except Exception as e:
+            logger.error(f"❌ 更新表注册信息失败: {e}")
+
+    async def init_ai_model_registry(self, conn):
+        """
+        初始化 AI 模型注册表 (ai_model_registry)
+        """
+        table_name = "ai_model_registry"
+        
+        # 1. 建表语句
+        ddl = """
+        CREATE TABLE IF NOT EXISTS ai_model_registry (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(100) NOT NULL,
+            filename VARCHAR(255) NOT NULL UNIQUE,
+            type VARCHAR(50) NOT NULL,
+            version VARCHAR(50),
+            description TEXT,
+            is_enabled BOOLEAN DEFAULT TRUE,
+            use_gpu BOOLEAN DEFAULT TRUE,
+            gpu_id INT DEFAULT 0,
+            status VARCHAR(50) DEFAULT 'pending',
+            error_msg TEXT,
+            usage_scenario TEXT,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        
+        COMMENT ON TABLE ai_model_registry IS 'AI模型注册表，管理所有模型文件的状态与配置';
+        COMMENT ON COLUMN ai_model_registry.id IS '主键ID';
+        COMMENT ON COLUMN ai_model_registry.name IS '模型名称 (如 heart_like)';
+        COMMENT ON COLUMN ai_model_registry.filename IS '模型文件名 (如 heart_like.pt)';
+        COMMENT ON COLUMN ai_model_registry.type IS '模型类型 (yolo, ocr, llm)';
+        COMMENT ON COLUMN ai_model_registry.version IS '模型版本号';
+        COMMENT ON COLUMN ai_model_registry.description IS '模型描述';
+        COMMENT ON COLUMN ai_model_registry.is_enabled IS '是否启用';
+        COMMENT ON COLUMN ai_model_registry.use_gpu IS '是否使用GPU';
+        COMMENT ON COLUMN ai_model_registry.gpu_id IS '指定GPU ID';
+        COMMENT ON COLUMN ai_model_registry.status IS '状态 (pending, loaded, error, disabled)';
+        COMMENT ON COLUMN ai_model_registry.error_msg IS '错误信息 (如有)';
+        COMMENT ON COLUMN ai_model_registry.usage_scenario IS '使用场景描述';
+        COMMENT ON COLUMN ai_model_registry.created_at IS '创建时间 (北京时间)';
+        COMMENT ON COLUMN ai_model_registry.updated_at IS '更新时间 (北京时间)';
+        """
+        
+        try:
+            # 执行建表
+            await conn.execute(ddl)
+            
+            # 尝试修复旧表结构
+            try:
+                await conn.execute("ALTER TABLE ai_model_registry ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE ai_model_registry ALTER COLUMN updated_at TYPE TIMESTAMP(0) USING updated_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE ai_model_registry ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                await conn.execute("ALTER TABLE ai_model_registry ALTER COLUMN updated_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+            except:
+                pass
+
+            logger.success(f"表 {table_name} 初始化成功")
+            
+            # 注册到 table_registry
+            await self._update_table_registry(conn, table_name, "AI模型注册表，管理所有模型文件的状态与配置")
+            logger.success(f"📝 [Registry] 已更新表 '{table_name}' 的元数据信息")
+            
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
+    async def init_user_images_table(self, conn):
+        """
+        初始化用户图片表 (user_images)
+        """
+        table_name = "user_images"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS user_images (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            s3_key VARCHAR(500) NOT NULL,
+            url TEXT NOT NULL,
+            size BIGINT,
+            mime_type VARCHAR(100),
+            module VARCHAR(50) DEFAULT 'common',
+            is_deleted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE user_images IS '用户上传图片记录表';
+        COMMENT ON COLUMN user_images.id IS '主键ID';
+        COMMENT ON COLUMN user_images.user_id IS '用户ID (关联 sys_users.username)';
+        COMMENT ON COLUMN user_images.filename IS '原始文件名';
+        COMMENT ON COLUMN user_images.s3_key IS 'S3对象键 (用于删除)';
+        COMMENT ON COLUMN user_images.url IS '访问URL';
+        COMMENT ON COLUMN user_images.size IS '文件大小(字节)';
+        COMMENT ON COLUMN user_images.mime_type IS '文件类型';
+        COMMENT ON COLUMN user_images.module IS '所属模块';
+        COMMENT ON COLUMN user_images.is_deleted IS '是否已删除';
+        COMMENT ON COLUMN user_images.created_at IS '创建时间';
+        COMMENT ON COLUMN user_images.updated_at IS '更新时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_images_user_id ON user_images(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_images_created_at ON user_images(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "用户上传图片记录表，关联用户与S3存储")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
+    async def init_rbac_tables(self, conn):
+        """
+        初始化 RBAC 相关表结构 (用户/角色/权限/部门)
+        """
+        tables = [
+            # 1. 部门表 (sys_departments)
+            {
+                "name": "sys_departments",
+                "desc": "部门表，对应企业微信架构",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_departments (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(100) NOT NULL,
+                    parent_id UUID REFERENCES sys_departments(id) ON DELETE SET NULL,
+                    leader VARCHAR(100),
+                    wecom_id VARCHAR(50), -- 企业微信部门ID
+                    order_num INT DEFAULT 0,
+                    status INT DEFAULT 1, -- 1:启用, 0:停用
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                );
+                COMMENT ON TABLE sys_departments IS '系统部门表';
+                COMMENT ON COLUMN sys_departments.id IS '部门ID';
+                COMMENT ON COLUMN sys_departments.name IS '部门名称';
+                COMMENT ON COLUMN sys_departments.parent_id IS '父部门ID';
+                COMMENT ON COLUMN sys_departments.leader IS '负责人';
+                COMMENT ON COLUMN sys_departments.wecom_id IS '企业微信部门ID';
+                COMMENT ON COLUMN sys_departments.order_num IS '显示排序';
+                COMMENT ON COLUMN sys_departments.status IS '部门状态 (1:启用, 0:停用)';
+                COMMENT ON COLUMN sys_departments.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_departments.updated_at IS '更新时间';
+                """
+            },
+            # 2. 用户表 (sys_users)
+            {
+                "name": "sys_users",
+                "desc": "系统用户表",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_users (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    username VARCHAR(50) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    full_name VARCHAR(50),
+                    email VARCHAR(100),
+                    phone VARCHAR(20),
+                    department_id UUID REFERENCES sys_departments(id) ON DELETE SET NULL,
+                    wecom_userid VARCHAR(100), -- 企业微信UserID
+                    avatar TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    is_superuser BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                );
+                COMMENT ON TABLE sys_users IS '系统用户表';
+                COMMENT ON COLUMN sys_users.id IS '用户ID';
+                COMMENT ON COLUMN sys_users.username IS '用户名 (登录账号)';
+                COMMENT ON COLUMN sys_users.password_hash IS '密码哈希值';
+                COMMENT ON COLUMN sys_users.full_name IS '真实姓名';
+                COMMENT ON COLUMN sys_users.email IS '电子邮箱';
+                COMMENT ON COLUMN sys_users.phone IS '手机号码';
+                COMMENT ON COLUMN sys_users.department_id IS '所属部门ID';
+                COMMENT ON COLUMN sys_users.wecom_userid IS '企业微信UserID';
+                COMMENT ON COLUMN sys_users.avatar IS '头像URL';
+                COMMENT ON COLUMN sys_users.is_active IS '是否激活 (True:激活, False:禁用)';
+                COMMENT ON COLUMN sys_users.is_superuser IS '是否超级管理员';
+                COMMENT ON COLUMN sys_users.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_users.updated_at IS '更新时间';
+                """
+            },
+            # 3. 角色表 (sys_roles)
+            {
+                "name": "sys_roles",
+                "desc": "系统角色表",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_roles (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(50) NOT NULL UNIQUE,
+                    code VARCHAR(50) NOT NULL UNIQUE,
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                );
+                COMMENT ON TABLE sys_roles IS '系统角色表';
+                COMMENT ON COLUMN sys_roles.id IS '角色ID';
+                COMMENT ON COLUMN sys_roles.name IS '角色名称 (如: 管理员)';
+                COMMENT ON COLUMN sys_roles.code IS '角色编码 (如: admin)';
+                COMMENT ON COLUMN sys_roles.description IS '角色描述';
+                COMMENT ON COLUMN sys_roles.is_active IS '是否启用';
+                COMMENT ON COLUMN sys_roles.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_roles.updated_at IS '更新时间';
+                """
+            },
+            # 4. 权限表 (sys_permissions)
+            {
+                "name": "sys_permissions",
+                "desc": "系统权限表",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_permissions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(50) NOT NULL,
+                    code VARCHAR(100) NOT NULL UNIQUE, -- 权限标识 (user:create)
+                    type VARCHAR(20) NOT NULL, -- menu, button, api
+                    parent_id UUID REFERENCES sys_permissions(id) ON DELETE SET NULL,
+                    path VARCHAR(200), -- 路由路径或API路径
+                    method VARCHAR(10), -- GET, POST (仅API类型有效)
+                    icon VARCHAR(50),
+                    order_num INT DEFAULT 0,
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                );
+                COMMENT ON TABLE sys_permissions IS '系统权限表';
+                COMMENT ON COLUMN sys_permissions.id IS '权限ID';
+                COMMENT ON COLUMN sys_permissions.name IS '权限名称';
+                COMMENT ON COLUMN sys_permissions.code IS '权限标识 (如 user:add)';
+                COMMENT ON COLUMN sys_permissions.type IS '类型 (menu:菜单, button:按钮, api:接口)';
+                COMMENT ON COLUMN sys_permissions.parent_id IS '父级权限ID';
+                COMMENT ON COLUMN sys_permissions.path IS '路由路径或API地址';
+                COMMENT ON COLUMN sys_permissions.method IS 'HTTP方法 (仅API类型)';
+                COMMENT ON COLUMN sys_permissions.icon IS '菜单图标';
+                COMMENT ON COLUMN sys_permissions.order_num IS '显示排序';
+                COMMENT ON COLUMN sys_permissions.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_permissions.updated_at IS '更新时间';
+                """
+            },
+            # 5. 用户-角色关联表 (sys_user_roles)
+            {
+                "name": "sys_user_roles",
+                "desc": "用户角色关联表",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_user_roles (
+                    user_id UUID REFERENCES sys_users(id) ON DELETE CASCADE,
+                    role_id UUID REFERENCES sys_roles(id) ON DELETE CASCADE,
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    PRIMARY KEY (user_id, role_id)
+                );
+                COMMENT ON TABLE sys_user_roles IS '用户角色关联表';
+                COMMENT ON COLUMN sys_user_roles.user_id IS '用户ID';
+                COMMENT ON COLUMN sys_user_roles.role_id IS '角色ID';
+                COMMENT ON COLUMN sys_user_roles.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_user_roles.updated_at IS '更新时间';
+                """
+            },
+            # 6. 角色-权限关联表 (sys_role_permissions)
+            {
+                "name": "sys_role_permissions",
+                "desc": "角色权限关联表",
+                "ddl": """
+                CREATE TABLE IF NOT EXISTS sys_role_permissions (
+                    role_id UUID REFERENCES sys_roles(id) ON DELETE CASCADE,
+                    permission_id UUID REFERENCES sys_permissions(id) ON DELETE CASCADE,
+                    created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                    PRIMARY KEY (role_id, permission_id)
+                );
+                COMMENT ON TABLE sys_role_permissions IS '角色权限关联表';
+                COMMENT ON COLUMN sys_role_permissions.role_id IS '角色ID';
+                COMMENT ON COLUMN sys_role_permissions.permission_id IS '权限ID';
+                COMMENT ON COLUMN sys_role_permissions.created_at IS '创建时间';
+                COMMENT ON COLUMN sys_role_permissions.updated_at IS '更新时间';
+                """
+            }
+        ]
+
+        try:
+            for table in tables:
+                await conn.execute(table["ddl"])
+                
+                # 尝试修复旧表时间字段及添加新字段 (针对已存在的表)
+                if "sys_" in table["name"]:
+                    # 1. 确保时间字段存在
+                    try:
+                         await conn.execute(f"ALTER TABLE {table['name']} ADD COLUMN IF NOT EXISTS created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                         await conn.execute(f"ALTER TABLE {table['name']} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                    except Exception as e:
+                         logger.warning(f"表 {table['name']} 添加时间字段失败: {e}")
+
+                    # 2. 修复时间字段类型
+                    try:
+                        await conn.execute(f"ALTER TABLE {table['name']} ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0)")
+                        await conn.execute(f"ALTER TABLE {table['name']} ALTER COLUMN updated_at TYPE TIMESTAMP(0) USING updated_at::TIMESTAMP(0)")
+                        await conn.execute(f"ALTER TABLE {table['name']} ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                        await conn.execute(f"ALTER TABLE {table['name']} ALTER COLUMN updated_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                    except Exception as e:
+                        # 如果是字段不存在，尝试强制添加
+                        if "does not exist" in str(e):
+                            logger.warning(f"表 {table['name']} 修复时间字段失败(字段不存在)，尝试强制添加")
+                            try:
+                                await conn.execute(f"ALTER TABLE {table['name']} ADD COLUMN IF NOT EXISTS created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                                await conn.execute(f"ALTER TABLE {table['name']} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                                logger.success(f"表 {table['name']} 强制添加时间字段成功")
+                            except Exception as e2:
+                                logger.error(f"表 {table['name']} 强制添加字段失败: {e2}")
+                        else:
+                            logger.warning(f"表 {table['name']} 修复时间字段失败: {e}")
+                        
+                    # 3. 自动迁移: sys_users 添加 source 字段
+                    if table["name"] == "sys_users":
+                        try:
+                            await conn.execute("ALTER TABLE sys_users ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'local'")
+                            await conn.execute("COMMENT ON COLUMN sys_users.source IS '用户来源 (local:本地注册, wecom:企业微信, feishu:飞书)'")
+                        except Exception as e:
+                            logger.warning(f"表 sys_users 添加 source 字段失败: {e}")
+                
+                logger.success(f"表 {table['name']} 初始化成功")
+                await self._update_table_registry(conn, table["name"], table["desc"])
+        except Exception as e:
+            logger.error(f"初始化 RBAC 表失败: {e}")
+            raise e
+
+    async def init_env_log_table(self, conn):
+        """
+        初始化环境配置日志表 (sys_env_logs)
+        """
+        table_name = "sys_env_logs"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS sys_env_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            env_hash VARCHAR(64) NOT NULL,
+            env_content TEXT,
+            machine_info VARCHAR(255),
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE sys_env_logs IS '系统环境配置日志表，用于备份 .env 历史';
+        COMMENT ON COLUMN sys_env_logs.id IS '主键ID';
+        COMMENT ON COLUMN sys_env_logs.env_hash IS '环境配置哈希值 (MD5)';
+        COMMENT ON COLUMN sys_env_logs.env_content IS '环境配置内容';
+        COMMENT ON COLUMN sys_env_logs.machine_info IS '机器信息 (IP/Host)';
+        COMMENT ON COLUMN sys_env_logs.created_at IS '创建时间';
+        COMMENT ON COLUMN sys_env_logs.updated_at IS '更新时间';
+        """
+        try:
+            await conn.execute(ddl)
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "系统环境配置日志表，用于备份 .env 历史")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
+    async def init_superuser(self, conn):
+        """
+        初始化超级管理员 (A6666)
+        """
+        try:
+            # 检查是否已存在
+            exists = await conn.fetchval("SELECT 1 FROM sys_users WHERE username = 'A6666'")
+            if not exists:
+                password_hash = get_password_hash("123456")
+                await conn.execute("""
+                    INSERT INTO sys_users (username, password_hash, full_name, is_superuser, is_active, source, created_at, updated_at)
+                    VALUES ('A6666', $1, '超级管理员', TRUE, TRUE, 'local', NOW(), NOW())
+                """, password_hash)
+                logger.success("✅ 已创建默认超级管理员: A6666 / 123456")
+            else:
+                # 确保 A6666 是超级管理员且激活
+                await conn.execute("""
+                    UPDATE sys_users 
+                    SET is_superuser = TRUE, is_active = TRUE, updated_at = NOW()
+                    WHERE username = 'A6666'
+                """)
+                logger.info("✅ 超级管理员 A6666 已存在 (已确保权限正确)")
+                
+        except Exception as e:
+            logger.error(f"❌ 初始化超级管理员失败: {e}")
+
+    async def init_tables(self):
+        """
+        连接目标数据库，创建表结构。
+        """
+        logger.info(f"🔌 [DB: {self.target_db}] 正在连接以初始化表结构...")
+        try:
+            conn = await asyncpg.connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                database=self.target_db
+            )
+            
+            # 1. 定义核心表 (request_logs)
+            create_table_sql = """
+            CREATE TABLE IF NOT EXISTS request_logs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                request_id VARCHAR(50) NOT NULL,
+                method VARCHAR(10) NOT NULL,
+                path TEXT NOT NULL,
+                status_code INTEGER,
+                client_ip VARCHAR(50),
+                user_id VARCHAR(50),
+                request_body TEXT,
+                response_body TEXT,
+                error_detail TEXT,
+                duration_ms DOUBLE PRECISION,
+                is_success BOOLEAN DEFAULT FALSE,
+                user_agent TEXT,
+                device VARCHAR(100),
+                created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+            );
+            
+            -- 确保 device 字段存在 (针对旧表)
+            ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS device VARCHAR(100);
+            
+            -- 尝试修复时间字段
+            try:
+                 ALTER TABLE request_logs ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0);
+                 ALTER TABLE request_logs ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai');
+            except:
+                 pass;
+            
+            -- 添加中文注释
+            COMMENT ON TABLE request_logs IS 'API请求日志表';
+            COMMENT ON COLUMN request_logs.id IS '唯一主键';
+            COMMENT ON COLUMN request_logs.request_id IS '请求追踪ID (X-Request-ID)';
+            COMMENT ON COLUMN request_logs.method IS 'HTTP请求方法';
+            COMMENT ON COLUMN request_logs.path IS '请求路径';
+            COMMENT ON COLUMN request_logs.status_code IS 'HTTP状态码';
+            COMMENT ON COLUMN request_logs.client_ip IS '客户端IP地址';
+            COMMENT ON COLUMN request_logs.user_id IS '用户ID (若已认证)';
+            COMMENT ON COLUMN request_logs.request_body IS '请求体内容 (原始内容)';
+            COMMENT ON COLUMN request_logs.response_body IS '响应体内容 (可选)';
+            COMMENT ON COLUMN request_logs.error_detail IS '错误堆栈或详情';
+            COMMENT ON COLUMN request_logs.duration_ms IS '请求耗时(毫秒)';
+            COMMENT ON COLUMN request_logs.is_success IS '请求是否成功 (code<400)';
+            COMMENT ON COLUMN request_logs.user_agent IS 'User-Agent';
+            COMMENT ON COLUMN request_logs.device IS '客户端设备信息 (PC/Mobile/Tablet)';
+            COMMENT ON COLUMN request_logs.created_at IS '请求创建时间 (北京时间)';
+            """
+            
+            # 由于 asyncpg 不能执行多条 SQL (除非用 execute 且不带参数，或者用脚本模式)，这里还是得拆分
+            # 但是 asyncpg 的 execute 其实支持简单的多条语句。
+            # 为了稳妥，我们手动拆分关键部分，或者简单执行。
+            # 注意: 上面的 SQL 字符串中包含 try-except 伪代码，这在 SQL 中是不合法的。我需要修正它。
+            
+            # 修正后的逻辑：
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS request_logs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                request_id VARCHAR(50) NOT NULL,
+                method VARCHAR(10) NOT NULL,
+                path TEXT NOT NULL,
+                status_code INTEGER,
+                client_ip VARCHAR(50),
+                user_id VARCHAR(50),
+                request_body TEXT,
+                response_body TEXT,
+                error_detail TEXT,
+                duration_ms DOUBLE PRECISION,
+                is_success BOOLEAN DEFAULT FALSE,
+                user_agent TEXT,
+                device VARCHAR(100),
+                created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+            );
+            """)
+            
+            # 补丁和注释
+            patch_sql = """
+            ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS device VARCHAR(100);
+            
+            COMMENT ON TABLE request_logs IS 'API请求日志表';
+            COMMENT ON COLUMN request_logs.id IS '唯一主键';
+            COMMENT ON COLUMN request_logs.request_id IS '请求追踪ID (X-Request-ID)';
+            COMMENT ON COLUMN request_logs.method IS 'HTTP请求方法';
+            COMMENT ON COLUMN request_logs.path IS '请求路径';
+            COMMENT ON COLUMN request_logs.status_code IS 'HTTP状态码';
+            COMMENT ON COLUMN request_logs.client_ip IS '客户端IP地址';
+            COMMENT ON COLUMN request_logs.user_id IS '用户ID (若已认证)';
+            COMMENT ON COLUMN request_logs.request_body IS '请求体内容 (原始内容)';
+            COMMENT ON COLUMN request_logs.response_body IS '响应体内容 (可选)';
+            COMMENT ON COLUMN request_logs.error_detail IS '错误堆栈或详情';
+            COMMENT ON COLUMN request_logs.duration_ms IS '请求耗时(毫秒)';
+            COMMENT ON COLUMN request_logs.is_success IS '请求是否成功 (code<400)';
+            COMMENT ON COLUMN request_logs.user_agent IS 'User-Agent';
+            COMMENT ON COLUMN request_logs.device IS '客户端设备信息 (PC/Mobile/Tablet)';
+            COMMENT ON COLUMN request_logs.created_at IS '请求创建时间 (北京时间)';
+            """
+            await conn.execute(patch_sql)
+            
+            # 自动迁移: 修改时间字段精度
+            try:
+                await conn.execute("ALTER TABLE request_logs ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE request_logs ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+            except:
+                pass
+
+            # 更新注册表
+            await self._update_table_registry(conn, "request_logs", "API请求日志表，记录所有请求、响应及设备信息")
+            logger.success(f"📝 [Registry] 已更新表 'request_logs' 的元数据信息")
+            
+            # 2. 初始化 AI 模型注册表
+            await self.init_ai_model_registry(conn)
+
+            # 3. 初始化用户图片表
+            await self.init_user_images_table(conn)
+
+            # 4. 初始化 RBAC 相关表
+            await self.init_rbac_tables(conn)
+
+            # 5. 初始化 Env Log 表
+            await self.init_env_log_table(conn)
+            
+            # 6. 初始化超级管理员
+            await self.init_superuser(conn)
+
+            logger.success("✅ 所有表结构初始化完成")
+            await conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 初始化表结构失败: {e}")
+            return False
+
+    async def run(self):
+        """
+        执行完整的初始化流程
+        """
+        success = await self.check_and_create_db()
+        if success:
+            await self.init_tables()
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    # 添加项目根目录到 sys.path 以便导入 config
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
+    
+    initializer = DBInitializer()
+    asyncio.run(initializer.run())

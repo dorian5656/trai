@@ -1,0 +1,6 @@
+/backend/app/middlewares/__pycache__/*.pyc
+*.pyc
+*.toc
+*.pkg
+*.txt
+TraeAI_Assistant
