@@ -148,7 +148,19 @@ class ModelScopeUtils:
 
         model_path = cls.get_model_path(model_name)
         if not cls.check_model_exists(model_name):
-            raise FileNotFoundError(f"模型未找到: {model_name} ({model_path})")
+             # 自动下载
+             logger.info(f"📥 ModelScope 模型未找到，开始下载: {model_name} -> {cls.BASE_MODEL_DIR}")
+             try:
+                 from modelscope.hub.snapshot_download import snapshot_download
+                 # 下载到 backend/app/models
+                 snapshot_download(model_name, cache_dir=str(cls.BASE_MODEL_DIR))
+                 logger.success(f"✅ [{model_name}] 模型下载完成")
+                 
+                 # 重新获取路径 (以防万一)
+                 model_path = cls.get_model_path(model_name)
+             except Exception as e:
+                 logger.error(f"❌ [{model_name}] 模型下载失败: {e}")
+                 raise e
 
         try:
             # 策略：如果已加载其他模型，先卸载以释放显存 (单卡/资源受限场景)
