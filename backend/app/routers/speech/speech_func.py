@@ -21,6 +21,7 @@ from backend.app.config import settings
 from backend.app.utils.logger import logger
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import Base
+from backend.app.utils.ocr_utils import OcrHelper
 from sqlalchemy import Column, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -80,9 +81,14 @@ class SpeechManager:
         if not self.TEMP_DIR.exists():
             self.TEMP_DIR.mkdir(parents=True, exist_ok=True)
         
-        # 强制 CPU 配置 (参考原 1.py)
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-        self.device = "cpu"
+        # 自动选择最空闲的 GPU
+            gpu_id = OcrHelper.get_free_gpu_id()
+            if gpu_id != -1:
+                self.device = f"cuda:{gpu_id}"
+                logger.info(f"✅ SpeechManager 使用 GPU: {self.device}")
+            else:
+                self.device = "cpu"
+                logger.warning("⚠️ 未检测到可用 GPU，SpeechManager 将使用 CPU")
 
     async def initialize(self):
         """
@@ -137,7 +143,7 @@ class SpeechManager:
                 punc_model=model_paths["punc"],
                 device=self.device,
                 disable_update=True,  # 已手动下载，禁止自动更新
-                nproc=1,              # CPU 单进程
+                nproc=1,              # 数据预处理进程数
                 trust_remote_code=False,
                 disable_pbar=True
             )
@@ -192,6 +198,7 @@ class SpeechManager:
             # Let's use get_file_stream to be safe and compatible with S3
             
             # Write temp file from S3/Local stream
+            os.makedirs(self.TEMP_DIR, exist_ok=True)
             with open(temp_file_path, "wb") as f:
                  async for chunk in UploadUtils.get_file_stream(object_key):
                      f.write(chunk)

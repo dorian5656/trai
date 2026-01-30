@@ -8,6 +8,7 @@
 import shutil
 import uuid
 import time
+import json
 import aioboto3
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -114,6 +115,30 @@ class UploadUtils:
             await file.close()
 
     @classmethod
+    async def _set_bucket_public(cls, s3_client, bucket_name: str):
+        """设置 Bucket 为公开读"""
+        try:
+            policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicRead",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": ["s3:GetObject"],
+                        "Resource": [f"arn:aws:s3:::{bucket_name}/*"]
+                    }
+                ]
+            }
+            await s3_client.put_bucket_policy(
+                Bucket=bucket_name,
+                Policy=json.dumps(policy)
+            )
+            logger.info(f"已设置 Bucket {bucket_name} 为公开读模式")
+        except Exception as e:
+            logger.warning(f"设置 Bucket {bucket_name} 策略失败: {e}")
+
+    @classmethod
     async def _save_to_s3(cls, file: UploadFile, object_name: str, bucket_name: str = None) -> Tuple[str, str, int]:
         """保存到 S3 对象存储"""
         if bucket_name is None:
@@ -144,6 +169,8 @@ class UploadUtils:
                     try:
                         logger.info(f"Bucket {bucket_name} 不存在，正在创建...")
                         await s3.create_bucket(Bucket=bucket_name)
+                        # 创建后立即设置公开读权限
+                        await cls._set_bucket_public(s3, bucket_name)
                     except Exception as e:
                         logger.warning(f"创建 Bucket {bucket_name} 失败 (可能已存在或权限不足): {e}")
 
@@ -151,7 +178,8 @@ class UploadUtils:
                     Bucket=bucket_name,
                     Key=object_name,
                     Body=file_content,
-                    ContentType=content_type
+                    ContentType=content_type,
+                    ACL='public-read'  # 显式设置对象 ACL
                 )
                 
                 logger.info(f"文件上传到 S3 成功: {bucket_name}/{object_name}")
