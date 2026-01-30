@@ -108,10 +108,10 @@ ipython_config.py
 # 忽略 backend/app/models 下的所有内容
 backend/app/models/*
 
-# 但保留 heart_like 文件夹 (根据用户要求)
-!backend/app/models/heart_like/
-# 保留 heart_like 文件夹下的 .pt 文件
-!backend/app/models/heart_like/*.pt
+# 但保留 yolo11/heart_like 文件夹 (根据用户要求)
+!backend/app/models/yolo11/
+!backend/app/models/yolo11/heart_like/
+!backend/app/models/yolo11/heart_like/*.pt
 
 # 忽略所有日志文件
 *.log

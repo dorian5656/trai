@@ -62,12 +62,10 @@ class SpeechManager:
     # 模型配置
     MODELS = {
         "asr": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        "vad": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-        "punc": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch"
     }
 
     # 路径配置
-    BASE_MODEL_DIR = settings.BASE_DIR / "app" / "models" / "speech_model"
+    BASE_MODEL_DIR = settings.BASE_DIR / "app" / "models"
     TEMP_DIR = settings.BASE_DIR / "temp"
 
     @classmethod
@@ -81,14 +79,29 @@ class SpeechManager:
         if not self.TEMP_DIR.exists():
             self.TEMP_DIR.mkdir(parents=True, exist_ok=True)
         
+        # 确保模型目录存在
+        if not self.BASE_MODEL_DIR.exists():
+            self.BASE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            
+        # 预先创建模型目录结构，以便用户查看
+        for model_id in self.MODELS.values():
+            # model_id format: namespace/model_name (e.g. iic/speech_paraformer...)
+            if "/" in model_id:
+                parts = model_id.split("/")
+                if len(parts) >= 2:
+                     model_dir = self.BASE_MODEL_DIR / parts[0] / parts[1]
+                     if not model_dir.exists():
+                         model_dir.mkdir(parents=True, exist_ok=True)
+                         logger.info(f"📁 [Speech] 创建默认模型目录: {model_dir}")
+        
         # 自动选择最空闲的 GPU
-            gpu_id = OcrHelper.get_free_gpu_id()
-            if gpu_id != -1:
-                self.device = f"cuda:{gpu_id}"
-                logger.info(f"✅ SpeechManager 使用 GPU: {self.device}")
-            else:
-                self.device = "cpu"
-                logger.warning("⚠️ 未检测到可用 GPU，SpeechManager 将使用 CPU")
+        gpu_id = OcrHelper.get_free_gpu_id()
+        if gpu_id != -1:
+            self.device = f"cuda:{gpu_id}"
+            logger.info(f"✅ SpeechManager 使用 GPU: {self.device}")
+        else:
+            self.device = "cpu"
+            logger.warning("⚠️ 未检测到可用 GPU，SpeechManager 将使用 CPU")
 
     async def initialize(self):
         """
@@ -106,44 +119,28 @@ class SpeechManager:
 
         self._is_loading = True
         try:
-            logger.info("🚀 [Speech] 开始初始化语音模型 (CPU模式)...")
+            logger.info("🚀 [Speech] 开始初始化语音模型...")
             
             # 1. 准备模型路径
             model_paths = {}
             for key, model_id in self.MODELS.items():
-                # 使用模型ID的最后一部分作为本地目录名
-                local_name = model_id.split("/")[-1]
-                local_path = self.BASE_MODEL_DIR / local_name
-                
-                # 检查是否已存在
-                if not local_path.exists():
-                    logger.info(f"📥 [Speech] 模型未找到，开始下载: {model_id} -> {local_path}")
-                    try:
-                        # 自动下载到指定目录
-                        download_path = snapshot_download(model_id, cache_dir=str(self.BASE_MODEL_DIR))
-                        # snapshot_download 默认会下载到 cache_dir/model_id，我们需要确认实际路径
-                        # 这里直接使用 snapshot_download 返回的路径即可
-                        model_paths[key] = download_path
-                        logger.success(f"✅ [Speech] 模型下载完成: {key}")
-                    except Exception as e:
-                        logger.error(f"❌ [Speech] 模型下载失败 {model_id}: {e}")
-                        raise e
-                else:
-                    # 如果手动放置了目录，尝试直接使用 (需符合 funasr 结构)
-                    # 为兼容 snapshot_download 的缓存结构，建议还是通过 snapshot_download 检查
-                    # 这里为了稳健，我们再次调用 snapshot_download，它会自动跳过已下载的文件
-                    logger.info(f"🔍 [Speech] 校验本地模型: {local_path}")
-                    model_paths[key] = snapshot_download(model_id, cache_dir=str(self.BASE_MODEL_DIR))
+                logger.info(f"📥 [Speech] 检查/下载模型: {model_id}")
+                try:
+                    # modelscope 会自动处理目录结构: cache_dir/namespace/model_name
+                    download_path = snapshot_download(model_id, cache_dir=str(self.BASE_MODEL_DIR))
+                    model_paths[key] = download_path
+                    logger.success(f"✅ [Speech] 模型就绪: {key} -> {download_path}")
+                except Exception as e:
+                    logger.error(f"❌ [Speech] 模型下载失败 {model_id}: {e}")
+                    raise e
 
             # 2. 加载模型
             logger.info("🔄 [Speech] 正在加载 FunASR 模型...")
             self._model = AutoModel(
                 model=model_paths["asr"],
-                vad_model=model_paths["vad"],
-                punc_model=model_paths["punc"],
                 device=self.device,
-                disable_update=True,  # 已手动下载，禁止自动更新
-                nproc=1,              # 数据预处理进程数
+                disable_update=True,
+                nproc=1,
                 trust_remote_code=False,
                 disable_pbar=True
             )

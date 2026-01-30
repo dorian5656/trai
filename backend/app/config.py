@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # 路径配置
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
+    @property
+    def MODEL_PATH_HEART_LIKE(self) -> Path:
+        """YOLO Heart Like 模型路径"""
+        return self.BASE_DIR / "app" / "models" / "yolo11" / "heart_like" / "heart_like.pt"
+
     # 日志配置
     LOG_LEVEL: str = "INFO"
 
