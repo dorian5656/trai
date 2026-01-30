@@ -77,6 +77,8 @@ class UploadUtils:
             bucket_name = settings.S3_BUCKET_NAME
             if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
                 bucket_name = settings.S3_IMAGE_BUCKET_NAME
+            elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
+                bucket_name = settings.S3_SPEECH_BUCKET_NAME
                 
             return await cls._save_to_s3(file, object_name, bucket_name)
         else:
@@ -132,11 +134,24 @@ class UploadUtils:
                 file_content = await file.read()
                 file_size = len(file_content)
                 
+                # 确保 ContentType 不为 None
+                content_type = file.content_type or "application/octet-stream"
+                
+                # 尝试自动创建 Bucket (如果不存在)
+                try:
+                    await s3.head_bucket(Bucket=bucket_name)
+                except Exception:
+                    try:
+                        logger.info(f"Bucket {bucket_name} 不存在，正在创建...")
+                        await s3.create_bucket(Bucket=bucket_name)
+                    except Exception as e:
+                        logger.warning(f"创建 Bucket {bucket_name} 失败 (可能已存在或权限不足): {e}")
+
                 await s3.put_object(
                     Bucket=bucket_name,
                     Key=object_name,
                     Body=file_content,
-                    ContentType=file.content_type
+                    ContentType=content_type
                 )
                 
                 logger.info(f"文件上传到 S3 成功: {bucket_name}/{object_name}")
@@ -181,8 +196,16 @@ class UploadUtils:
                 try:
                     # 使用 generate_presigned_url 获取临时链接重定向 (更高效)
                     # 或者直接读取流 (消耗后端流量但兼容性好)
+                    
+                    # 确定 Bucket
+                    bucket_name = settings.S3_BUCKET_NAME
+                    if file_key.startswith("speech/") and settings.S3_SPEECH_BUCKET_NAME:
+                        bucket_name = settings.S3_SPEECH_BUCKET_NAME
+                    elif settings.S3_IMAGE_BUCKET_NAME and any(file_key.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                         bucket_name = settings.S3_IMAGE_BUCKET_NAME
+
                     # 这里为了解决用户无法访问 S3 IP 的问题，必须代理流
-                    response = await s3.get_object(Bucket=settings.S3_BUCKET_NAME, Key=file_key)
+                    response = await s3.get_object(Bucket=bucket_name, Key=file_key)
                     # 注意: StreamingResponse 需要 async generator
                     async for chunk in response['Body'].iter_chunks():
                         yield chunk

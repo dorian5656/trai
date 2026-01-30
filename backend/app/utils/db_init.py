@@ -223,6 +223,51 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+    async def init_speech_logs_table(self, conn):
+        """
+        初始化语音识别记录表 (speech_logs)
+        """
+        table_name = "speech_logs"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS speech_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            audio_url TEXT NOT NULL,
+            s3_key VARCHAR(500),
+            recognition_text TEXT,
+            duration FLOAT,
+            model_version VARCHAR(50) DEFAULT 'funasr-paraformer',
+            status VARCHAR(20) DEFAULT 'success',
+            error_msg TEXT,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE speech_logs IS '语音识别历史记录表';
+        COMMENT ON COLUMN speech_logs.id IS '主键ID';
+        COMMENT ON COLUMN speech_logs.user_id IS '用户ID';
+        COMMENT ON COLUMN speech_logs.audio_url IS '音频文件访问URL';
+        COMMENT ON COLUMN speech_logs.s3_key IS 'S3对象键';
+        COMMENT ON COLUMN speech_logs.recognition_text IS '识别结果文本';
+        COMMENT ON COLUMN speech_logs.duration IS '音频时长(秒)';
+        COMMENT ON COLUMN speech_logs.model_version IS '使用模型版本';
+        COMMENT ON COLUMN speech_logs.status IS '状态 (success, failed)';
+        COMMENT ON COLUMN speech_logs.error_msg IS '错误信息';
+        COMMENT ON COLUMN speech_logs.created_at IS '创建时间';
+        COMMENT ON COLUMN speech_logs.updated_at IS '更新时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_speech_logs_user_id ON speech_logs(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_speech_logs_created_at ON speech_logs(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "语音识别历史记录表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
     async def init_rbac_tables(self, conn):
         """
         初始化 RBAC 相关表结构 (用户/角色/权限/部门)
@@ -625,7 +670,10 @@ class DBInitializer:
             # 5. 初始化 Env Log 表
             await self.init_env_log_table(conn)
             
-            # 6. 初始化超级管理员
+            # 6. 初始化语音识别记录表
+            await self.init_speech_logs_table(conn)
+            
+            # 7. 初始化超级管理员
             await self.init_superuser(conn)
 
             logger.success("✅ 所有表结构初始化完成")

@@ -248,6 +248,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 优化 `SimilarityDialog` 组件, 支持图片拖拽上传与预览, 并修复大整数精度问题.
   - 修正 Axios 拦截器以兼容非标准 OAuth2 响应格式 (`access_token`).
 
+### 2026_01_30_1602
+- **后端**: 新增语音识别模块 (FunASR), 支持音频文件转写及 S3 存储与数据库记录.
+- **后端**: 优化模型管理, 统一模型目录至 `backend/app/models`, 并实现 FunASR/PaddleOCR/Z-Image-Turbo/Qwen3-VL 模型的自动下载与加载.
+- **后端**: 修复 PaddleOCR GPU 检测问题, 默认选择最空闲 GPU.
+- **后端**: 更新 `ocr_utils.py` 与 `speech_func.py`, 规范化临时文件路径 (`backend/temp`).
+- **后端**: 完善 S3 上传逻辑, 支持自动创建 Bucket 及 Content-Type 识别.
+
 ### 2026_01_27_1620
 - **后端**: 优化 `heart_like` 相关业务逻辑, 将 OCR 相似度触发阈值从 0.6 调整为 0.55, 提升准确率.
 

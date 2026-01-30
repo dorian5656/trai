@@ -98,71 +98,6 @@ ipython_config.py
 #   类似于 Pipfile.lock，通常建议将 poetry.lock 包含在版本控制中。
 #   这对于二进制包尤其建议，以确保可重复性，并且更多
 #   对于库通常被忽略。
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   类似于 Pipfile.lock，通常建议将 pdm.lock 包含在版本控制中。
-#pdm.lock
-#   pdm 将项目范围的配置存储在 .pdm.toml 中，但建议不要将其包含
-#   在版本控制中。
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
-
-# PEP 582; 例如被 github.com/David-OConnor/pyflow 和其他人使用
-__pypackages__/
-
-# Celery 相关
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath 解析文件
-*.sage.py
-
-# 环境
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder 项目设置
-.spyderproject
-.spyproject
-
-# Rope 项目设置
-.ropeproject
-
-# mkdocs 文档
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre 类型检查器
-.pyre/
-
-# pytype 静态类型分析器
-.pytype/
-
-# Cython 调试符号
-cython_debug/
-
-# IDE 设置
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# MacOS
-.DS_Store
-
-# Windows
-Thumbs.db
 
 # Models - Ignore all models except specific ones
 *.safetensors
@@ -170,28 +105,14 @@ Thumbs.db
 *.pth
 *.bin
 
-# 忽略 backend/app/model 下的所有内容
-backend/app/model/*
-# 但保留 heart_like 文件夹
-!backend/app/model/heart_like/
-# 保留 heart_like 文件夹下的 .pt 文件 (即使上面忽略了 *.pt，这里需要显式放行吗？
-# .gitignore 规则：如果排除了父目录，则无法重新包含文件。
-# 所以逻辑是：
-# 1. 忽略 model 下所有
-# 2. 不忽略 model/heart_like 目录
-# 3. 上面已经忽略了全局 *.pt，所以 heart_like 下的 .pt 也会被忽略
-# 4. 需要显式不忽略 heart_like 下的 .pt
+# 忽略 backend/app/models 下的所有内容
+backend/app/models/*
+# 但保留 heart_like 文件夹 (根据用户要求)
+!backend/app/models/heart_like/
+# 保留 heart_like 文件夹下的 .pt 文件
+!backend/app/models/heart_like/*.pt
 
-!backend/app/model/heart_like/*.pt
-
-backend/app/models/Qwen/
-backend/app/models/Tongyi-MAI/
-
-# Ignore local config
-backend/.env
-!backend/.env.example
-/backend/.env.dev
-
-# Trae Assistant
-TraeAI_Assistant
-Z-Image-Turbo
+# 忽略所有日志文件
+*.log
+logs/
+backend/logs/

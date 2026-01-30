@@ -129,13 +129,29 @@ class OcrHelper:
                 
                 real_use_gpu = (gpu_id != -1)
                 
+                # 强制设置 Paddle 设备 (解决有时候检测不到 GPU 的问题)
+                if real_use_gpu:
+                    try:
+                        import paddle
+                        if paddle.is_compiled_with_cuda():
+                            paddle.set_device(f'gpu:{gpu_id}')
+                            logger.info(f"已强制设置 Paddle 设备: gpu:{gpu_id}")
+                        else:
+                            logger.warning("PaddlePaddle 未编译 CUDA 支持，将回退到 CPU")
+                            real_use_gpu = False
+                    except Exception as e:
+                        logger.warning(f"设置 Paddle 设备失败: {e}")
+
                 # use_gpu=False 默认使用CPU，如果环境支持GPU会自动切换或需显式指定
                 cls._ocr = PaddleOCR(
                     use_angle_cls=use_angle_cls, 
                     lang=lang, 
                     use_gpu=real_use_gpu,  # 显式控制
                     gpu_id=gpu_id if real_use_gpu else 0, 
-                    show_log=False 
+                    show_log=False,
+                    # 确保模型下载路径在项目内 (可选，Paddle 默认在 ~/.paddleocr)
+                    # det_model_dir=..., rec_model_dir=... 
+                    # 这里保持默认，因为 Paddle 会自动处理，用户主要是想要"自动下载"的行为
                 )
                 
                 # 如果使用 GPU，设置环境变量 (这应该在 import paddle 之前设置，但这里尝试兼容)

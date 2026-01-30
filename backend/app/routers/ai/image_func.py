@@ -251,10 +251,30 @@ class ImageManager:
         # 1. 确定模型路径
         # backend/app/routers/ai/image_func.py -> backend
         base_dir = Path(__file__).resolve().parent.parent.parent.parent
-        model_path = base_dir / "app/models/Tongyi-MAI"
+        # 使用 app/models
+        model_dir = base_dir / "app/models/Tongyi-MAI"
         
-        if not model_path.exists():
-            raise Exception(f"Model path not found: {model_path}")
+        # 自动下载模型 (如果不存在)
+        if not model_dir.exists() or not any(model_dir.iterdir()):
+            logger.info(f"📥 Z-Image-Turbo 模型未找到，开始下载: Tongyi-MAI/Z-Image-Turbo -> {model_dir}")
+            try:
+                from modelscope.hub.snapshot_download import snapshot_download
+                snapshot_download("Tongyi-MAI/Z-Image-Turbo", cache_dir=str(base_dir / "app/models"))
+                logger.success(f"✅ Z-Image-Turbo 模型下载完成")
+            except Exception as e:
+                logger.error(f"❌ Z-Image-Turbo 模型下载失败: {e}")
+                raise e
+        
+        # modelscope 下载后通常会在 cache_dir 下创建 Tongyi-MAI/Z-Image-Turbo 目录
+        # 我们上面指定 cache_dir=app/models，所以最终路径应该是 app/models/Tongyi-MAI/Z-Image-Turbo
+        # 但我们原本的逻辑是指向 Tongyi-MAI，这里需要适配一下路径
+        # 检查实际路径
+        actual_model_path = base_dir / "app/models/Tongyi-MAI/Z-Image-Turbo"
+        if actual_model_path.exists():
+            model_path = actual_model_path
+        else:
+            # 可能是直接下载到了 Tongyi-MAI (取决于 modelscope 版本 behavior，通常是 Organization/ModelName)
+            model_path = model_dir
 
         # 2. 加载模型 (单例缓存)
         if _z_image_pipeline is None:

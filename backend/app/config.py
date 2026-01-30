@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "trai-uploads")
     S3_IMAGE_BUCKET_NAME: str = os.getenv("S3_IMAGE_BUCKET_NAME", "trai_images")
+    S3_SPEECH_BUCKET_NAME: str = os.getenv("S3_SPEECH_BUCKET_NAME", "trai_speech")
     S3_REGION_NAME: str = os.getenv("S3_REGION_NAME", "us-east-1")
     S3_PUBLIC_DOMAIN: str = os.getenv("S3_PUBLIC_DOMAIN", "")
 
