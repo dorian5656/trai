@@ -6,7 +6,9 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 
 ### 后端 (Backend)
 
-#### 1. 激活环境1
+
+#### 1. 激活环境
+
 ```bash
 conda activate trai_31014_whf
 ```
