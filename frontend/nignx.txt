@@ -1,0 +1,91 @@
+server
+{
+    listen 5690;
+    server_name 192.168.100.119_5690;
+    index index.php index.html index.htm default.php default.htm default.html;
+    root /home/code/trai/frontend/dist;
+    #CERT-APPLY-CHECK--START
+    # 用于SSL证书申请时的文件验证相关配置 -- 请勿删除
+    include /www/server/panel/vhost/nginx/well-known/192.168.100.119_5690.conf;
+    #CERT-APPLY-CHECK--END
+    include /www/server/panel/vhost/nginx/extension/192.168.100.119_5690/*.conf;
+    
+    #SSL-START SSL相关配置，请勿删除或修改下一行带注释的404规则
+    #error_page 404/404.html;
+    #SSL-END
+
+    #ERROR-PAGE-START  错误页配置，可以注释、删除或修改
+    error_page 404 /404.html;
+    #error_page 502 /502.html;
+    #ERROR-PAGE-END
+
+    #PHP-INFO-START  PHP引用配置，可以注释或修改
+    include enable-php-82.conf;
+    #PHP-INFO-END
+
+    #REWRITE-START URL重写规则引用,修改后将导致面板设置的伪静态规则失效
+    include /www/server/panel/vhost/rewrite/192.168.100.119_5690.conf;
+    #REWRITE-END
+
+    location / {
+        # 尝试寻找对应文件($uri)或目录($uri/)，如果都没找到，则返回 index.html
+        try_files $uri $uri/ /index.html;
+    }
+
+    # -----------------------------------------------------------
+    # [反向代理] 转发 API 请求到后端 Python 服务
+    # -----------------------------------------------------------
+    location /api/ {
+        # 后端服务地址 (尝试使用内网 IP 避免回环地址问题)
+        # 关键修改：自动补充 v1 版本号前缀 (/api/xxx -> /api/v1/xxx)
+        proxy_pass http://192.168.100.119:6001/api/v1/;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 关键：支持 SSE 流式输出 (打字机效果)
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # 禁止访问的敏感文件
+    location ~* (\.user.ini|\.htaccess|\.htpasswd|\.env.*|\.project|\.bashrc|\.bash_profile|\.bash_logout|\.DS_Store|\.gitignore|\.gitattributes|LICENSE|README\.md|CLAUDE\.md|CHANGELOG\.md|CHANGELOG|CONTRIBUTING\.md|TODO\.md|FAQ\.md|composer\.json|composer\.lock|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|\.\w+~|\.swp|\.swo|\.bak(up)?|\.old|\.tmp|\.temp|\.log|\.sql(\.gz)?|docker-compose\.yml|docker\.env|Dockerfile|\.csproj|\.sln|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|phpunit\.xml|phpunit\.xml|pom\.xml|build\.gradl|pyproject\.toml|requirements\.txt|application(-\w+)?\.(ya?ml|properties))$
+    {
+        return 404;
+    }
+    
+    # 禁止访问的敏感目录
+    location ~* /(\.git|\.svn|\.bzr|\.vscode|\.claude|\.idea|\.ssh|\.github|\.npm|\.yarn|\.pnpm|\.cache|\.husky|\.turbo|\.next|\.nuxt|node_modules|runtime)/ {
+        return 404;
+    }
+
+    #一键申请SSL证书验证目录相关设置
+    location ~ \.well-known{
+        allow all;
+    }
+
+    #禁止在证书验证目录放入敏感文件
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$
+    {
+        expires      30d;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+
+    location ~ .*\.(js|css)?$
+    {
+        expires      12h;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+    access_log  /www/wwwlogs/192.168.100.119_5690.log;
+    error_log  /www/wwwlogs/192.168.100.119_5690.error.log;
+}
