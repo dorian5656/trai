@@ -12,6 +12,7 @@ conda activate trai_31014_whf
 ```
 
 #### 2. 启动服务
+
 ```bash
 # 在项目根目录下执行
 python backend/run.py
