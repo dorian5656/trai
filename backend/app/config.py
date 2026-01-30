@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     WECOM_TRAI_ROBOT_KEY: str = os.getenv("WECOM_TRAI_ROBOT_KEY", "")
     WECOM_CORP_ID: str = os.getenv("WECOM_CORP_ID", "")
     WECOM_CORP_SECRET: str = os.getenv("WECOM_CORP_SECRET", "")
+    WECOM_AGENT_ID: str = os.getenv("WECOM_AGENT_ID", "")
     WECOM_SYNC_ON_STARTUP: bool = os.getenv("WECOM_SYNC_ON_STARTUP", "false").lower() == "true"
     
     # 飞书配置

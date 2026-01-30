@@ -153,6 +153,8 @@ export async function streamDifyChat(
     conversation_id?: string;
     inputs?: Record<string, any>;
     app_name?: string;
+    mode?: string; // 新增 mode
+    isPublic?: boolean; // 新增：是否使用公开接口 (无Token)
   },
   onMessage: (text: string, conversationId?: string) => void,
   onDone: () => void,
@@ -164,15 +166,25 @@ export async function streamDifyChat(
   chatStore.abortController = controller;
 
   try {
-    const token = localStorage.getItem('token') || '';
     const baseURL = import.meta.env.VITE_APP_MAIN_URL || '/api';
     
-    const response = await fetch(`${baseURL}/dify/chat`, {
+    // 确定 URL 和 Headers
+    const url = params.isPublic ? '/dify/chat/public' : '/dify/chat';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // 只有非公开接口才需要 Token
+    if (!params.isPublic) {
+      const token = localStorage.getItem('token') || '';
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    
+    const response = await fetch(`${baseURL}${url}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: headers,
       body: JSON.stringify({
         query: params.query,
         user: params.user,

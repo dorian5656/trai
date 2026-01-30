@@ -104,6 +104,56 @@ class AuthFunc:
             return Token(access_token=access_token, token_type="bearer")
 
     @staticmethod
+    async def login_by_wecom_code(code: str) -> Token:
+        """
+        企业微信静默登录
+        """
+        from backend.app.utils.wecom_utils import wecom_app
+        
+        # 1. 用 code 换取 UserId
+        try:
+            wecom_userid = wecom_app.get_user_id_by_code(code)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"企业微信授权失败: {str(e)}")
+            
+        if not wecom_userid:
+            raise HTTPException(status_code=401, detail="未获取到有效的企业成员信息")
+            
+        # 2. 查库
+        engine = PGUtils.get_engine()
+        async with engine.connect() as conn:
+            # 优先匹配 wecom_userid
+            result = await conn.execute(
+                text("SELECT * FROM sys_users WHERE wecom_userid = :uid AND is_active = TRUE"),
+                {"uid": wecom_userid}
+            )
+            user = result.mappings().one_or_none()
+            
+            if not user:
+                # 尝试匹配 username (兼容旧数据)
+                result = await conn.execute(
+                    text("SELECT * FROM sys_users WHERE username = :uid AND is_active = TRUE"),
+                    {"uid": wecom_userid}
+                )
+                user = result.mappings().one_or_none()
+            
+            if not user:
+                logger.warning(f"企微用户尝试登录但未同步: {wecom_userid}")
+                raise HTTPException(
+                    status_code=401, 
+                    detail="用户未同步或无权限，请联系管理员同步通讯录"
+                )
+                
+            # 3. 生成 Token
+            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": user.username}, expires_delta=access_token_expires
+            )
+            
+            logger.info(f"企业微信静默登录成功: {user.username} ({wecom_userid})")
+            return Token(access_token=access_token, token_type="bearer")
+
+    @staticmethod
     async def register_user(user_in: UserCreate):
         """
         用户注册

@@ -117,3 +117,4 @@ backend/app/models/*
 *.log
 logs/
 backend/logs/
+/backend/.env

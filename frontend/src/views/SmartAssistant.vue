@@ -106,11 +106,11 @@ const props = defineProps({
 });
 
 // Markdown 配置
-const md = new MarkdownIt({
+const md: any = new MarkdownIt({
   html: true, // 开启 HTML 以支持自定义交互链接
   linkify: true,
   breaks: true,
-  highlight: function (str, lang) {
+  highlight: function (str: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
@@ -123,10 +123,10 @@ const md = new MarkdownIt({
 });
 
 // 自定义链接渲染 (在新标签页打开)
-const defaultRenderLink = md.renderer.rules.link_open || function(tokens, idx, options, env, self) {
+const defaultRenderLink = md.renderer.rules.link_open || function(tokens: any, idx: any, options: any, env: any, self: any) {
   return self.renderToken(tokens, idx, options);
 };
-md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
+md.renderer.rules.link_open = function (tokens: any, idx: any, options: any, env: any, self: any) {
   const token = tokens[idx];
   token.attrSet('target', '_blank');
   token.attrSet('rel', 'noopener noreferrer');
@@ -209,9 +209,11 @@ const scrollToBottom = () => nextTick(() => {
 const updateLastMessage = (text: string) => {
   if (messages.value.length === 0) return;
   const lastMessage = messages.value[messages.value.length - 1];
-  lastMessage.text = text;
-  lastMessage.renderedText = parseMarkdown(text);
-  scrollToBottom();
+  if (lastMessage) {
+    lastMessage.text = text;
+    lastMessage.renderedText = parseMarkdown(text);
+    scrollToBottom();
+  }
 };
 
 const addMessage = (sender: 'user' | 'ai', text: string) => {
@@ -282,7 +284,10 @@ const askQuestion = async (question: string) => {
         query: text,
         user: userId,
         conversation_id: currentDifyConversationId.value || undefined,
-        app_name: 'guanwang' // 指定为官网助手
+        app_name: 'guanwang', // 指定为官网助手
+        mode: 'chat',
+        inputs: {},
+        isPublic: true // 使用公开接口 (无 Token)
     },
     (streamText, conversationId) => {
         isThinking.value = false;
@@ -452,6 +457,7 @@ watchEffect(() => {
 </script>
 
 <style lang="scss" scoped>
+@use "sass:color";
 /* 样式复用自原项目，稍微调整 */
 $primary: #2473ba;
 $bg: #e6f7ff;
@@ -759,7 +765,7 @@ $shadow: rgba(0, 0, 0, 0.15);
     }
     
     &:hover:not(:disabled) {
-      background: darken($primary, 10%);
+      background: color.adjust($primary, $lightness: -10%);
     }
   }
 }

@@ -6,12 +6,15 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 
 ### 后端 (Backend)
 
-#### 1. 激活环境1
+
+#### 1. 激活环境
+
 ```bash
 conda activate trai_31014_whf
 ```
 
 #### 2. 启动服务
+
 ```bash
 # 在项目根目录下执行
 python backend/run.py

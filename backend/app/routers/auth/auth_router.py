@@ -5,7 +5,7 @@
 # 日期：2026-01-27
 # 描述：认证模块路由定义
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from backend.app.routers.auth.auth_func import AuthFunc, UserCreate, Token
 
@@ -19,6 +19,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     - **password**: 密码
     """
     return await AuthFunc.login_for_access_token(form_data)
+
+@router.post("/wecom-login", response_model=Token, summary="企业微信静默登录")
+async def wecom_login(code: str = Body(..., embed=True)):
+    """
+    企业微信 Code 换 Token
+    - **code**: OAuth2 授权回调的 code
+    """
+    return await AuthFunc.login_by_wecom_code(code)
 
 @router.post("/register", summary="用户注册")
 async def register(user_in: UserCreate):
