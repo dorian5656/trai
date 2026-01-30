@@ -60,7 +60,7 @@ class PredictManager:
         try:
             yolo_config = await ModelManager.get_model_config("heart_like.pt")
             if yolo_config and yolo_config.get("is_enabled"):
-                default_path = settings.BASE_DIR / "app" / "models" / "heart_like" / "heart_like.pt"
+                default_path = settings.BASE_DIR / "app" / "model" / "heart_like" / "heart_like.pt"
                 yolo_path = Path(yolo_config.get("path") or default_path)
                 if yolo_path.exists():
                     use_gpu = yolo_config.get("use_gpu", True)

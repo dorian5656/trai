@@ -6,7 +6,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 
 ### 后端 (Backend)
 
-#### 1. 激活环境
+#### 1. 激活环境1
 ```bash
 conda activate trai_31014_whf
 ```
@@ -129,6 +129,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志
+### 2026_01_30_1451
+- **后端**: 优化目录结构, 启动时自动检测并修复模型路径与临时目录.
+- **后端**: 移除冗余文件 (879.txt, scripts, logs等), 规范化项目结构.
 ### 2026_01_29_1730
 - **后端**: 优化端口管理, 启动时自动检测并释放占用端口 (支持 Windows/Linux/MacOS).
 - **后端**: 完善网络工具类 `NetUtils`, 统一中文注释与跨平台支持.
