@@ -44,7 +44,7 @@ class ImageChatRequest(BaseModel):
     AI 图像对话请求 (Qwen-VL 等)
     """
     messages: List[MultimodalMessage] = Field(..., description="历史消息列表")
-    model: str = Field("Qwen3-VL-4B-Instruct", description="模型名称")
+    model: str = Field("Qwen/Qwen3-VL-4B-Instruct", description="模型名称")
     temperature: float = Field(0.7, description="温度系数")
     max_tokens: int = Field(512, description="最大生成 Token 数")
 
@@ -102,15 +102,22 @@ class ImageManager:
             # 简单起见，我们假设用户会在 prompt 里问，或者我们默认追加
             # 这里不强制修改 prompt，以免影响用户意图
             
+            # 处理模型名称: 如果是短名，尝试映射到完整 ID
+            model_name = request.model
+            if model_name == "Qwen3-VL-4B-Instruct":
+                model_name = "Qwen/Qwen3-VL-4B-Instruct"
+            elif model_name == "Qwen3-VL-8B-Instruct":
+                model_name = "Qwen/Qwen3-VL-8B-Instruct"
+
             reply = await ModelScopeUtils.chat_completion(
                 messages=messages,
-                model_name="Qwen3-VL-4B-Instruct",
+                model_name=model_name,
                 max_new_tokens=request.max_tokens
             )
             
             return ImageChatResponse(
                 reply=reply,
-                model="Qwen3-VL-4B-Instruct",
+                model=model_name,
                 usage={"prompt_tokens": 0, "completion_tokens": 0} # 暂无法精确统计
             )
             

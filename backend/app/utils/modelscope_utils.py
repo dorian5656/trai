@@ -30,7 +30,10 @@ class ModelScopeUtils:
     # 默认模型路径映射 (可扩展)
     # 格式: "ShortName": "Relative/Path/To/Model"
     _MODEL_PATHS = {
-        "Qwen3-VL-4B-Instruct": "Qwen/Qwen/qwen3_vl_4b_instruct/Qwen/Qwen3-VL-4B-Instruct"
+        "Qwen3-VL-4B-Instruct": "Qwen/Qwen3-VL-4B-Instruct",
+        "Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct",
+        "Qwen/Qwen3-VL-4B-Instruct": "Qwen/Qwen3-VL-4B-Instruct",
+        "Qwen/Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct"
     }
 
     @classmethod
@@ -45,6 +48,14 @@ class ModelScopeUtils:
         
         # 2. 如果表中没有，尝试自动发现
         if not relative_path:
+            # 如果传入的是 namespace/model_name 格式，直接尝试拼接
+            if "/" in model_name:
+                parts = model_name.split("/")
+                if len(parts) >= 2:
+                    potential_path = base_path / parts[0] / parts[1]
+                    if potential_path.exists():
+                        return str(potential_path)
+
             logger.info(f"正在自动扫描查找模型: {model_name} ...")
             relative_path = cls._scan_and_find_model(model_name)
             if relative_path:
@@ -53,6 +64,9 @@ class ModelScopeUtils:
                 cls._MODEL_PATHS[model_name] = relative_path
         
         if not relative_path:
+            # 如果是 full id 且不存在，返回预期的路径以便后续下载
+            if "/" in model_name:
+                 return str(base_path / model_name)
             return ""
             
         return str(base_path / relative_path)
@@ -80,7 +94,7 @@ class ModelScopeUtils:
         return None
         
     @classmethod
-    def check_model_exists(cls, model_name: str = "Qwen3-VL-4B-Instruct") -> bool:
+    def check_model_exists(cls, model_name: str = "Qwen/Qwen3-VL-4B-Instruct") -> bool:
         """
         检查模型文件是否存在
         """
@@ -257,7 +271,7 @@ class ModelScopeUtils:
     async def chat_completion(
         cls, 
         messages: List[Dict[str, Any]], 
-        model_name: str = "Qwen3-VL-4B-Instruct",
+        model_name: str = "Qwen/Qwen3-VL-4B-Instruct",
         max_new_tokens: int = 512
     ) -> str:
         """
