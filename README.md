@@ -11,7 +11,8 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 conda activate trai_31014_whf
 ```
 
-#### 2. 启动服务
+#### 2. 启动服务2
+
 ```bash
 # 在项目根目录下执行
 python backend/run.py
