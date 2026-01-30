@@ -37,6 +37,8 @@ export function useFileUpload() {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
       const file = target.files[0];
+      if (!file) return;
+      
       const newFile: UploadFile = {
         id: Date.now().toString(),
         name: file.name,
