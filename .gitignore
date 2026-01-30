@@ -163,10 +163,27 @@ cython_debug/
 
 # Windows
 Thumbs.db
+
+# Models - Ignore all models except specific ones
 *.safetensors
 *.pt
 *.pth
 *.bin
+
+# 忽略 backend/app/model 下的所有内容
+backend/app/model/*
+# 但保留 heart_like 文件夹
+!backend/app/model/heart_like/
+# 保留 heart_like 文件夹下的 .pt 文件 (即使上面忽略了 *.pt，这里需要显式放行吗？
+# .gitignore 规则：如果排除了父目录，则无法重新包含文件。
+# 所以逻辑是：
+# 1. 忽略 model 下所有
+# 2. 不忽略 model/heart_like 目录
+# 3. 上面已经忽略了全局 *.pt，所以 heart_like 下的 .pt 也会被忽略
+# 4. 需要显式不忽略 heart_like 下的 .pt
+
+!backend/app/model/heart_like/*.pt
+
 backend/app/models/Qwen/
 backend/app/models/Tongyi-MAI/
 
