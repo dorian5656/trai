@@ -103,6 +103,31 @@ class WeComApp:
             logger.error(f"获取企业微信用户信息失败: {e}")
             raise
 
+    def get_user_id_by_code(self, code: str):
+        """
+        通过 OAuth2 code 获取成员信息 (UserId)
+        """
+        token = self._get_access_token()
+        url = f"https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={token}&code={code}"
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("errcode") == 0:
+                # 成功: {"UserId":"USERID", "DeviceId":"...", "errcode":0, ...}
+                # 失败(非企业成员): {"OpenId":"OPENID", "errcode":0, ...}
+                if "UserId" in data:
+                    return data["UserId"]
+                else:
+                    logger.warning(f"Code换取信息成功但无UserId (可能是非企业成员): {data}")
+                    return None
+            else:
+                logger.error(f"Code换取成员信息失败: {data}")
+                raise Exception(f"WeCom Code Error: {data.get('errmsg')}")
+        except Exception as e:
+            logger.error(f"获取企业微信成员UserId异常: {e}")
+            raise
+
     def get_department_list(self, department_id: int = None):
         """
         获取部门列表

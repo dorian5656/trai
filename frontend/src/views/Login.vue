@@ -6,7 +6,7 @@
 -->
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { User, Lock, Message, Iphone, UserFilled } from '@element-plus/icons-vue';
