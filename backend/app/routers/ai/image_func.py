@@ -9,12 +9,18 @@ import httpx
 import os
 import time
 import uuid
+import json
+from io import BytesIO
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Union
 from backend.app.config import settings
 from backend.app.utils.logger import logger
 from backend.app.utils.modelscope_utils import ModelScopeUtils
+from backend.app.utils.upload_utils import UploadUtils
+from backend.app.routers.upload.upload_func import UserImage
+from backend.app.utils.pg_utils import PGUtils
+from sqlalchemy import text
 
 # 全局缓存模型 pipeline
 _z_image_pipeline = None
@@ -44,7 +50,7 @@ class ImageChatRequest(BaseModel):
     AI 图像对话请求 (Qwen-VL 等)
     """
     messages: List[MultimodalMessage] = Field(..., description="历史消息列表")
-    model: str = Field("Qwen3-VL-4B-Instruct", description="模型名称")
+    model: str = Field("Qwen/Qwen3-VL-4B-Instruct", description="模型名称")
     temperature: float = Field(0.7, description="温度系数")
     max_tokens: int = Field(512, description="最大生成 Token 数")
 
@@ -88,30 +94,25 @@ class ImageManager:
         """
         try:
             # 转换消息格式 (如果需要适配前端格式到 Qwen 格式)
-            # 假设前端传来的格式已经是:
-            # content: [
-            #    {"type": "image", "image": "http://..."},
-            #    {"type": "text", "text": "描述图片"}
-            # ]
-            # 这与 QwenVLUtils 期望的格式一致，直接透传
-            
             messages = [msg.model_dump() for msg in request.messages]
             
-            # 添加系统提示要求中文回复 (如果用户没有明确指定语言)
-            # 或者在最后一条消息中追加提示
-            # 简单起见，我们假设用户会在 prompt 里问，或者我们默认追加
-            # 这里不强制修改 prompt，以免影响用户意图
-            
+            # 处理模型名称
+            model_name = request.model
+            if model_name == "Qwen3-VL-4B-Instruct":
+                model_name = "Qwen/Qwen3-VL-4B-Instruct"
+            elif model_name == "Qwen3-VL-8B-Instruct":
+                model_name = "Qwen/Qwen3-VL-8B-Instruct"
+
             reply = await ModelScopeUtils.chat_completion(
                 messages=messages,
-                model_name="Qwen3-VL-4B-Instruct",
+                model_name=model_name,
                 max_new_tokens=request.max_tokens
             )
             
             return ImageChatResponse(
                 reply=reply,
-                model="Qwen3-VL-4B-Instruct",
-                usage={"prompt_tokens": 0, "completion_tokens": 0} # 暂无法精确统计
+                model=model_name,
+                usage={"prompt_tokens": 0, "completion_tokens": 0}
             )
             
         except Exception as e:
@@ -119,63 +120,13 @@ class ImageManager:
             raise ValueError(f"Multimodal chat failed: {e}")
 
     @staticmethod
-    async def generate_image(request: ImageGenRequest) -> ImageGenResponse:
-        # ... (保持原有的文生图逻辑或待实现)
-        return ImageGenResponse(created=int(time.time()), data=[])
-        api_key = settings.AI_API_KEY or "sk-xxx"
-
-        # 适配本地模型服务 (通常不带 /v1)
-        # 如果配置中有 /v1 但我们需要去掉它 (根据测试结果)
-        # 简单处理：如果 api_base 包含 /v1，先尝试去掉它
-        
-        base_url = api_base
-        if "/v1" in base_url:
-            base_url = base_url.replace("/v1", "")
-        if base_url.endswith("/"):
-            base_url = base_url[:-1]
-            
-        url = f"{base_url}/chat/completions"
-
-        logger.info(f"正在调用多模态模型: {request.model}, URL: {url}")
-        
-        try:
-            async with httpx.AsyncClient(timeout=100.0) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    }
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"模型调用失败: {response.text}")
-                    raise Exception(f"Model API Error: {response.status_code} - {response.text}")
-                
-                try:
-                    data = response.json()
-                except Exception:
-                    logger.error(f"响应解析失败: {response.text[:200]}")
-                    raise Exception(f"Invalid JSON response: {response.text[:200]}")
-                
-                return ImageChatResponse(
-                    reply=data["choices"][0]["message"]["content"],
-                    model=data["model"],
-                    usage=data.get("usage", {})
-                )
-        except Exception as e:
-            logger.error(f"多模态对话异常: {str(e)}")
-            raise e
-
-    @staticmethod
-    async def generate_image(request: ImageGenRequest) -> ImageGenResponse:
+    async def generate_image(request: ImageGenRequest, user_id: str = "anonymous") -> ImageGenResponse:
         """
         文生图 (FLUX / Z-Image 等)
         """
         # 如果请求指定 Z-Image 模型，走本地调用
         if "Z-Image" in request.model or "Tongyi-MAI" in request.model:
-             return await ImageManager._generate_z_image_local(request)
+             return await ImageManager._generate_z_image_local(request, user_id)
 
         # 构造请求体
         payload = {
@@ -221,6 +172,32 @@ class ImageManager:
                     logger.error(f"响应解析失败: {response.text[:200]}")
                     raise Exception(f"Invalid JSON response: {response.text[:200]}")
                 
+                # 记录到 user_images 表
+                try:
+                    engine = PGUtils.get_engine()
+                    async with engine.begin() as conn:
+                        for item in data.get("data", []):
+                            img_url = item.get("url")
+                            if img_url:
+                                await conn.execute(
+                                    text("""
+                                        INSERT INTO user_images (user_id, filename, s3_key, url, module, source, prompt, meta_data)
+                                        VALUES (:user_id, :filename, :s3_key, :url, :module, :source, :prompt, :meta_data)
+                                    """),
+                                    {
+                                        "user_id": user_id,
+                                        "filename": f"dify_gen_{int(time.time())}_{uuid.uuid4().hex[:8]}.png",
+                                        "s3_key": img_url, # 远程URL作为key
+                                        "url": img_url,
+                                        "module": "gen",
+                                        "source": "generated",
+                                        "prompt": request.prompt,
+                                        "meta_data": json.dumps({"model": request.model, "provider": "dify"})
+                                    }
+                                )
+                except Exception as e:
+                    logger.error(f"Failed to save generated image to DB: {e}")
+
                 return ImageGenResponse(
                     created=data.get("created", 0),
                     data=data.get("data", [])
@@ -230,73 +207,137 @@ class ImageManager:
             raise e
 
     @staticmethod
-    async def _generate_z_image_local(request: ImageGenRequest) -> ImageGenResponse:
+    async def _generate_z_image_local(request: ImageGenRequest, user_id: str = "anonymous") -> ImageGenResponse:
         """
         本地运行 Z-Image 模型 (异步包装)
         """
         import asyncio
         loop = asyncio.get_running_loop()
         # 在线程池中运行阻塞的 GPU 推理代码
-        return await loop.run_in_executor(None, ImageManager._run_z_image_sync, request)
+        images_bytes = await loop.run_in_executor(None, ImageManager._run_z_image_sync, request)
+        
+        images_data = []
+        for img_bytes in images_bytes:
+            filename = f"z_image_{uuid.uuid4()}.png"
+            
+            # 判断是否启用 S3 (通过 settings 或 UploadUtils 内部逻辑)
+            # UploadUtils.save_from_bytes 内部已经处理了 S3_ENABLED 的判断逻辑
+            # 但我们需要确保返回的是完整 URL 给前端
+            
+            url, object_key, size = await UploadUtils.save_from_bytes(
+                data=img_bytes, 
+                filename=filename, 
+                module="gen", 
+                content_type="image/png"
+            )
+            
+            # 如果是本地存储，UploadUtils 返回的是相对路径 (e.g., /static/uploads/...)
+            # 如果是 S3，返回的是完整 URL (e.g., http://minio... or https://oss...)
+            # 前端通常需要完整 URL，或者拼接 BaseURL
+            
+            # 这里的 url 字段，如果是 S3 则是完整链接；如果是本地则是相对路径
+            # 为了方便前端，我们可以尝试拼接本地 URL 的 host
+            
+            final_url = url
+            
+            # 记录到 user_images 表
+            try:
+                engine = PGUtils.get_engine()
+                async with engine.begin() as conn:
+                     await conn.execute(
+                        text("""
+                            INSERT INTO user_images (user_id, filename, s3_key, url, size, mime_type, module, source, prompt, meta_data)
+                            VALUES (:user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :prompt, :meta_data)
+                        """),
+                        {
+                            "user_id": user_id,
+                            "filename": filename,
+                            "s3_key": object_key,
+                            "url": final_url,
+                            "size": size,
+                            "mime_type": "image/png",
+                            "module": "gen",
+                            "source": "generated",
+                            "prompt": request.prompt,
+                            "meta_data": json.dumps({"model": request.model, "provider": "z-image"})
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"Failed to save generated Z-Image to DB: {e}")
+
+            if not url.startswith("http"):
+                 # 本地相对路径，尝试拼接 (虽然后端无法确切知道前端访问的 Host，但可以尽量提供完整路径)
+                 # 或者保持相对路径，由前端拼接。
+                 # 用户要求 "记得返回有 S3 地址"，意味着如果配置了 S3，必须是 S3 地址。
+                 # UploadUtils.save_from_bytes 已经做到了这一点。
+                 pass
+
+            images_data.append({"url": final_url})
+            logger.info(f"Generated image: {object_key} (URL: {final_url})")
+            
+        return ImageGenResponse(
+            created=int(time.time()),
+            data=images_data
+        )
 
     @staticmethod
-    def _run_z_image_sync(request: ImageGenRequest) -> ImageGenResponse:
+    def _run_z_image_sync(request: ImageGenRequest) -> List[bytes]:
         """
-        Z-Image 同步推理逻辑
+        Z-Image 同步推理逻辑 (返回图片字节列表)
         """
         global _z_image_pipeline
         import torch
-        from diffusers import ZImagePipeline
+        from diffusers import DiffusionPipeline
 
         # 1. 确定模型路径
-        # backend/app/routers/ai/image_func.py -> backend
         base_dir = Path(__file__).resolve().parent.parent.parent.parent
-        # 使用 app/models
-        model_dir = base_dir / "app/models/Tongyi-MAI"
         
-        # 自动下载模型 (如果不存在)
-        if not model_dir.exists() or not any(model_dir.iterdir()):
-            logger.info(f"📥 Z-Image-Turbo 模型未找到，开始下载: Tongyi-MAI/Z-Image-Turbo -> {model_dir}")
-            try:
-                from modelscope.hub.snapshot_download import snapshot_download
-                snapshot_download("Tongyi-MAI/Z-Image-Turbo", cache_dir=str(base_dir / "app/models"))
-                logger.success(f"✅ Z-Image-Turbo 模型下载完成")
-            except Exception as e:
-                logger.error(f"❌ Z-Image-Turbo 模型下载失败: {e}")
-                raise e
-        
-        # modelscope 下载后通常会在 cache_dir 下创建 Tongyi-MAI/Z-Image-Turbo 目录
-        # 我们上面指定 cache_dir=app/models，所以最终路径应该是 app/models/Tongyi-MAI/Z-Image-Turbo
-        # 但我们原本的逻辑是指向 Tongyi-MAI，这里需要适配一下路径
-        # 检查实际路径
-        actual_model_path = base_dir / "app/models/Tongyi-MAI/Z-Image-Turbo"
-        if actual_model_path.exists():
-            model_path = actual_model_path
-        else:
-            # 可能是直接下载到了 Tongyi-MAI (取决于 modelscope 版本 behavior，通常是 Organization/ModelName)
-            model_path = model_dir
+        # 自动下载/检查模型
+        try:
+            from modelscope.hub.snapshot_download import snapshot_download
+            logger.info(f"Checking/Downloading Z-Image-Turbo model...")
+            # snapshot_download 会自动处理断点续传和缓存
+            model_path = snapshot_download("Tongyi-MAI/Z-Image-Turbo", cache_dir=str(base_dir / "app/models"))
+            logger.success(f"✅ Z-Image-Turbo model ready at {model_path}")
+        except Exception as e:
+            logger.error(f"❌ Z-Image-Turbo 模型下载/检查失败: {e}")
+            raise e
 
         # 2. 加载模型 (单例缓存)
         if _z_image_pipeline is None:
              logger.info(f"Loading Z-Image model from {model_path}...")
              try:
                  dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
-                 _z_image_pipeline = ZImagePipeline.from_pretrained(
+                 _z_image_pipeline = DiffusionPipeline.from_pretrained(
                      str(model_path),
                      torch_dtype=dtype,
                      low_cpu_mem_usage=False
                  )
                  if torch.cuda.is_available():
-                     _z_image_pipeline.to("cuda")
+                     # 自动选择显存最大的 GPU
+                     device = "cuda"
+                     try:
+                         device_count = torch.cuda.device_count()
+                         max_free_memory = 0
+                         best_gpu_id = 0
+                         for i in range(device_count):
+                             free_mem = torch.cuda.mem_get_info(i)[0]
+                             if free_mem > max_free_memory:
+                                 max_free_memory = free_mem
+                                 best_gpu_id = i
+                         device = f"cuda:{best_gpu_id}"
+                         logger.info(f"Z-Image using GPU {best_gpu_id} (Free: {max_free_memory / 1024**3:.2f} GB)")
+                     except Exception as e:
+                         logger.warning(f"Failed to auto-select GPU, using default cuda: {e}")
+                     
+                     _z_image_pipeline.to(device)
                  logger.success("Z-Image model loaded successfully.")
              except Exception as e:
                  logger.error(f"Failed to load Z-Image model: {e}")
                  raise e
 
         # 3. 生成图片
-        images_data = []
-        static_dir = base_dir / "static/gen"
-        static_dir.mkdir(parents=True, exist_ok=True)
+        generated_images_bytes = []
         
         logger.info(f"Start generating {request.n} images with prompt: {request.prompt[:50]}...")
         
@@ -319,20 +360,9 @@ class ImageManager:
                 generator=torch.Generator("cuda" if torch.cuda.is_available() else "cpu").manual_seed(int(time.time() * 1000) % 2**32),
             ).images[0]
             
-            # 4. 保存文件
-            filename = f"z_image_{uuid.uuid4()}.png"
-            file_path = static_dir / filename
-            image.save(file_path)
+            # 将 PIL Image 保存到内存
+            img_byte_arr = BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            generated_images_bytes.append(img_byte_arr.getvalue())
             
-            # 构造访问 URL
-            # 假设前端可以通过 /static 访问
-            url = f"/static/gen/{filename}"
-            images_data.append({"url": url})
-            
-            logger.info(f"Generated image: {file_path}")
-
-        return ImageGenResponse(
-            created=int(time.time()),
-            data=images_data
-        )
-
+        return generated_images_bytes

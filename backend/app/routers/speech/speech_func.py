@@ -22,6 +22,7 @@ from backend.app.utils.logger import logger
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import Base
 from backend.app.utils.ocr_utils import OcrHelper
+from backend.app.routers.upload.upload_func import UserAudio
 from sqlalchemy import Column, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -209,8 +210,11 @@ class SpeechManager:
             text_result = res[0].get("text", "") if (res and len(res) > 0) else ""
             
             # 4. 存入数据库
+            user_id = getattr(current_user, "username", str(current_user))
+            
+            # 4.1 SpeechLog
             log_entry = SpeechLog(
-                user_id=current_user.username, # 假设 current_user 有 username
+                user_id=user_id,
                 audio_url=url,
                 s3_key=object_key,
                 recognition_text=text_result,
@@ -218,6 +222,23 @@ class SpeechManager:
                 status="success"
             )
             db.add(log_entry)
+            
+            # 4.2 UserAudio (资产表)
+            user_audio = UserAudio(
+                user_id=user_id,
+                filename=file.filename,
+                s3_key=object_key,
+                url=url,
+                size=size,
+                duration=duration,
+                mime_type=file.content_type or "audio/wav",
+                module="speech",
+                source="upload",
+                text_content=text_result,
+                meta_data={"task": "asr", "model": "funasr"}
+            )
+            db.add(user_audio)
+            
             await db.commit()
             await db.refresh(log_entry)
             

@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     @property
     def MODEL_PATH_HEART_LIKE(self) -> Path:
         """YOLO Heart Like 模型路径"""
-        return self.BASE_DIR / "app" / "models" / "yolo11" / "heart_like" / "heart_like.pt"
+        # Updated to match actual file structure: yolo/yolo11/heart_like/heart_like.pt
+        return self.BASE_DIR / "app" / "models" / "yolo" / "yolo11" / "heart_like" / "heart_like.pt"
 
     # 日志配置
     LOG_LEVEL: str = "INFO"

@@ -37,6 +37,109 @@ class UploadUtils:
     BASE_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "uploads"
 
     @classmethod
+    async def save_from_bytes(cls, data: bytes, filename: str, module: str = "common", content_type: str = None) -> Tuple[str, str, int]:
+        """
+        保存字节数据 (本地或S3)
+        
+        Args:
+            data: 文件的字节内容
+            filename: 原始文件名
+            module: 模块名称
+            content_type: MIME类型
+            
+        Returns:
+            Tuple[str, str, int]: (相对路径/URL路径, 本地绝对路径/S3 Key, 文件大小)
+        """
+        # 1. 获取文件扩展名并转小写
+        ext = Path(filename).suffix.lower()
+        if not ext:
+            ext = ".bin"
+            
+        # 2. 校验文件类型 (可选，仅警告)
+        file_type = cls._get_file_type(ext)
+        if not file_type:
+            logger.warning(f"上传了未在白名单中的文件类型: {ext}")
+
+        # 3. 生成存储路径
+        date_str = time.strftime("%Y%m%d")
+        file_id = str(uuid.uuid4()).replace("-", "")
+        new_filename = f"{file_id}{ext}"
+        object_name = f"{module}/{date_str}/{new_filename}" # S3 Key 或相对路径
+        
+        file_size = len(data)
+        
+        # 4. 判断存储方式
+        if settings.S3_ENABLED:
+            # S3 模式
+            bucket_name = settings.S3_BUCKET_NAME
+            if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
+                bucket_name = settings.S3_IMAGE_BUCKET_NAME
+            elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
+                bucket_name = settings.S3_SPEECH_BUCKET_NAME
+            
+            session = aioboto3.Session()
+            try:
+                async with session.client(
+                    's3',
+                    endpoint_url=settings.S3_ENDPOINT_URL,
+                    aws_access_key_id=settings.S3_ACCESS_KEY,
+                    aws_secret_access_key=settings.S3_SECRET_KEY,
+                    region_name=settings.S3_REGION_NAME
+                ) as s3:
+                    # 确保 ContentType
+                    final_content_type = content_type or "application/octet-stream"
+                    
+                    # 自动创建 Bucket
+                    try:
+                        await s3.head_bucket(Bucket=bucket_name)
+                    except Exception:
+                        try:
+                            logger.info(f"Bucket {bucket_name} 不存在，正在创建...")
+                            await s3.create_bucket(Bucket=bucket_name)
+                            await cls._set_bucket_public(s3, bucket_name)
+                        except Exception:
+                            pass
+
+                    await s3.put_object(
+                        Bucket=bucket_name,
+                        Key=object_name,
+                        Body=data,
+                        ContentType=final_content_type,
+                        ACL='public-read'
+                    )
+                    
+                    logger.info(f"文件上传到 S3 成功: {bucket_name}/{object_name}")
+                    
+                    if settings.S3_PUBLIC_DOMAIN:
+                        url = f"{settings.S3_PUBLIC_DOMAIN}/{object_name}"
+                    else:
+                        url = f"{settings.S3_ENDPOINT_URL}/{bucket_name}/{object_name}"
+                        
+                    return url, object_name, file_size
+            except Exception as e:
+                logger.error(f"S3 上传失败: {e}")
+                raise HTTPException(status_code=500, detail=f"S3 上传失败: {str(e)}")
+        else:
+            # 本地模式
+            save_dir = cls.BASE_UPLOAD_DIR / module / date_str
+            if not save_dir.exists():
+                save_dir.mkdir(parents=True, exist_ok=True)
+                
+            local_path = save_dir / new_filename
+            try:
+                with open(local_path, "wb") as f:
+                    f.write(data)
+                
+                logger.info(f"文件保存到本地成功: {local_path} (Size: {file_size})")
+                
+                # 生成访问 URL
+                relative_path = f"/static/uploads/{module}/{date_str}/{new_filename}"
+                return relative_path, str(local_path), file_size
+            except Exception as e:
+                logger.error(f"本地文件写入失败: {e}")
+                raise HTTPException(status_code=500, detail="文件保存失败")
+
+    @classmethod
     async def save_file(cls, file: UploadFile, module: str = "common") -> Tuple[str, str, int]:
         """
         保存上传的文件 (本地或S3)
