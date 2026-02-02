@@ -36,4 +36,5 @@ async def generate_image(
     - **prompt**: 提示词
     - **model**: 模型 (默认 FLUX.2-dev)
     """
-    return await ImageManager.generate_image(request)
+    user_id = getattr(current_user, "username", None) or current_user["username"]
+    return await ImageManager.generate_image(request, user_id=str(user_id))
