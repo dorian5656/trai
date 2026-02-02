@@ -27,6 +27,24 @@ async def chat_message(
     generator = await DifyFunc.chat_message(request)
     return StreamingResponse(generator, media_type="text/event-stream")
 
+@router.post("/chat/public", summary="Dify 对话 (官网公开/匿名)")
+async def chat_message_public(
+    request: DifyChatRequest
+):
+    """
+    官网专用公开对话接口 (无 Token 验证)
+    - 强制 app_name="guanwang"
+    """
+    # 强制覆盖 app_name，防止滥用
+    request.app_name = "guanwang"
+    
+    # 允许匿名，如果没有 user 则自动生成一个 session user id 或直接透传
+    if not request.user:
+        request.user = "anonymous_web_user"
+        
+    generator = await DifyFunc.chat_message(request)
+    return StreamingResponse(generator, media_type="text/event-stream")
+
 @router.get("/conversations", summary="获取会话列表")
 async def get_conversations(
     user: str,

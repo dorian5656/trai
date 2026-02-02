@@ -60,10 +60,11 @@ const handleRegenerate = () => {
   const messages = chatStore.messages;
   let lastUserMsgContent = '';
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user') {
+    const msg = messages[i];
+    if (msg && msg.role === 'user') {
       // 提取纯文本内容（去除可能的 [文件: ...] 前缀，如果需要重新上传文件逻辑会更复杂，这里简化为重发文本）
       // 现在的 fullContent 是 "[文件: xxx] 文本"，这里简单起见直接重发整条内容
-      lastUserMsgContent = messages[i].content;
+      lastUserMsgContent = msg.content;
       break;
     }
   }
@@ -110,7 +111,7 @@ const loadConversations = async () => {
   try {
     const res = await fetchDifyConversations(userStore.username);
     if (res && res.data) {
-      chatStore.difyConversations = res.data;
+      chatStore.difyConversations = (res.data as unknown) as any[];
     }
   } catch (e) {
     console.error('加载历史会话失败', e);

@@ -40,42 +40,37 @@ export const useUserStore = defineStore('user', () => {
 
   /**
    * 获取用户信息
-   * 暂时直接从 Token 解析，不调用后端接口
    */
   const fetchUserInfo = async () => {
     if (!token.value) return;
     
-    // 直接尝试从 Token 解析
     try {
-      const parts = token.value.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]));
-        if (payload && payload.sub) {
-          userInfo.value = {
-            id: 'local',
-            username: payload.sub,
-            full_name: payload.sub,
-            is_active: true,
-            is_superuser: false,
-            created_at: new Date().toISOString()
-          } as UserInfo;
-          // console.log('已从 Token 本地解析用户信息');
-          return;
-        }
-      }
-    } catch (e) {
-      console.error('Token 解析失败:', e);
-    }
-
-    // 如果 Token 解析失败，尝试调用接口作为备选 (或直接忽略)
-    /*
-    try {
+      // 优先从后端接口获取完整信息
       const info = await getUserInfo();
       userInfo.value = info;
     } catch (error) {
-      console.error('获取用户信息失败:', error);
+      console.error('获取用户信息失败, 尝试本地解析:', error);
+      
+      // 接口调用失败时，尝试从 Token 解析 (降级方案)
+      try {
+        const parts = token.value.split('.');
+        if (parts.length === 3 && parts[1]) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload && payload.sub) {
+            userInfo.value = {
+              id: 'local',
+              username: payload.sub,
+              full_name: payload.sub,
+              is_active: true,
+              is_superuser: false,
+              created_at: new Date().toISOString()
+            } as UserInfo;
+          }
+        }
+      } catch (e) {
+        console.error('Token 本地解析也失败:', e);
+      }
     }
-    */
   };
 
   /**

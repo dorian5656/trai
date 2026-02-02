@@ -15,6 +15,7 @@ from backend.app.routers.upload import upload_router
 from backend.app.routers import monitor
 from backend.app.routers import wecom
 from backend.app.routers import dify
+from backend.app.routers import speech
 
 api_router = APIRouter()
 
@@ -35,3 +36,5 @@ api_router.include_router(rrdsppg.router, prefix="/rrdsppg", tags=["人人都是
 api_router.include_router(wecom.router, prefix="/wecom", tags=["企业微信"])
 # 注册 Dify 路由
 api_router.include_router(dify.router, prefix="/dify", tags=["Dify AI"])
+# 注册 语音路由
+api_router.include_router(speech.router, prefix="/speech", tags=["语音服务"])

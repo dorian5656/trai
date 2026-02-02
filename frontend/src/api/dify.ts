@@ -32,3 +32,9 @@ export const fetchDifyConversations = (user: string, limit: number = 20, app_nam
     params: { user, limit, app_name }
   });
 };
+
+/**
+ * 官网专用公开对话接口 (流式)
+ * URL: /dify/chat/public
+ */
+export const publicChatUrl = '/dify/chat/public';

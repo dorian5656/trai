@@ -109,10 +109,9 @@ export const useChatStore = defineStore('chat', () => {
 
   // 更新最后一条消息内容 (用于流式输出)
   const updateLastMessage = (content: string) => {
-    const session = sessions.value.find(s => s.id === currentSessionId.value);
-    if (session && session.messages.length > 0) {
-      const lastMsg = session.messages[session.messages.length - 1];
-      if (lastMsg.role === 'assistant') {
+    if (messages.value.length > 0) {
+      const lastMsg = messages.value[messages.value.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
         lastMsg.content = content;
       }
     }
