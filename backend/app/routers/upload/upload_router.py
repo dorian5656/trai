@@ -27,11 +27,20 @@ async def upload_file(
 ):
     """
     上传文件到服务器
-    - **file**: 文件对象
-    - **module**: 模块名称 (决定存储子目录)
-    
-    返回:
-    - **url**: 文件的静态访问路径
+
+    Args:
+        file (UploadFile): 文件对象
+        module (str): 模块名称 (决定存储子目录)
+        current_user (User): 当前登录用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        UploadResponse: 上传结果
+            - url (str): 文件的静态访问路径
+            - filename (str): 原始文件名
+            - size (int): 文件大小
+            - content_type (str): MIME类型
+            - local_path (str): 存储路径
     """
     logger.info(f"用户 {current_user.username} 正在上传文件: {file.filename} (Module: {module})")
     
@@ -99,7 +108,12 @@ async def upload_file(
 async def download_file(file_path: str):
     """
     代理下载文件 (用于解决内网 S3 无法直接访问的问题)
-    - **file_path**: 文件路径 (如 common/20260127/abc.png)
+
+    Args:
+        file_path (str): 文件路径 (如 common/20260127/abc.png)
+
+    Returns:
+        StreamingResponse: 文件流
     """
     logger.info(f"正在代理下载文件: {file_path}")
     
@@ -135,6 +149,15 @@ async def list_my_images(
 ):
     """
     获取当前用户上传的图片列表
+
+    Args:
+        page (int): 页码
+        size (int): 每页数量
+        current_user (User): 当前登录用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        List[ImageInfo]: 图片信息列表
     """
     stmt = (
         select(UserImage)
@@ -156,16 +179,28 @@ async def list_my_images(
         ) for img in images
     ]
 
-@router.delete("/{image_id}", summary="删除图片")
+class DeleteImageRequest(BaseModel):
+    image_id: str
+
+@router.post("/delete", summary="删除图片")
 async def delete_image(
-    image_id: str,
+    request: DeleteImageRequest,
     current_user = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     删除图片 (软删除)
+
+    Args:
+        request (DeleteImageRequest): 删除请求
+            - image_id (str): 图片ID
+        current_user (User): 当前登录用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        dict: 操作结果
     """
-    stmt = select(UserImage).where(UserImage.id == image_id)
+    stmt = select(UserImage).where(UserImage.id == request.image_id)
     result = await db.execute(stmt)
     image = result.scalar_one_or_none()
     

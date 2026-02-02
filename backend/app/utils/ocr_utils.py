@@ -146,9 +146,8 @@ class OcrHelper:
                 cls._ocr = PaddleOCR(
                     use_angle_cls=use_angle_cls, 
                     lang=lang, 
-                    use_gpu=real_use_gpu,  # 显式控制
-                    gpu_id=gpu_id if real_use_gpu else 0, 
-                    show_log=False,
+                    # use_gpu=real_use_gpu,  # 显式控制 (新版移除)
+                    # show_log=False, # 新版 PaddleOCR 可能已移除此参数
                     # 确保模型下载路径在项目内 (可选，Paddle 默认在 ~/.paddleocr)
                     # det_model_dir=..., rec_model_dir=... 
                     # 这里保持默认，因为 Paddle 会自动处理，用户主要是想要"自动下载"的行为

@@ -15,8 +15,16 @@ router = APIRouter()
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """
     OAuth2 兼容的 Token 登录接口
-    - **username**: 用户名 (A0001-A9999)
-    - **password**: 密码
+
+    Args:
+        form_data (OAuth2PasswordRequestForm): 表单数据
+            - username (str): 用户名 (A0001-A9999)
+            - password (str): 密码
+
+    Returns:
+        Token: 访问令牌
+            - access_token (str): JWT Token
+            - token_type (str): Bearer
     """
     return await AuthFunc.login_for_access_token(form_data)
 
@@ -24,7 +32,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 async def wecom_login(code: str = Body(..., embed=True)):
     """
     企业微信 Code 换 Token
-    - **code**: OAuth2 授权回调的 code
+
+    Args:
+        code (str): OAuth2 授权回调的 code
+
+    Returns:
+        Token: 访问令牌
+            - access_token (str): JWT Token
+            - token_type (str): Bearer
     """
     return await AuthFunc.login_by_wecom_code(code)
 
@@ -32,9 +47,18 @@ async def wecom_login(code: str = Body(..., embed=True)):
 async def register(user_in: UserCreate):
     """
     用户注册接口
-    - **username**: 必须是 A+4位数字 (如 A0001)
-    - **password**: 至少6位
-    - **其他信息**: 可选
-    - **注意**: 注册后默认为"未激活"状态，需管理员审核
+
+    Args:
+        user_in (UserCreate): 用户注册信息
+            - username (str): 必须是 A+4位数字 (如 A0001)
+            - password (str): 至少6位
+            - email (str, optional): 邮箱
+            - full_name (str, optional): 全名
+
+    Note:
+        注册后默认为"未激活"状态，需管理员审核
+
+    Returns:
+        User: 注册成功的用户信息
     """
     return await AuthFunc.register_user(user_in)

@@ -11,14 +11,15 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from backend.app.utils.logger import logger
 from backend.app.config import settings
-from backend.app.router import api_router
-from backend.app.utils.net_utils import NetUtils
-from backend.app.middlewares.log_middleware import RequestLogMiddleware
 
 def create_app() -> FastAPI:
     """
     创建 FastAPI 应用实例
     """
+    from backend.app.router import api_router
+    from backend.app.utils.net_utils import NetUtils
+    from backend.app.middlewares.log_middleware import RequestLogMiddleware
+
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
@@ -98,4 +99,4 @@ def create_app() -> FastAPI:
 
     return app
 
-app = create_app()
+# app = create_app()
