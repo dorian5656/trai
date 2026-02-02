@@ -19,6 +19,17 @@ async def chat_message(
 ):
     """
     调用 Dify API 进行对话 (流式 SSE)
+
+    Args:
+        request (DifyChatRequest): 请求参数
+            - query (str): 用户问题
+            - user (str, optional): 用户标识 (后端会覆盖为当前用户)
+            - conversation_id (str, optional): 会话ID
+            - inputs (dict, optional): 变量输入
+        current_user (User): 当前登录用户
+
+    Returns:
+        StreamingResponse: SSE 流式响应
     """
     # 强制使用当前用户的 username 作为 Dify user 标识 (或者可以使用 request.user)
     # 这里为了安全，可以覆盖 request.user，或者允许前端传但做校验
@@ -33,7 +44,16 @@ async def chat_message_public(
 ):
     """
     官网专用公开对话接口 (无 Token 验证)
-    - 强制 app_name="guanwang"
+
+    Args:
+        request (DifyChatRequest): 请求参数
+            - query (str): 用户问题
+            - user (str, optional): 用户标识 (若无则自动生成)
+            - conversation_id (str, optional): 会话ID
+            - app_name (str): 必须为 "guanwang" (后端强制覆盖)
+
+    Returns:
+        StreamingResponse: SSE 流式响应
     """
     # 强制覆盖 app_name，防止滥用
     request.app_name = "guanwang"
@@ -54,5 +74,14 @@ async def get_conversations(
 ):
     """
     获取 Dify 会话列表
+
+    Args:
+        user (str): 用户标识
+        limit (int): 数量限制
+        app_name (str): 应用名称
+        current_user (User): 当前登录用户
+
+    Returns:
+        dict: 会话列表数据
     """
     return await DifyFunc.get_conversations(user=user, limit=limit, app_name=app_name)

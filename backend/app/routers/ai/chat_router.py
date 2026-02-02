@@ -22,9 +22,17 @@ async def chat_completions(
 ):
     """
     调用 AI 进行对话 (支持 DeepSeek API 和 本地 ModelScope)
-    - **messages**: 消息历史
-    - **model**: 模型 (deepseek-chat / Qwen3-VL-4B-Instruct)
-    - **temperature**: 温度系数
+
+    Args:
+        request (ChatRequest): 请求体
+            - messages (list): 消息历史
+            - model (str): 模型名称 (deepseek-chat / Qwen3-VL-4B-Instruct)
+            - temperature (float): 温度系数
+            - max_tokens (int): 最大生成 Token 数
+        current_user (User): 当前登录用户
+
+    Returns:
+        ChatResponse: 对话响应
     """
     # 假设 current_user 支持属性访问 (根据 dependencies.py 推断)
     user_id = getattr(current_user, "username", None) or current_user["username"]
@@ -37,9 +45,17 @@ async def chat_completions_stream(
 ):
     """
     调用 DeepSeek API 进行对话 (流式 SSE)
-    - **messages**: 消息历史
-    - **model**: 模型 (默认 deepseek-chat)
-    - **temperature**: 温度系数
+
+    Args:
+        request (ChatRequest): 请求体
+            - messages (list): 消息历史
+            - model (str): 模型名称 (默认 deepseek-chat)
+            - temperature (float): 温度系数
+            - session_id (str, optional): 会话 ID (若无则自动生成)
+        current_user (User): 当前登录用户
+
+    Returns:
+        StreamingResponse: SSE 流式响应 (text/event-stream)
     """
     user_id = getattr(current_user, "username", None) or current_user["username"]
     session_id = request.session_id or str(uuid.uuid4())

@@ -131,6 +131,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志
+### 2026_02_02_1618
+- **后端**: 完善所有路由的 API 文档(参数与返回值).
+- **后端**: 优化 `upload` 模块删除接口为 POST 请求.
+- **后端**: 扩展 `ResponseCode` 状态码定义.
+- **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
+
 ### 2026_02_02_1436
 - **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
 - **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
