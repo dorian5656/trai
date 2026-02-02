@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
 
     # 引入环境同步工具
     from backend.app.utils.env_sync import EnvSync
+    from backend.app.routers.monitor.ai_models_func import ModelManager
 
     @app.on_event("startup")
     async def startup_event():
@@ -52,6 +53,9 @@ def create_app() -> FastAPI:
         
         # 1. 同步环境配置到数据库
         await EnvSync.sync()
+
+        # 2. 初始化 AI 模型管理器 (创建默认文件夹)
+        await ModelManager.initialize()
 
         # 初始化静态资源目录 (backend/static)
         # 用于存放 exe、图片等静态文件

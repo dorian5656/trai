@@ -16,7 +16,7 @@ router = APIRouter()
 
 from backend.app.utils.pg_utils import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.routers.upload.upload_func import UserImage
+from backend.app.routers.upload.upload_func import UserImage, UserAudio
 
 @router.post("/common", response_model=UploadResponse, summary="通用文件上传")
 async def upload_file(
@@ -39,21 +39,52 @@ async def upload_file(
     
     # 记录到数据库
     try:
-        new_image = UserImage(
-            user_id=current_user.username,
-            filename=file.filename,
-            s3_key=local_path, # local_path 在 S3 模式下是 object_name
-            url=url,
-            size=size,
-            mime_type=file.content_type,
-            module=module
-        )
-        db.add(new_image)
-        await db.commit()
-        await db.refresh(new_image)
-        logger.info(f"图片记录已保存到数据库: {new_image.id}")
+        # 判断文件类型
+        content_type = file.content_type or "application/octet-stream"
+        is_audio = content_type.startswith("audio/")
+        
+        # 二次检查扩展名 (防止 MIME 类型不准)
+        if not is_audio and file.filename:
+            ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ""
+            if f".{ext}" in UploadUtils.ALLOWED_EXTENSIONS.get('audio', {}):
+                is_audio = True
+        
+        if is_audio:
+            # 保存到音频表
+            new_audio = UserAudio(
+                user_id=current_user.username,
+                filename=file.filename,
+                s3_key=local_path,
+                url=url,
+                size=size,
+                mime_type=content_type,
+                module=module,
+                source="upload"
+            )
+            db.add(new_audio)
+            await db.commit()
+            await db.refresh(new_audio)
+            logger.info(f"音频记录已保存到数据库: {new_audio.id}")
+        else:
+            # 默认保存到图片表 (兼容旧逻辑，且 UserImage 实际上作为通用文件表使用)
+            # 只有明确是音频才去 audio 表
+            new_image = UserImage(
+                user_id=current_user.username,
+                filename=file.filename,
+                s3_key=local_path, # local_path 在 S3 模式下是 object_name
+                url=url,
+                size=size,
+                mime_type=content_type,
+                module=module,
+                source="upload"
+            )
+            db.add(new_image)
+            await db.commit()
+            await db.refresh(new_image)
+            logger.info(f"文件记录已保存到数据库: {new_image.id}")
+            
     except Exception as e:
-        logger.error(f"保存图片记录失败: {e}")
+        logger.error(f"保存文件记录失败: {e}")
         # 注意：这里不应该回滚文件上传，但需要记录错误
     
     return UploadResponse(
