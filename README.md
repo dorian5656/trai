@@ -131,6 +131,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志
+### 2026_02_02_1436
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
+- **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
+- **后端**: 优化项目结构, 清理临时测试脚本.
+
 ### 2026_01_30_1645
 - **后端**: 修复 SpeechManager CPU 强制配置, 启用 GPU 加速 (通过 `ocr_utils.py` 自动选择空闲 GPU).
 - **后端**: 修复 S3 音频 URL 访问权限问题 (设为 public-read).
