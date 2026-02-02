@@ -7,8 +7,8 @@
 
 from pydantic import BaseModel, Field
 from typing import Optional
-from sqlalchemy import Column, String, BigInteger, Boolean, DateTime, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, BigInteger, Boolean, DateTime, text, Float, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from backend.app.utils.pg_utils import Base
 
 class UploadResponse(BaseModel):
@@ -33,6 +33,35 @@ class UserImage(Base):
     size = Column(BigInteger, comment="文件大小")
     mime_type = Column(String(100), comment="MIME类型")
     module = Column(String(50), default="common", comment="所属模块")
+    
+    # 新增字段
+    source = Column(String(20), default="upload", comment="来源 (upload:上传, generated:生成)")
+    prompt = Column(Text, comment="生成提示词")
+    meta_data = Column(JSONB, comment="扩展元数据")
+    
+    is_deleted = Column(Boolean, default=False, comment="是否删除")
+    created_at = Column(DateTime, server_default=text("NOW()"), comment="创建时间")
+    updated_at = Column(DateTime, server_default=text("NOW()"), onupdate=text("NOW()"), comment="更新时间")
+
+class UserAudio(Base):
+    """用户音频表"""
+    __tablename__ = "user_audios"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id = Column(String(50), nullable=False, comment="用户ID")
+    filename = Column(String(255), nullable=False, comment="原始文件名")
+    s3_key = Column(String(500), nullable=False, comment="S3对象键")
+    url = Column(Text, nullable=False, comment="访问URL")
+    size = Column(BigInteger, comment="文件大小")
+    duration = Column(Float, comment="时长(秒)")
+    mime_type = Column(String(100), comment="MIME类型")
+    module = Column(String(50), default="common", comment="所属模块")
+    
+    source = Column(String(20), default="upload", comment="来源 (upload:上传, generated:生成)")
+    prompt = Column(Text, comment="TTS文本")
+    text_content = Column(Text, comment="ASR识别结果或TTS文本")
+    meta_data = Column(JSONB, comment="扩展元数据")
+    
     is_deleted = Column(Boolean, default=False, comment="是否删除")
     created_at = Column(DateTime, server_default=text("NOW()"), comment="创建时间")
     updated_at = Column(DateTime, server_default=text("NOW()"), onupdate=text("NOW()"), comment="更新时间")

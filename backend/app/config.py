@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # 路径配置
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
+    @property
+    def MODEL_PATH_HEART_LIKE(self) -> Path:
+        """YOLO Heart Like 模型路径"""
+        # Updated to match actual file structure: yolo/yolo11/heart_like/heart_like.pt
+        return self.BASE_DIR / "app" / "models" / "yolo" / "yolo11" / "heart_like" / "heart_like.pt"
+
     # 日志配置
     LOG_LEVEL: str = "INFO"
 
@@ -61,6 +67,7 @@ class Settings(BaseSettings):
     WECOM_TRAI_ROBOT_KEY: str = os.getenv("WECOM_TRAI_ROBOT_KEY", "")
     WECOM_CORP_ID: str = os.getenv("WECOM_CORP_ID", "")
     WECOM_CORP_SECRET: str = os.getenv("WECOM_CORP_SECRET", "")
+    WECOM_AGENT_ID: str = os.getenv("WECOM_AGENT_ID", "")
     WECOM_SYNC_ON_STARTUP: bool = os.getenv("WECOM_SYNC_ON_STARTUP", "false").lower() == "true"
     
     # 飞书配置
@@ -84,6 +91,7 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "trai-uploads")
     S3_IMAGE_BUCKET_NAME: str = os.getenv("S3_IMAGE_BUCKET_NAME", "trai_images")
+    S3_SPEECH_BUCKET_NAME: str = os.getenv("S3_SPEECH_BUCKET_NAME", "trai_speech")
     S3_REGION_NAME: str = os.getenv("S3_REGION_NAME", "us-east-1")
     S3_PUBLIC_DOMAIN: str = os.getenv("S3_PUBLIC_DOMAIN", "")
 

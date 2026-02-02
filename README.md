@@ -6,12 +6,14 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 
 ### 后端 (Backend)
 
-#### 1. 激活环境1
+
+#### 1. 激活环境
+
 ```bash
 conda activate trai_31014_whf
 ```
 
-#### 2. 启动服务2
+#### 2. 启动服务
 
 ```bash
 # 在项目根目录下执行
@@ -129,6 +131,28 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志
+### 2026_02_02_1436
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
+- **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
+- **后端**: 优化项目结构, 清理临时测试脚本.
+
+### 2026_01_30_1645
+- **后端**: 修复 SpeechManager CPU 强制配置, 启用 GPU 加速 (通过 `ocr_utils.py` 自动选择空闲 GPU).
+- **后端**: 修复 S3 音频 URL 访问权限问题 (设为 public-read).
+- **后端**: 更新 `.gitignore` 忽略模型文件与日志, 优化项目体积.
+- **后端**: 统一测试音频文件路径至 `backend/temp`.
+- **后端**: 优化模型目录结构:
+  - 语音模型: `models/iic/speech_paraformer...` (支持默认目录创建与运行时下载).
+  - YOLO模型: 迁移至 `models/yolo11/heart_like`.
+  - 配置化: 提取 YOLO 模型路径至 `settings.MODEL_PATH_HEART_LIKE`.
+
+### 2026_01_30_1602
+- **后端**: 新增语音识别模块 (FunASR), 支持音频文件转写及 S3 存储与数据库记录.
+- **后端**: 优化模型管理, 统一模型目录至 `backend/app/models`, 并实现 FunASR/PaddleOCR/Z-Image-Turbo/Qwen3-VL 模型的自动下载与加载.
+- **后端**: 修复 PaddleOCR GPU 检测问题, 默认选择最空闲 GPU.
+- **后端**: 更新 `ocr_utils.py` 与 `speech_func.py`, 规范化临时文件路径 (`backend/temp`).
+- **后端**: 完善 S3 上传逻辑, 支持自动创建 Bucket 及 Content-Type 识别.
+
 ### 2026_01_30_1451
 - **后端**: 优化目录结构, 启动时自动检测并修复模型路径与临时目录.
 - **后端**: 移除冗余文件 (879.txt, scripts, logs等), 规范化项目结构.
@@ -248,6 +272,8 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 首页 (`PC` & `Mobile`) 集成登录/退出功能, 侧边栏同步显示用户信息.
   - 优化 `SimilarityDialog` 组件, 支持图片拖拽上传与预览, 并修复大整数精度问题.
   - 修正 Axios 拦截器以兼容非标准 OAuth2 响应格式 (`access_token`).
+
+
 
 ### 2026_01_27_1620
 - **后端**: 优化 `heart_like` 相关业务逻辑, 将 OCR 相似度触发阈值从 0.6 调整为 0.55, 提升准确率.
