@@ -130,7 +130,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 
-## 📝 更新日志
+## 📝 更新日志 (Changelog)
+
+### 2026_02_02_1719
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 2.6.1/2.5.2) 并优化 GPU 检测逻辑.
+- **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
+
 ### 2026_02_02_1618
 - **后端**: 完善所有路由的 API 文档(参数与返回值).
 - **后端**: 优化 `upload` 模块删除接口为 POST 请求.
