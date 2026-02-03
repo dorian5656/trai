@@ -8,11 +8,8 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 from backend.app.config import settings
-
-# 密码哈希上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -21,7 +18,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     :param hashed_password: 哈希密码
     :return: 是否匹配
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    if isinstance(plain_password, str):
+        plain_password = plain_password.encode('utf-8')
+    
+    # 限制密码长度，避免 bcrypt 报错 (password too long)
+    if len(plain_password) > 71:
+        plain_password = plain_password[:71]
+        
+    if isinstance(hashed_password, str):
+        hashed_password = hashed_password.encode('utf-8')
+        
+    try:
+        return bcrypt.checkpw(plain_password, hashed_password)
+    except Exception:
+        return False
 
 def get_password_hash(password: str) -> str:
     """
@@ -29,7 +39,16 @@ def get_password_hash(password: str) -> str:
     :param password: 明文密码
     :return: 哈希密码
     """
-    return pwd_context.hash(password)
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+        
+    if len(password) > 71:
+        password = password[:71]
+            
+    # 生成 salt 并哈希
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password, salt)
+    return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     """

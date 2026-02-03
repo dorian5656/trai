@@ -132,6 +132,17 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_03_1108
+- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
+- **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
+
+
+### 2026_02_03_1015
+- **后端**: 修复留资模块 (`contact`) 文件头模板不符合规范的问题.
+- **后端**: 同步更新 `.env.example` 配置文件, 补充企业微信、飞书、纷享销客等配置项.
+- **文档**: 更新 README.md 中的 PaddleOCR 和 Torch 版本号.
+
 ### 2026_02_03_1000
 - **后端**: 留资模块功能完善与修复.
   - 留资通知支持多邮箱 (QQ/163) 和 飞书 Webhook 同步.
@@ -144,7 +155,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 重构 `DBInitializer`, 统一管理所有业务表的创建与迁移.
 
 ### 2026_02_02_1719
-- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 2.6.1/2.5.2) 并优化 GPU 检测逻辑.
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 `paddleocr==2.6.1.3`, `paddlepaddle-gpu==2.5.2`) 并锁定 `torch==2.10.0`, 优化 GPU 检测逻辑.
 - **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
 
 ### 2026_02_02_1618

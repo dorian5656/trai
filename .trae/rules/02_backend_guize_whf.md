@@ -24,7 +24,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # 文件名: {文件名} 
-# 作者: whf
+# 作者: wuhao
 # 日期: {yyyy-MM-dd HH:mm:ss}
 # 描述: {功能描述}
 ```
