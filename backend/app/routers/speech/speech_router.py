@@ -31,8 +31,14 @@ async def transcribe(
 ):
     """
     上传音频文件进行语音转文字
-    - **file**: 音频文件
-    - **Note**: 结果会自动存入数据库并关联当前用户
+
+    Args:
+        file (UploadFile): 音频文件 (支持 mp3, wav, m4a 等格式)
+        current_user (User): 当前登录用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        dict: 转写结果，包含文本内容和元数据
     """
     return await speech_service.transcribe_file(file, current_user, db)
 
@@ -40,8 +46,17 @@ async def transcribe(
 async def websocket_transcribe(websocket: WebSocket):
     """
     WebSocket 实时语音转写
-    - 协议: 发送二进制音频流 (PCM/WAV bytes)
-    - 控制: 发送 {"is_speaking": false} 结束
+
+    Args:
+        websocket (WebSocket): WebSocket 连接对象
+
+    Protocol:
+        - Client 发送: 二进制音频流 (PCM/WAV bytes)
+        - Client 控制: 发送 {"is_speaking": false} 结束
+        - Server 返回: 实时转写文本
+
+    Returns:
+        None
     """
     await speech_service.handle_websocket(websocket)
 
@@ -49,6 +64,13 @@ async def websocket_transcribe(websocket: WebSocket):
 async def health_check():
     """
     检查模型加载状态
+
+    Returns:
+        dict: 服务状态信息
+            - status (str): "ok"
+            - device (str): 运行设备 (cuda/cpu)
+            - model_loaded (bool): 模型是否已加载
+            - model_path (str): 模型路径
     """
     is_loaded = speech_service._model is not None
     return {

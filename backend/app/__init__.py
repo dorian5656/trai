@@ -11,14 +11,15 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from backend.app.utils.logger import logger
 from backend.app.config import settings
-from backend.app.router import api_router
-from backend.app.utils.net_utils import NetUtils
-from backend.app.middlewares.log_middleware import RequestLogMiddleware
 
 def create_app() -> FastAPI:
     """
     创建 FastAPI 应用实例
     """
+    from backend.app.router import api_router
+    from backend.app.utils.net_utils import NetUtils
+    from backend.app.middlewares.log_middleware import RequestLogMiddleware
+
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
 
     # 引入环境同步工具
     from backend.app.utils.env_sync import EnvSync
+    from backend.app.routers.monitor.ai_models_func import ModelManager
 
     @app.on_event("startup")
     async def startup_event():
@@ -52,6 +54,9 @@ def create_app() -> FastAPI:
         
         # 1. 同步环境配置到数据库
         await EnvSync.sync()
+
+        # 2. 初始化 AI 模型管理器 (创建默认文件夹)
+        await ModelManager.initialize()
 
         # 初始化静态资源目录 (backend/static)
         # 用于存放 exe、图片等静态文件
@@ -94,4 +99,4 @@ def create_app() -> FastAPI:
 
     return app
 
-app = create_app()
+# app = create_app()

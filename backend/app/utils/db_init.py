@@ -7,6 +7,18 @@
 
 import asyncpg
 import asyncio
+from pathlib import Path
+from dotenv import load_dotenv
+
+# 优先加载环境变量 (必须在导入 config 之前)
+backend_dir = Path(__file__).resolve().parent.parent.parent
+env_dev_path = backend_dir / ".env.dev"
+env_path = backend_dir / ".env"
+if env_dev_path.exists():
+    load_dotenv(env_dev_path, override=True)
+elif env_path.exists():
+    load_dotenv(env_path)
+
 from backend.app.utils.logger import logger
 from backend.app.config import settings
 from backend.app.utils.security import get_password_hash
@@ -30,9 +42,29 @@ class DBInitializer:
 
     async def check_and_create_db(self):
         """
-        连接默认 postgres 库，检查目标数据库是否存在，不存在则创建。
+        检查数据库是否存在。
+        优先尝试直接连接目标数据库，成功则跳过创建。
+        若连接失败（不存在），则尝试连接 postgres 库进行创建。
         """
         logger.info(f"⏳ [DB: {self.target_db}] 开始数据库存在性检查...")
+        
+        # 1. 尝试直接连接目标数据库
+        try:
+            conn = await asyncpg.connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                database=self.target_db
+            )
+            await conn.close()
+            logger.success(f"✅ 数据库 '{self.target_db}' 已存在 (连接成功)，跳过创建")
+            return True
+        except Exception as e:
+            # 如果是认证失败，那即使连接 postgres 也大概率失败，但还是按流程走一下
+            logger.warning(f"⚠️ 无法直接连接数据库 '{self.target_db}' (可能不存在或认证失败): {e}")
+
+        # 2. 尝试通过 postgres 库创建
         try:
             # 连接到默认 postgres 数据库进行管理操作
             sys_conn = await asyncpg.connect(
@@ -535,6 +567,95 @@ class DBInitializer:
         except Exception as e:
             logger.error(f"❌ 初始化超级管理员失败: {e}")
 
+    async def init_user_audios_table(self, conn):
+        """
+        初始化用户音频表 (user_audios)
+        """
+        table_name = "user_audios"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS user_audios (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            s3_key VARCHAR(500) NOT NULL,
+            url TEXT NOT NULL,
+            size BIGINT,
+            duration FLOAT,
+            mime_type VARCHAR(100),
+            module VARCHAR(50) DEFAULT 'common',
+            source VARCHAR(20) DEFAULT 'upload', -- upload, generated
+            prompt TEXT, -- TTS 文本
+            text_content TEXT, -- ASR 识别结果 或 TTS 文本
+            meta_data JSONB, -- 扩展信息
+            is_deleted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE user_audios IS '用户音频表';
+        COMMENT ON COLUMN user_audios.source IS '来源 (upload:上传, generated:生成)';
+        COMMENT ON COLUMN user_audios.duration IS '时长(秒)';
+        COMMENT ON COLUMN user_audios.text_content IS 'ASR识别结果或TTS文本';
+        """
+        try:
+            await conn.execute(ddl)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_audios_user_id ON user_audios(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_audios_created_at ON user_audios(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "用户音频表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
+    async def init_chat_messages_table(self, conn):
+        """
+        初始化聊天消息表 (chat_messages)
+        """
+        table_name = "chat_messages"
+        ddl_create = """
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id VARCHAR(50), -- 会话ID (可选，用于分组)
+            user_id VARCHAR(50) NOT NULL,
+            role VARCHAR(20) NOT NULL, -- user, assistant, system
+            content_type VARCHAR(20) DEFAULT 'text', -- text, image, audio, mixed
+            content TEXT, -- 文本内容 (如果是 mixed，则是 JSON)
+            model VARCHAR(50), -- 使用的模型名称
+            media_urls JSONB, -- 关联的媒体文件 URLs (数组)
+            meta_data JSONB, -- 扩展信息 (如 tokens, model_name)
+            is_deleted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        """
+        
+        ddl_comments = """
+        COMMENT ON TABLE chat_messages IS '多模态对话历史表';
+        COMMENT ON COLUMN chat_messages.role IS '角色 (user/assistant/system)';
+        COMMENT ON COLUMN chat_messages.content_type IS '内容类型';
+        COMMENT ON COLUMN chat_messages.model IS '模型名称';
+        """
+        
+        try:
+            # 1. 创建表 (如果不存在)
+            await conn.execute(ddl_create)
+            
+            # 2. 补丁：确保 model 字段存在 (针对旧表)
+            # 注意: 必须在添加注释之前执行
+            await conn.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS model VARCHAR(50)")
+            
+            # 3. 添加注释
+            await conn.execute(ddl_comments)
+            
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "多模态对话历史表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
     async def init_tables(self):
         """
         连接目标数据库，创建表结构。
@@ -672,6 +793,12 @@ class DBInitializer:
             
             # 6. 初始化语音识别记录表
             await self.init_speech_logs_table(conn)
+            
+            # 6.1 初始化用户音频表
+            await self.init_user_audios_table(conn)
+
+            # 6.2 初始化聊天消息表
+            await self.init_chat_messages_table(conn)
             
             # 7. 初始化超级管理员
             await self.init_superuser(conn)

@@ -130,7 +130,23 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 
-## 📝 更新日志
+## 📝 更新日志 (Changelog)
+
+### 2026_02_02_1719
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 2.6.1/2.5.2) 并优化 GPU 检测逻辑.
+- **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
+
+### 2026_02_02_1618
+- **后端**: 完善所有路由的 API 文档(参数与返回值).
+- **后端**: 优化 `upload` 模块删除接口为 POST 请求.
+- **后端**: 扩展 `ResponseCode` 状态码定义.
+- **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
+
+### 2026_02_02_1436
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
+- **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
+- **后端**: 优化项目结构, 清理临时测试脚本.
+
 ### 2026_01_30_1645
 - **后端**: 修复 SpeechManager CPU 强制配置, 启用 GPU 加速 (通过 `ocr_utils.py` 自动选择空闲 GPU).
 - **后端**: 修复 S3 音频 URL 访问权限问题 (设为 public-read).
