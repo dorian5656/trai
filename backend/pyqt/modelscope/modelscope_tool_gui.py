@@ -354,7 +354,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ModelScope 模型上传/下载工具")
-        self.resize(800, 700)
+        self.resize(900, 600)
         
         # 初始化 UI
         self.init_ui()
@@ -376,7 +376,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.download_tab, "下载模型")
         
         # 版本号显示 (右上角)
-        version_label = QLabel("v.20260203.01  ")
+        version_label = QLabel("v.20260203.02  ")
         version_label.setStyleSheet("color: #888888; font-size: 10px;")
         self.tabs.setCornerWidget(version_label, Qt.Corner.TopRightCorner)
 
