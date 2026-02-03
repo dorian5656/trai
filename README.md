@@ -132,6 +132,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_03_0929
+- **后端**: 新增客户留资业务模块 (`contact`), 支持数据入库与邮件通知.
+- **后端**: 实现 `customer_leads` 表的自动初始化与元数据注册.
+- **后端**: 规范化 API 文档注释 (Args/Returns), 并修复配置项兼容性问题.
+- **后端**: 重构 `DBInitializer`, 统一管理所有业务表的创建与迁移.
+
 ### 2026_02_02_1719
 - **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 2.6.1/2.5.2) 并优化 GPU 检测逻辑.
 - **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).

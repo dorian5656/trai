@@ -16,6 +16,7 @@ from backend.app.routers import monitor
 from backend.app.routers import wecom
 from backend.app.routers import dify
 from backend.app.routers import speech
+from backend.app.routers.contact import contact_router
 
 api_router = APIRouter()
 
@@ -38,3 +39,5 @@ api_router.include_router(wecom.router, prefix="/wecom", tags=["企业微信"])
 api_router.include_router(dify.router, prefix="/dify", tags=["Dify AI"])
 # 注册 语音路由
 api_router.include_router(speech.router, prefix="/speech", tags=["语音服务"])
+# 注册 联系人路由
+api_router.include_router(contact_router.router, prefix="/contact", tags=["客户留资"])

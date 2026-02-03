@@ -113,6 +113,13 @@ class Settings(BaseSettings):
     # 财务助手 Key (预留)
     DIFY_CAIWU_API_KEY: str = os.getenv("DIFY_CAIWU_API_KEY", "")
     
+    # 邮件推送配置 (SMTP)
+    EMAIL_HOST: str = os.getenv("EMAIL_HOST", "smtp.qq.com")
+    EMAIL_PORT: int = int(os.getenv("EMAIL_PORT", 465))
+    EMAIL_USER: str = os.getenv("EMAIL_USER", "")
+    EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
+    EMAIL_TO_DEFAULT: str = os.getenv("EMAIL_TO_DEFAULT", "")
+
     # 兼容旧配置 (如果需要)
     @property
     def DIFY_API_KEY(self) -> str:
@@ -136,7 +143,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        env_file = ".env"
+        env_file = str(Path(__file__).resolve().parent.parent / ".env")
         extra = "ignore" # 忽略多余的环境变量
 
 settings = Settings()
