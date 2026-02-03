@@ -132,6 +132,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_03_1000
+- **后端**: 留资模块功能完善与修复.
+  - 留资通知支持多邮箱 (QQ/163) 和 飞书 Webhook 同步.
+  - 修复数据库插入事务提交问题 (`PGUtils.fetch_one_commit`), 解决数据未持久化 BUG.
+
 ### 2026_02_03_0929
 - **后端**: 新增客户留资业务模块 (`contact`), 支持数据入库与邮件通知.
 - **后端**: 实现 `customer_leads` 表的自动初始化与元数据注册.

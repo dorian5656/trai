@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     
     # 飞书配置
     FEISHU_TRAI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_TRAI_WEBHOOK_TOKEN", "")
+    FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN", "")
     FEISHU_APP_ID: str = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET: str = os.getenv("FEISHU_APP_SECRET", "")
     
@@ -118,7 +119,22 @@ class Settings(BaseSettings):
     EMAIL_PORT: int = int(os.getenv("EMAIL_PORT", 465))
     EMAIL_USER: str = os.getenv("EMAIL_USER", "")
     EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
-    EMAIL_TO_DEFAULT: str = os.getenv("EMAIL_TO_DEFAULT", "")
+    
+    # 邮件收件人配置
+    EMAIL_TO_DEFAULT_QQ: str = os.getenv("EMAIL_TO_DEFAULT_QQ", "")
+    EMAIL_TO_DEFAULT_163: str = os.getenv("EMAIL_TO_DEFAULT_163", "")
+
+    @property
+    def EMAIL_TO_DEFAULT(self) -> list[str]:
+        """
+        获取合并后的默认收件人列表 (QQ + 163)
+        """
+        emails = []
+        for src in [self.EMAIL_TO_DEFAULT_QQ, self.EMAIL_TO_DEFAULT_163]:
+            if src:
+                # 支持逗号分隔
+                emails.extend([e.strip() for e in src.split(",") if e.strip()])
+        return emails
 
     # 兼容旧配置 (如果需要)
     @property

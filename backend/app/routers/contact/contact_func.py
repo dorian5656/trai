@@ -90,7 +90,7 @@ class ContactManager:
                 "submit_time": submit_time_val or datetime.now()
             }
             
-            result = await PGUtils.fetch_one(insert_sql, params)
+            result = await PGUtils.fetch_one_commit(insert_sql, params)
             new_id = result["id"] if result else None
             
             logger.success(f"客户留资已存入数据库: ID={new_id}, Name={request.name}")
@@ -120,6 +120,22 @@ class ContactManager:
             except Exception as e:
                 logger.error(f"发送邮件过程发生异常: {e}")
             
+            # 3. 发送飞书通知
+            try:
+                feishu_content = f"🚀【官网留资通知】\n" \
+                                 f"👤 姓名: {request.name}\n" \
+                                 f"📞 电话: {request.phone}\n" \
+                                 f"📦 产品: {request.product or '未填写'}\n" \
+                                 f"📍 区域: {request.region or '未填写'}\n" \
+                                 f"🌐 IP: {request.clientIp or '未知'}\n" \
+                                 f"🕒 时间: {request.submitTime or '未知'}"
+                
+                # 使用专用 Webhook Token (如果配置了)
+                token = settings.FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN or None
+                feishu_bot.send_webhook_message(feishu_content, webhook_token=token)
+            except Exception as e:
+                logger.error(f"飞书通知发送失败: {e}")
+
             return LeadSubmitResponse(data={"id": new_id})
             
         except Exception as e:
