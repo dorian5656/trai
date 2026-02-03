@@ -86,6 +86,8 @@ ipython_config.py
 .env.*
 backend/.env
 backend/.env.*
+frontend/.env
+frontend/.env.*
 
 # Temporary Files
 backend/temp/
