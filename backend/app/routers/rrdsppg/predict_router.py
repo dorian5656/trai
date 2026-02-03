@@ -24,6 +24,9 @@ async def startup_event():
 async def check_gpu():
     """
     检查系统 GPU 可用性 (Torch & Paddle)
+
+    Returns:
+        dict: 包含 torch_gpu 和 paddle_gpu 布尔值的状态字典
     """
     try:
         info = PredictManager.check_gpu()
@@ -45,15 +48,64 @@ class YoloRequest(BaseModel):
 
 import os
 
-@router.post("/predict", summary="智能预测 (自动路由)")
+@router.post("/predict", summary="智能预测 (自动路由)", openapi_extra={
+    "requestBody": {
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "taskId": {"type": "integer", "description": "任务ID"},
+                        "userId": {"type": "integer", "description": "用户ID"},
+                        "type": {"type": "integer", "description": "任务类型"},
+                        "itzx": {"type": "integer", "description": "来源标识", "default": 0},
+                        "templatePath": {"type": "string", "description": "模板图片URL"},
+                        "targetPath": {"type": "string", "description": "目标图片URL"},
+                        "file": {"type": "string", "format": "binary", "description": "图片文件"}
+                    }
+                }
+            },
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "taskId": {"type": "integer", "description": "任务ID"},
+                        "userId": {"type": "integer", "description": "用户ID"},
+                        "type": {"type": "integer", "description": "任务类型"},
+                        "itzx": {"type": "integer", "description": "来源标识", "default": 0},
+                        "templatePath": {"type": "string", "description": "模板图片URL"},
+                        "targetPath": {"type": "string", "description": "目标图片URL"}
+                    }
+                }
+            }
+        }
+    }
+})
 async def predict_auto(
     request: Request
 ):
     """
     通用预测接口 (支持 Multipart Form 或 JSON Body)
+
     根据 type 参数自动路由：
     - 公众号转发 (OCR) -> PaddleOCR
     - 视频号 (YOLO + OCR) -> 组合逻辑
+
+    **Args:**
+
+    - `taskId` (int): 任务ID
+    - `userId` (int): 用户ID
+    - `type` (int): 任务类型
+        - `1997929948761825282`: 公众号转发 (OCR)
+        - `其他`: 视频号/通用 (YOLO + OCR)
+    - `itzx` (int): 来源标识
+    - `templatePath` (str): 模板图片URL (用于比对)
+    - `targetPath` (str): 目标图片URL
+    - `file` (UploadFile): 图片文件 (仅 multipart/form-data 支持)
+
+    **Returns:**
+
+    - `dict`: 预测结果
     """
     try:
         # 手动解析请求
@@ -131,15 +183,62 @@ async def predict_auto(
     except Exception as e:
         return ResponseHelper.error(msg=f"预测失败: {str(e)}")
 
-@router.post("/predict/yolo", summary="YOLO 目标检测")
+@router.post("/predict/yolo", summary="YOLO 目标检测", openapi_extra={
+    "requestBody": {
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "taskId": {"type": "integer", "description": "任务ID"},
+                        "userId": {"type": "integer", "description": "用户ID"},
+                        "type": {"type": "integer", "description": "任务类型"},
+                        "itzx": {"type": "integer", "description": "来源标识", "default": 0},
+                        "templatePath": {"type": "string", "description": "模板图片URL"},
+                        "targetPath": {"type": "string", "description": "目标图片URL"},
+                        "file": {"type": "string", "format": "binary", "description": "图片文件"}
+                    }
+                }
+            },
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "taskId": {"type": "integer", "description": "任务ID"},
+                        "userId": {"type": "integer", "description": "用户ID"},
+                        "type": {"type": "integer", "description": "任务类型"},
+                        "itzx": {"type": "integer", "description": "来源标识", "default": 0},
+                        "templatePath": {"type": "string", "description": "模板图片URL"},
+                        "targetPath": {"type": "string", "description": "目标图片URL"}
+                    }
+                }
+            }
+        }
+    }
+})
 async def predict_yolo(
     request: Request
 ):
     """
     上传图片进行 YOLO 目标检测 (支持 Multipart Form 或 JSON Body)
+
     根据 type 参数自动路由：
     - 公众号转发 (OCR) -> PaddleOCR (ID配置在环境变量)
     - 视频号 (YOLO) -> YOLO (ID配置在环境变量)
+
+    **Args:**
+
+    - `taskId` (int): 任务ID
+    - `userId` (int): 用户ID
+    - `type` (int): 任务类型
+    - `itzx` (int): 来源标识
+    - `templatePath` (str): 模板图片URL
+    - `targetPath` (str): 目标图片URL
+    - `file` (UploadFile): 图片文件 (仅 multipart/form-data 支持)
+
+    **Returns:**
+
+    - `dict`: 检测结果
     """
     try:
         # 手动解析请求
@@ -231,6 +330,20 @@ async def predict_ocr(
 ):
     """
     根据 URL 下载图片并进行 OCR 文字识别
+
+    **Args:**
+
+    - `request` (OcrRequest): OCR 请求参数
+        - `templatePath` (str): 模板图片URL
+        - `targetPath` (str): 目标图片URL
+        - `taskId` (int): 任务ID
+        - `userId` (int): 用户ID
+        - `type` (int): 类型
+        - `itzx` (int, optional): 来源标识
+
+    **Returns:**
+
+    - `dict`: OCR 识别结果
     """
     try:
         results = await PredictManager.predict_ocr_url(request)
@@ -241,6 +354,9 @@ async def predict_ocr(
 @router.post("/hello", summary="Hello World接口")
 async def hello():
     """
-    输出 helloword
+    Hello World 测试接口
+
+    Returns:
+        dict: {"message": "helloword"}
     """
     return ResponseHelper.success(data={"message": "helloword"})

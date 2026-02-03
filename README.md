@@ -130,7 +130,40 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 
-## 📝 更新日志
+## 📝 更新日志 (Changelog)
+
+### 2026_02_03_1108
+- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
+- **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
+
+
+### 2026_02_03_1015
+- **后端**: 修复留资模块 (`contact`) 文件头模板不符合规范的问题.
+- **后端**: 同步更新 `.env.example` 配置文件, 补充企业微信、飞书、纷享销客等配置项.
+- **文档**: 更新 README.md 中的 PaddleOCR 和 Torch 版本号.
+
+### 2026_02_03_1000
+- **后端**: 留资模块功能完善与修复.
+  - 留资通知支持多邮箱 (QQ/163) 和 飞书 Webhook 同步.
+  - 修复数据库插入事务提交问题 (`PGUtils.fetch_one_commit`), 解决数据未持久化 BUG.
+
+### 2026_02_03_0929
+- **后端**: 新增客户留资业务模块 (`contact`), 支持数据入库与邮件通知.
+- **后端**: 实现 `customer_leads` 表的自动初始化与元数据注册.
+- **后端**: 规范化 API 文档注释 (Args/Returns), 并修复配置项兼容性问题.
+- **后端**: 重构 `DBInitializer`, 统一管理所有业务表的创建与迁移.
+
+### 2026_02_02_1719
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 `paddleocr==2.6.1.3`, `paddlepaddle-gpu==2.5.2`) 并锁定 `torch==2.10.0`, 优化 GPU 检测逻辑.
+- **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
+
+### 2026_02_02_1618
+- **后端**: 完善所有路由的 API 文档(参数与返回值).
+- **后端**: 优化 `upload` 模块删除接口为 POST 请求.
+- **后端**: 扩展 `ResponseCode` 状态码定义.
+- **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
+
 ### 2026_02_02_1436
 - **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
 - **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.

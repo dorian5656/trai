@@ -21,8 +21,16 @@ async def chat_with_image(
 ):
     """
     多模态对话接口 (支持图文对话)
-    - **messages**: 消息列表 (支持 image_url)
-    - **model**: 模型 (默认 Qwen3-VL-8B-Instruct)
+
+    Args:
+        request (ImageChatRequest): 请求体
+            - messages (list): 消息列表 (支持 image_url)
+            - model (str): 模型名称 (默认 Qwen3-VL-8B-Instruct)
+            - temperature (float): 温度系数
+        current_user (User): 当前登录用户
+
+    Returns:
+        ImageChatResponse: 对话响应结果
     """
     return await ImageManager.chat_with_image(request)
 
@@ -33,8 +41,17 @@ async def generate_image(
 ):
     """
     文生图接口
-    - **prompt**: 提示词
-    - **model**: 模型 (默认 FLUX.2-dev)
+
+    Args:
+        request (ImageGenRequest): 请求体
+            - prompt (str): 提示词
+            - model (str): 模型名称 (默认 FLUX.2-dev)
+            - size (str): 图片尺寸
+            - n (int): 生成数量
+        current_user (User): 当前登录用户
+
+    Returns:
+        ImageGenResponse: 图片生成结果 (URL)
     """
     user_id = getattr(current_user, "username", None) or current_user["username"]
     return await ImageManager.generate_image(request, user_id=str(user_id))
