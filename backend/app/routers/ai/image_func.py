@@ -139,15 +139,11 @@ class ImageManager:
         api_base = settings.DIFY_API_BASE_URL
         api_key = settings.AI_API_KEY
         
+        # 构造 URL (Dify OpenAI 兼容接口通常在 /v1 下)
+        # 如果配置中有 /v1，则直接拼接; 否则尝试自动适配
         url = f"{api_base}/images/generations"
-        # 类似 chat，尝试适配路径
-        base_url = api_base
-        if "/v1" in base_url:
-            base_url = base_url.replace("/v1", "")
-        if base_url.endswith("/"):
-            base_url = base_url[:-1]
-        
-        url = f"{base_url}/images/generations"
+        if api_base.endswith("/"):
+            url = f"{api_base}images/generations"
 
         logger.info(f"正在调用文生图模型: {request.model}, URL: {url}")
 
