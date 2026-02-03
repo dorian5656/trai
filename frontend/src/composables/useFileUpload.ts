@@ -6,6 +6,7 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { uploadFile } from '@/api/common';
+import { ErrorHandler } from '@/utils/errorHandler';
 
 export interface UploadFile {
   id: string;
@@ -64,10 +65,11 @@ export function useFileUpload() {
         if (res.url) {
           newFile.url = res.url; // 更新为远程 URL
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('上传失败:', error);
         newFile.status = 'error';
-        ElMessage.error(`${newFile.name} 上传失败`);
+        const appError = ErrorHandler.handleHttpError(error);
+        ElMessage.error(`${newFile.name} 上传失败: ${appError.message}`);
       }
     }
   };

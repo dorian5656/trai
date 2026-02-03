@@ -11,17 +11,15 @@ import { useAppStore } from '@/stores/app';
 import { useChatStore } from '@/stores/chat';
 import { useUserStore } from '@/stores/user';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
-import { mockStreamChat } from '@/utils/stream';
-import { renderMarkdown } from '@/utils/markdown';
 import { ElMessage, ElImageViewer } from 'element-plus';
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
 import { useFileUpload } from '@/composables/useFileUpload';
 import { useSkills } from '@/composables/useSkills';
-import { useChatLogic } from '@/composables/useChatLogic';
 import SkillSelector from '@/components/business/home/SkillSelector.vue';
 import ChatInput from '@/components/business/home/ChatInput.vue';
 import MessageList from '@/components/business/home/MessageList.vue';
 import { fetchDifyConversations } from '@/api/dify';
+import type { DifyConversation } from '@/types/chat';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -34,58 +32,71 @@ const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelec
 const { activeSkill, visibleSkills, moreSkills, moreSkillItem, handleSkillClick, removeSkill } = useSkills();
 
 const inputMessage = ref('');
-const isSending = ref(false);
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
 
-const { handleSend, handleStop } = useChatLogic(
-  chatStore,
-  inputMessage,
-  activeSkill,
-  uploadedFiles,
-  isSending,
-  () => messageListRef.value?.scrollToBottom(),
-  clearFiles,
+// 自动滚动
+watch(
+  () => chatStore.messages,
   () => {
-      // 当新会话创建时，刷新会话列表
-      // 延迟一点时间，确保后端已经可以查到
-      setTimeout(() => {
-          loadConversations();
-      }, 1000);
-  }
+    messageListRef.value?.scrollToBottom();
+  },
+  { deep: true }
 );
 
+const handleSend = async () => {
+  const content = inputMessage.value.trim();
+  if ((!content && uploadedFiles.value.length === 0) || chatStore.isSending) return;
+
+  // 1. 捕获当前状态
+  const currentFiles = [...uploadedFiles.value];
+  const currentSkill = activeSkill.value;
+  
+  // 2. 立即清空 UI 输入状态 (让用户感觉响应快)
+  inputMessage.value = '';
+  clearFiles();
+  activeSkill.value = null;
+
+  // 3. 调用 Store Action
+  await chatStore.sendMessage(
+    content,
+    currentFiles,
+    currentSkill,
+    () => {
+      // 当新会话创建时，刷新会话列表
+      setTimeout(() => {
+        loadConversations();
+      }, 1000);
+    }
+  );
+};
+
+const handleStop = () => {
+  chatStore.stopGenerating();
+};
+
 const handleRegenerate = () => {
-  if (isSending.value) return;
+  if (chatStore.isSending) return;
   // 找到最后一条 user 消息
   const messages = chatStore.messages;
   let lastUserMsgContent = '';
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg && msg.role === 'user') {
-      // 提取纯文本内容（去除可能的 [文件: ...] 前缀，如果需要重新上传文件逻辑会更复杂，这里简化为重发文本）
-      // 现在的 fullContent 是 "[文件: xxx] 文本"，这里简单起见直接重发整条内容
       lastUserMsgContent = msg.content;
       break;
     }
   }
 
   if (lastUserMsgContent) {
-    // 移除最后一条 assistant 消息 (如果是失败的消息) 或者准备生成新的
     // 简单起见，我们模拟用户重新输入了这条消息
     inputMessage.value = lastUserMsgContent;
-    // 这里的 content 可能包含 "[文件: ...]"，在 handleSend 中会再次拼接，导致重复
-    // 需要清洗 content，或者调整 handleSend 逻辑
-    // 更好的做法是：让 useChatLogic 暴露一个 directSend 方法，或者我们在 handleSend 中判断
     
-    // 临时方案：如果内容以 [文件: 开头，尝试提取真实文本
-    // 这里的逻辑稍微有点 hack，但为了不改动太大
+    // 尝试提取纯文本 (移除 [文件: ...] 前缀)
     const fileRegex = /^(\[文件: .*?\]\s*)+/;
     const match = lastUserMsgContent.match(fileRegex);
     if (match) {
         inputMessage.value = lastUserMsgContent.replace(fileRegex, '').trim();
-        // 注意：这里丢失了文件信息，如果重新生成需要带文件，需要重新 select 文件
-        // 由于文件上传是临时的，发送后 clearFiles 了，所以很难完全还原
         ElMessage.warning('重新生成仅包含文本内容，文件需重新上传');
     } else {
         inputMessage.value = lastUserMsgContent;
@@ -112,7 +123,7 @@ const loadConversations = async () => {
   try {
     const res = await fetchDifyConversations(userStore.username);
     if (res && res.data) {
-      chatStore.difyConversations = (res.data as unknown) as any[];
+      chatStore.difyConversations = (res.data as unknown) as DifyConversation[];
     }
   } catch (e) {
     console.error('加载历史会话失败', e);
@@ -262,7 +273,7 @@ const handleLogout = () => {
             <div class="footer-input-wrapper">
               <ChatInput 
                 v-model="inputMessage"
-                :is-sending="isSending"
+                :is-sending="chatStore.isSending"
                 :is-deep-thinking="isDeepThinking"
                 :active-skill="activeSkill"
                 :uploaded-files="uploadedFiles"
@@ -293,7 +304,7 @@ const handleLogout = () => {
             <div class="input-area-wrapper">
               <ChatInput 
                 v-model="inputMessage"
-                :is-sending="isSending"
+                :is-sending="chatStore.isSending"
                 :is-deep-thinking="isDeepThinking"
                 :active-skill="activeSkill"
                 :uploaded-files="uploadedFiles"

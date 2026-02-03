@@ -14,7 +14,6 @@ import { ElImageViewer } from 'element-plus';
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
 import { useFileUpload } from '@/composables/useFileUpload';
 import { useSkills } from '@/composables/useSkills';
-import { useChatLogic } from '@/composables/useChatLogic';
 import ChatInput from '@/components/business/home/ChatInput.vue';
 import MessageList from '@/components/business/home/MessageList.vue';
 
@@ -27,19 +26,38 @@ const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelec
 const { allSkills, activeSkill, handleSkillClick, removeSkill } = useSkills();
 
 const inputMessage = ref('');
-const isSending = ref(false);
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
 
-const { handleSend, handleStop } = useChatLogic(
-  chatStore,
-  inputMessage,
-  activeSkill,
-  uploadedFiles,
-  isSending,
-  () => messageListRef.value?.scrollToBottom(),
-  clearFiles
+// 自动滚动
+watch(
+  () => chatStore.messages,
+  () => {
+    messageListRef.value?.scrollToBottom();
+  },
+  { deep: true }
 );
+
+const handleSend = async () => {
+  const content = inputMessage.value.trim();
+  if ((!content && uploadedFiles.value.length === 0) || chatStore.isSending) return;
+
+  // 1. 捕获当前状态
+  const currentFiles = [...uploadedFiles.value];
+  const currentSkill = activeSkill.value;
+  
+  // 2. 立即清空 UI 输入状态
+  inputMessage.value = '';
+  clearFiles();
+  activeSkill.value = null;
+
+  // 3. 调用 Store Action
+  await chatStore.sendMessage(content, currentFiles, currentSkill);
+};
+
+const handleStop = () => {
+  chatStore.stopGenerating();
+};
 
 const toggleDeepThinking = () => {
   isDeepThinking.value = !isDeepThinking.value;
@@ -151,7 +169,7 @@ const handleMobileSkillClick = (skill: any) => {
         <div class="chat-footer">
           <ChatInput 
             v-model="inputMessage"
-            :is-sending="isSending"
+            :is-sending="chatStore.isSending"
             :is-deep-thinking="isDeepThinking"
             :active-skill="activeSkill"
             :uploaded-files="uploadedFiles"
@@ -175,7 +193,7 @@ const handleMobileSkillClick = (skill: any) => {
         <div class="input-area-wrapper">
           <ChatInput 
             v-model="inputMessage"
-            :is-sending="isSending"
+            :is-sending="chatStore.isSending"
             :is-deep-thinking="isDeepThinking"
             :active-skill="activeSkill"
             :uploaded-files="uploadedFiles"

@@ -24,7 +24,7 @@ export async function streamChat(
 
   try {
     const token = localStorage.getItem('token') || '';
-    const baseURL = import.meta.env.VITE_APP_MAIN_URL || '/api';
+    const baseURL = (import.meta.env.VITE_APP_SERVER_URL || '') + (import.meta.env.VITE_APP_BASE_URL || '/api');
     
     const response = await fetch(`${baseURL}/ai/chat/completions/stream`, {
       method: 'POST',
@@ -166,7 +166,7 @@ export async function streamDifyChat(
   chatStore.abortController = controller;
 
   try {
-    const baseURL = import.meta.env.VITE_APP_MAIN_URL || '/api';
+    const baseURL = (import.meta.env.VITE_APP_SERVER_URL || '') + (import.meta.env.VITE_APP_BASE_URL || '/api');
     
     // 确定 URL 和 Headers
     const url = params.isPublic ? '/dify/chat/public' : '/dify/chat';
