@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # 文件名：backend/app/routers/contact/contact_func.py
-# 作者：liuhd
+# 作者：wuhao
 # 日期：2026-02-03
 # 描述：联系人/留资业务逻辑
 
@@ -35,6 +35,9 @@ class LeadSubmitResponse(BaseModel):
 # Manager 逻辑
 # =============================================================================
 
+from backend.app.config import settings
+from backend.app.utils.feishu_utils import feishu_bot
+
 class ContactManager:
     """
     联系人/留资业务管理器
@@ -61,11 +64,16 @@ class ContactManager:
             submit_time_val = None
             if request.submitTime:
                 try:
-                    # 尝试解析 ISO 格式，如果失败则让数据库使用默认值或直接存字符串(需调整字段类型)
-                    # 这里假设传入的是标准 ISO 字符串，PG 可以直接接收
-                    submit_time_val = request.submitTime
+                    # 尝试解析 ISO 格式
+                    if 'T' in request.submitTime:
+                        submit_time_val = datetime.fromisoformat(request.submitTime)
+                    else:
+                         submit_time_val = datetime.strptime(request.submitTime, "%Y-%m-%d %H:%M:%S")
                 except:
-                    pass
+                    # 解析失败，使用当前时间
+                    submit_time_val = datetime.now()
+            else:
+                submit_time_val = datetime.now()
             
             # 执行插入
             # 注意: 如果 submission_id 重复，可能会抛出唯一约束异常
@@ -87,7 +95,7 @@ class ContactManager:
                 "client_ip": request.clientIp,
                 "user_agent": request.userAgent,
                 "submission_id": request.submissionId,
-                "submit_time": submit_time_val or datetime.now()
+                "submit_time": submit_time_val
             }
             
             result = await PGUtils.fetch_one_commit(insert_sql, params)

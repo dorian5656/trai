@@ -31,12 +31,12 @@ async def transcribe(
 ):
     """
     上传音频文件进行语音转文字
-
+    
     Args:
         file (UploadFile): 音频文件 (支持 mp3, wav, m4a 等格式)
         current_user (User): 当前登录用户
         db (AsyncSession): 数据库会话
-
+    
     Returns:
         dict: 转写结果，包含文本内容和元数据
     """
@@ -70,7 +70,7 @@ async def health_check():
             - status (str): "ok"
             - device (str): 运行设备 (cuda/cpu)
             - model_loaded (bool): 模型是否已加载
-            - model_path (str): 模型路径
+            backend/app/routers/upload- model_path (str): 模型路径
     """
     is_loaded = speech_service._model is not None
     return {
