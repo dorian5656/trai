@@ -425,6 +425,21 @@ class MainWindow(QMainWindow):
         except AttributeError:
             pass # 某些环境可能不允许修改 __stderr__
 
+        # 关键修复：修复标准 logging 模块在 Windowed 模式下因 sys.stderr 为 None 导致的 AttributeError
+        # ModelScope 等库使用标准 logging，初始化时可能捕获了为 None 的 stderr
+        import logging
+        def fix_logger_handlers(logger_name=None):
+            logger_obj = logging.getLogger(logger_name)
+            for handler in logger_obj.handlers:
+                if isinstance(handler, logging.StreamHandler):
+                    # 如果 handler 的 stream 是 None (Windowed 模式默认) 或者无效，替换为我们的 stream_logger
+                    if getattr(handler, 'stream', None) is None:
+                        handler.stream = self.stream_logger
+        
+        # 修复根日志记录器和 modelscope 日志记录器
+        fix_logger_handlers()
+        fix_logger_handlers('modelscope')
+
     @pyqtSlot(str)
     def append_log(self, text):
         try:
