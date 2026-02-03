@@ -11,10 +11,11 @@ from backend.app.routers.ai.image_func import (
     ImageGenRequest, ImageGenResponse
 )
 from backend.app.utils.dependencies import get_current_active_user
+from backend.app.utils.response import ResponseHelper, ResponseModel
 
 router = APIRouter()
 
-@router.post("/chat/image", response_model=ImageChatResponse, summary="多模态对话 (Qwen-VL)")
+@router.post("/chat/image", response_model=ResponseModel, summary="多模态对话 (Qwen-VL)")
 async def chat_with_image(
     request: ImageChatRequest,
     current_user = Depends(get_current_active_user)
@@ -30,11 +31,15 @@ async def chat_with_image(
         current_user (User): 当前登录用户
 
     Returns:
-        ImageChatResponse: 对话响应结果
+        ResponseModel: 统一响应结构 (data=ImageChatResponse)
     """
-    return await ImageManager.chat_with_image(request)
+    try:
+        result = await ImageManager.chat_with_image(request)
+        return ResponseHelper.success(result)
+    except Exception as e:
+        return ResponseHelper.error(msg=str(e))
 
-@router.post("/generations", response_model=ImageGenResponse, summary="文生图 (Image Generation)")
+@router.post("/generations", response_model=ResponseModel, summary="文生图 (Image Generation)")
 async def generate_image(
     request: ImageGenRequest,
     current_user = Depends(get_current_active_user)
@@ -45,13 +50,17 @@ async def generate_image(
     Args:
         request (ImageGenRequest): 请求体
             - prompt (str): 提示词
-            - model (str): 模型名称 (默认 FLUX.2-dev)
+            - model (str): 模型名称 (默认 Z-Image)
             - size (str): 图片尺寸
             - n (int): 生成数量
         current_user (User): 当前登录用户
 
     Returns:
-        ImageGenResponse: 图片生成结果 (URL)
+        ResponseModel: 统一响应结构 (data=ImageGenResponse)
     """
     user_id = getattr(current_user, "username", None) or current_user["username"]
-    return await ImageManager.generate_image(request, user_id=str(user_id))
+    try:
+        result = await ImageManager.generate_image(request, user_id=str(user_id))
+        return ResponseHelper.success(result)
+    except Exception as e:
+        return ResponseHelper.error(msg=str(e))
