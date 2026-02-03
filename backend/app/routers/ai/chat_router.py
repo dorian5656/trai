@@ -12,10 +12,11 @@ from backend.app.routers.ai.chat_func import ChatRequest, ChatResponse, AIManage
 from backend.app.utils.ai_utils import AIUtils
 from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.logger import logger
+from backend.app.utils.response import ResponseHelper, ResponseModel
 
 router = APIRouter()
 
-@router.post("/chat/completions", response_model=ChatResponse, summary="AI 对话 (统一入口)")
+@router.post("/chat/completions", response_model=ResponseModel, summary="AI 对话 (统一入口)")
 async def chat_completions(
     request: ChatRequest,
     current_user = Depends(get_current_active_user)
@@ -32,11 +33,15 @@ async def chat_completions(
         current_user (User): 当前登录用户
 
     Returns:
-        ChatResponse: 对话响应
+        ResponseModel: 对话响应 (data=ChatResponse)
     """
     # 假设 current_user 支持属性访问 (根据 dependencies.py 推断)
     user_id = getattr(current_user, "username", None) or current_user["username"]
-    return await AIManager.chat_completion(request, user_id=str(user_id))
+    try:
+        result = await AIManager.chat_completion(request, user_id=str(user_id))
+        return ResponseHelper.success(result)
+    except Exception as e:
+        return ResponseHelper.error(msg=str(e))
 
 @router.post("/chat/completions/stream", summary="DeepSeek 对话 (流式)")
 async def chat_completions_stream(
