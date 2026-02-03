@@ -132,6 +132,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_03_1723
+- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
+- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
+- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
+
 ### 2026_02_03_1108
 - **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
 - **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
