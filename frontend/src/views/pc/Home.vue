@@ -28,6 +28,7 @@ const appStore = useAppStore();
 const chatStore = useChatStore();
 const userStore = useUserStore();
 const showSimilarityDialog = ref(false);
+const showMeetingRecorder = ref(false);
 const { isListening, result, toggleListening } = useSpeechRecognition();
 const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles } = useFileUpload();
 const { activeSkill, visibleSkills, moreSkills, moreSkillItem, handleSkillClick, removeSkill } = useSkills();
@@ -127,6 +128,10 @@ onMounted(async () => {
 });
 
 const handleSkillSelect = (skill: any) => {
+  if (skill.label === '会议记录') {
+    showMeetingRecorder.value = true;
+    return;
+  }
   handleSkillClick(skill, () => {
     showSimilarityDialog.value = true;
   });
@@ -314,8 +319,17 @@ const handleLogout = () => {
       </div>
 
       <!-- 弹窗组件 -->
-      <SimilarityDialog v-model:visible="showSimilarityDialog" />
+      <SimilarityDialog
+        v-if="showSimilarityDialog"
+        :visible="showSimilarityDialog"
+        @update:visible="(val) => showSimilarityDialog = val"
+      />
     </main>
+
+    <MeetingRecorder 
+      v-if="showMeetingRecorder" 
+      @close="showMeetingRecorder = false" 
+    />
 
     <!-- 图片预览组件 -->
     <el-image-viewer
