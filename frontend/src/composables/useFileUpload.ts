@@ -6,6 +6,7 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { uploadFile } from '@/api/common';
+import { ErrorHandler } from '@/utils/errorHandler';
 
 export interface UploadFile {
   id: string;
@@ -55,19 +56,25 @@ export function useFileUpload() {
       uploadedFiles.value.push(newFile);
       target.value = ''; // 重置 input
 
+      // 获取响应式对象引用，确保后续修改能触发视图更新
+      const activeFile = uploadedFiles.value.find(f => f.id === newFile.id)!;
+
       try {
         const res = await uploadFile(file, 'chat', (percent) => {
-          newFile.progress = percent;
+          activeFile.progress = percent;
         });
         
-        newFile.status = 'done';
+        activeFile.status = 'done';
         if (res.url) {
-          newFile.url = res.url; // 更新为远程 URL
+          activeFile.url = res.url; // 更新为远程 URL
         }
-      } catch (error) {
+        // 强制设置进度为 100%，防止 onUploadProgress 未触发最后一次
+        activeFile.progress = 100;
+      } catch (error: any) {
         console.error('上传失败:', error);
-        newFile.status = 'error';
-        ElMessage.error(`${newFile.name} 上传失败`);
+        activeFile.status = 'error';
+        const appError = ErrorHandler.handleHttpError(error);
+        ElMessage.error(`${activeFile.name} 上传失败: ${appError.message}`);
       }
     }
   };
@@ -80,12 +87,15 @@ export function useFileUpload() {
   };
 
   const handlePreview = (file: UploadFile) => {
+    // 允许预览所有 image 类型文件，即使还在上传中（因为有本地 blob URL）
     if (file.url && file.type.startsWith('image/')) {
+      // 收集所有可预览的图片 URL
       const images = uploadedFiles.value
         .filter(f => f.url && f.type.startsWith('image/'))
         .map(f => f.url as string);
       
       const index = images.indexOf(file.url);
+      
       if (index !== -1) {
         previewUrlList.value = images;
         initialIndex.value = index;

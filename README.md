@@ -138,13 +138,36 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
 - **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
 
+### 2026_02_04_1648
+- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
+- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
 ### 2026_02_04_1541
 - **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
 - **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
 - **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
 
+### 2026_02_04_1415
+- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
+- **后端**: 修正 YOLO 模型加载路径配置 (`config.py`).
+
+### 2026_02_04_1130
+- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
+- **构建**: 更新 Vite 配置与通用组件 (`SimilarityDialog`).
+
+### 2026_02_04_0936
+- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
+- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
+- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
+- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
+
 ### 2026_02_04_0845
 - **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
+
+### 2026_02_03_1723
+- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
+- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
+- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
 
 ### 2026_02_03_1108
 - **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
