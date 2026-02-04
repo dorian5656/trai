@@ -97,10 +97,10 @@ class Settings(BaseSettings):
     S3_PUBLIC_DOMAIN: str = os.getenv("S3_PUBLIC_DOMAIN", "")
 
     # Dify AI 配置
-    DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.100.119:8098/v1")
+    DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.1.2:8098/v1")
     
     # Dify 数据库配置
-    DIFY_PG_HOST: str = os.getenv("DIFY_PG_HOST", "192.168.100.119")
+    DIFY_PG_HOST: str = os.getenv("DIFY_PG_HOST", "192.168.1.2")
     DIFY_PG_PORT: int = int(os.getenv("DIFY_PG_PORT", 5433))
     DIFY_PG_USER: str = os.getenv("DIFY_PG_USER", "postgres")
     DIFY_PG_PASSWORD: str = os.getenv("DIFY_PG_PASSWORD", "")

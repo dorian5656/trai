@@ -233,7 +233,7 @@ class ModelScopeUtils:
             raise RuntimeError(f"Failed to load model {model_name}: {e}")
 
     @classmethod
-    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int) -> str:
+    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int, streamer=None) -> str:
         """
         同步执行推理逻辑 (将被运行在线程池中)
         """
@@ -277,22 +277,73 @@ class ModelScopeUtils:
 
             # 4. 生成
             logger.info(f"[{model_name}] 开始推理...")
-            generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
-            
-            # 5. 解码
-            generated_ids_trimmed = [
-                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
-            
-            output_text = processor.batch_decode(
-                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )
-            
-            result = output_text[0]
-            logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
-            return result
+            if streamer:
+                # 使用 streamer 进行流式生成
+                model.generate(**inputs, max_new_tokens=max_new_tokens, streamer=streamer)
+                return "" # 流式模式下返回值由 streamer 处理，这里返回空或最后累积的文本
+            else:
+                generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+                
+                # 5. 解码
+                generated_ids_trimmed = [
+                    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                ]
+                
+                output_text = processor.batch_decode(
+                    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+                )
+                
+                result = output_text[0]
+                logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
+                return result
             
         return "Unsupported model architecture"
+
+    @classmethod
+    async def chat_completion_stream(
+        cls, 
+        messages: List[Dict[str, Any]], 
+        model_name: str = "Qwen/Qwen3-VL-4B-Instruct",
+        max_new_tokens: int = 512
+    ):
+        """
+        执行对话推理 (异步流式)
+        """
+        from transformers import TextIteratorStreamer
+        import threading
+
+        # 加载模型 (获取 processor)
+        # 注意: 这里需要在主线程加载，因为 load_model 可能涉及下载和 GPU 操作
+        async with cls._inference_lock:
+            instance = cls._load_model(model_name)
+            processor = instance["processor"]
+            
+            # 创建 Streamer
+            streamer = TextIteratorStreamer(processor, skip_prompt=True, skip_special_tokens=True)
+            
+            # 在新线程中运行 generate
+            # 注意: generate 是阻塞的，必须在线程中运行，否则会阻塞 event loop 导致无法 yield
+            thread = threading.Thread(
+                target=cls._run_inference_sync, 
+                kwargs={
+                    "model_name": model_name,
+                    "messages": messages,
+                    "max_new_tokens": max_new_tokens,
+                    "streamer": streamer
+                }
+            )
+            thread.start()
+
+            # 在主线程中 yield streamer 的输出
+            # streamer 是一个迭代器，会阻塞等待新 token
+            try:
+                for new_text in streamer:
+                    yield new_text
+            except Exception as e:
+                logger.error(f"流式生成异常: {e}")
+                yield f"[ERROR: {str(e)}]"
+            finally:
+                thread.join()
 
     @classmethod
     async def chat_completion(
@@ -312,7 +363,8 @@ class ModelScopeUtils:
                     cls._run_inference_sync,
                     model_name,
                     messages,
-                    max_new_tokens
+                    max_new_tokens,
+                    None # No streamer
                 )
                 return result
                 

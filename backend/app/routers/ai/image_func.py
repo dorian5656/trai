@@ -34,25 +34,66 @@ class ImageContent(BaseModel):
     """
     多模态消息内容
     """
-    type: str = Field(..., description="类型 (text/image)")
-    text: Optional[str] = Field(None, description="文本内容")
-    image: Optional[str] = Field(None, description="图片链接或Base64") # 改名 image 以匹配 Qwen 格式
+    type: str = Field(..., description="内容类型: 'text' (文本) 或 'image' (图片)", examples=["text", "image"])
+    text: Optional[str] = Field(None, description="当 type='text' 时必填，表示文本内容", examples=["Describe this image."])
+    image: Optional[str] = Field(None, description="当 type='image' 时必填，支持 URL (http/file) 或 Base64 (data:image/...)", examples=["https://example.com/image.jpg"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "text",
+                "text": "What is in this picture?",
+                "image": None
+            }
+        }
+    }
 
 class MultimodalMessage(BaseModel):
     """
     多模态对话消息
     """
-    role: str = Field(..., description="角色 (user/assistant/system)")
-    content: List[Dict[str, Any]] = Field(..., description="消息内容 (支持纯文本或多模态列表)")
+    role: str = Field(..., description="角色 (user/assistant/system)", examples=["user"])
+    content: List[ImageContent] = Field(..., description="消息内容 (支持纯文本或多模态列表)")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": "https://example.com/cat.jpg"},
+                    {"type": "text", "text": "What animal is this?"}
+                ]
+            }
+        }
+    }
 
 class ImageChatRequest(BaseModel):
     """
     AI 图像对话请求 (Qwen-VL 等)
     """
     messages: List[MultimodalMessage] = Field(..., description="历史消息列表")
-    model: str = Field("Qwen/Qwen3-VL-4B-Instruct", description="模型名称")
-    temperature: float = Field(0.7, description="温度系数")
-    max_tokens: int = Field(512, description="最大生成 Token 数")
+    model: str = Field("Qwen/Qwen3-VL-4B-Instruct", description="模型名称", examples=["Qwen/Qwen3-VL-4B-Instruct"])
+    temperature: float = Field(0.7, description="温度系数", examples=[0.7])
+    max_tokens: int = Field(512, description="最大生成 Token 数", examples=[512])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image", "image": "https://example.com/demo.jpg"},
+                            {"type": "text", "text": "Describe this image."}
+                        ]
+                    }
+                ],
+                "model": "Qwen/Qwen3-VL-4B-Instruct",
+                "temperature": 0.7,
+                "max_tokens": 512
+            }
+        }
+    }
 
 class ImageChatResponse(BaseModel):
     """
@@ -66,10 +107,21 @@ class ImageGenRequest(BaseModel):
     """
     文生图请求
     """
-    prompt: str = Field(..., description="提示词")
-    model: str = Field("Z-Image-Turbo", description="模型名称")
-    size: str = Field("1024x1024", description="图片尺寸")
-    n: int = Field(1, description="生成数量")
+    prompt: str = Field(..., description="提示词", examples=["A futuristic city skyline at sunset"])
+    model: str = Field("Z-Image-Turbo", description="模型名称", examples=["Z-Image-Turbo"])
+    size: str = Field("1024x1024", description="图片尺寸", examples=["1024x1024"])
+    n: int = Field(1, description="生成数量", examples=[1])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "prompt": "A cute cat playing piano",
+                "model": "Z-Image-Turbo",
+                "size": "1024x1024",
+                "n": 1
+            }
+        }
+    }
 
 class ImageGenResponse(BaseModel):
     """
@@ -88,13 +140,73 @@ class ImageManager:
     """
     
     @staticmethod
+    async def chat_with_image_stream(request: ImageChatRequest):
+        """
+        多模态对话 (Qwen-VL) - 流式响应
+        """
+        try:
+            # 转换消息格式
+            # 注意: Pydantic 的 model_dump() 默认会包含所有字段，包括 None 值的字段
+            # Qwen-VL utils 的 process_vision_info 对 None 值敏感，特别是 'image' 字段
+            # 如果 type='text'，image 字段应该是缺失的，而不是 None
+            
+            messages = []
+            for msg in request.messages:
+                content_list = []
+                for item in msg.content:
+                    content_item = {"type": item.type}
+                    if item.text is not None:
+                        content_item["text"] = item.text
+                    if item.image is not None:
+                        content_item["image"] = item.image
+                    content_list.append(content_item)
+                
+                messages.append({
+                    "role": msg.role,
+                    "content": content_list
+                })
+            
+            # 处理模型名称
+            model_name = request.model
+            if model_name == "Qwen3-VL-4B-Instruct":
+                model_name = "Qwen/Qwen3-VL-4B-Instruct"
+            elif model_name == "Qwen3-VL-8B-Instruct":
+                model_name = "Qwen/Qwen3-VL-8B-Instruct"
+
+            # 这里的 chat_completion_stream 是一个 async generator
+            async for chunk in ModelScopeUtils.chat_completion_stream(
+                messages=messages,
+                model_name=model_name,
+                max_new_tokens=request.max_tokens
+            ):
+                yield chunk
+            
+        except Exception as e:
+            logger.error(f"多模态流式对话失败: {e}")
+            yield f"[ERROR: {str(e)}]"
+
+    @staticmethod
     async def chat_with_image(request: ImageChatRequest) -> ImageChatResponse:
         """
         多模态对话 (Qwen-VL) - 本地推理
         """
         try:
             # 转换消息格式 (如果需要适配前端格式到 Qwen 格式)
-            messages = [msg.model_dump() for msg in request.messages]
+            messages = []
+            for msg in request.messages:
+                content_list = []
+                for item in msg.content:
+                    content_item = {"type": item.type}
+                    if item.text is not None:
+                        content_item["text"] = item.text
+                    if item.image is not None:
+                        content_item["image"] = item.image
+                    content_list.append(content_item)
+                
+                messages.append({
+                    "role": msg.role,
+                    "content": content_list
+                })
             
             # 处理模型名称
             model_name = request.model
