@@ -10,11 +10,18 @@ from anyio import to_thread
 # 尝试导入 modelscope 相关库 (可选依赖)
 try:
     # 优先尝试从 transformers 导入模型类 (更通用)
-    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+    from transformers import Qwen2_5_VLForConditionalGeneration, Qwen3VLForConditionalGeneration, AutoProcessor
     from qwen_vl_utils import process_vision_info
     _MODELSCOPE_AVAILABLE = True
 except ImportError:
-    _MODELSCOPE_AVAILABLE = False
+    try:
+        # Fallback if Qwen3 is not available
+        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from qwen_vl_utils import process_vision_info
+        Qwen3VLForConditionalGeneration = None
+        _MODELSCOPE_AVAILABLE = True
+    except ImportError:
+        _MODELSCOPE_AVAILABLE = False
     logger.warning("⚠️ transformers 或 qwen_vl_utils 未安装，ModelScopeUtils 功能受限")
 
 class ModelScopeUtils:
@@ -192,16 +199,24 @@ class ModelScopeUtils:
             logger.info(f"[{model_name}] 使用设备: {device}")
 
             # 根据模型类型加载
-            if "Qwen3-VL" in model_name or "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
-                # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
-                model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
-                    ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
-                ).to(device)
-                processor = AutoProcessor.from_pretrained(model_path)
+            if "Qwen3-VL" in model_name:
+                if Qwen3VLForConditionalGeneration is None:
+                     raise ImportError("当前 transformers 版本不支持 Qwen3-VL")
+                model_class = Qwen3VLForConditionalGeneration
+            elif "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
+                model_class = Qwen2_5_VLForConditionalGeneration
             else:
-                raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+                 # Default fallback or error
+                 raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+
+            # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
+            model = model_class.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
+                # trust_remote_code=True, # 允许加载自定义代码
+                ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
+            ).to(device)
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             
             cls._instances[model_name] = {
                 "model": model,
@@ -250,6 +265,15 @@ class ModelScopeUtils:
             
             # 移至设备
             inputs = inputs.to(device)
+
+            # Debug Log: Print Input Shapes
+            logger.info(f"[{model_name}] Input Keys: {list(inputs.keys())}")
+            if "pixel_values" in inputs:
+                logger.info(f"[{model_name}] pixel_values shape: {inputs['pixel_values'].shape}")
+            if "image_grid_thw" in inputs:
+                logger.info(f"[{model_name}] image_grid_thw: {inputs['image_grid_thw']}")
+            if "input_ids" in inputs:
+                logger.info(f"[{model_name}] input_ids shape: {inputs['input_ids'].shape}")
 
             # 4. 生成
             logger.info(f"[{model_name}] 开始推理...")

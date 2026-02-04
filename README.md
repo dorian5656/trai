@@ -132,6 +132,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_04_1541
+- **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
+- **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
+- **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
+
 ### 2026_02_04_0845
 - **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
 

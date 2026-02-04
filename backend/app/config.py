@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # 环境配置
     ENV: str = os.getenv("ENV", "dev")
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", 5689))
+    PORT: int = int(os.getenv("PORT", 5777))
     
     # PostgreSQL 数据库配置
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
@@ -98,6 +98,13 @@ class Settings(BaseSettings):
 
     # Dify AI 配置
     DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.100.119:8098/v1")
+    
+    # Dify 数据库配置
+    DIFY_PG_HOST: str = os.getenv("DIFY_PG_HOST", "192.168.100.119")
+    DIFY_PG_PORT: int = int(os.getenv("DIFY_PG_PORT", 5433))
+    DIFY_PG_USER: str = os.getenv("DIFY_PG_USER", "postgres")
+    DIFY_PG_PASSWORD: str = os.getenv("DIFY_PG_PASSWORD", "")
+    DIFY_PG_DB: str = os.getenv("DIFY_PG_DB", "dify")
     
     # 兼容 DeepSeek 变量 (如果 .env 中使用的是 DEEPSEEK_API_BASE)
     @property

@@ -223,7 +223,7 @@ torch-complex==0.4.4
 torchaudio==2.10.0
 torchvision==0.25.0
 tqdm>=4.66.0
-transformers==4.38.2
+transformers==5.0.0
 triton==3.6.0
 typer==0.21.1
 typer-slim==0.21.1
