@@ -1,6 +1,6 @@
 # Conda Environments List
 
-> 生成时间: 2026-02-03
+> 生成时间: 2026-02-04
 
 ## 环境列表
 
@@ -23,8 +23,11 @@ nhsa_crm_31114_lhd     /opt/miniconda3/envs/nhsa_crm_31114_lhd
 supertonicpy310        /opt/miniconda3/envs/supertonicpy310
 supertonicpy3911       /opt/miniconda3/envs/supertonicpy3911
 talent3129             /opt/miniconda3/envs/talent3129
-trai_31014_whf       * /opt/miniconda3/envs/trai_31014_whf
+trai_31014_whf         /opt/miniconda3/envs/trai_31014_whf
 trai_31014_whf_dev     /opt/miniconda3/envs/trai_31014_whf_dev
+trai_31014_whf_trai_20260202   /opt/miniconda3/envs/trai_31014_whf_trai_20260202
+trai_31014_whf_trai_dev_20260202   /opt/miniconda3/envs/trai_31014_whf_trai_dev_20260202
+trai_31014_whf_trai_pro_20260202       * /opt/miniconda3/envs/trai_31014_whf_trai_pro_20260202
 trai_31019_zcl         /opt/miniconda3/envs/trai_31019_zcl
 tuoren_apps_31114_lhd   /opt/miniconda3/envs/tuoren_apps_31114_lhd
 videounderstandingpy3911   /opt/miniconda3/envs/videounderstandingpy3911
