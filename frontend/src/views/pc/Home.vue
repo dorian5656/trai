@@ -231,6 +231,14 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
     // 用户点击取消
   }
 };
+
+const createConversationCommandHandler = (conv: DifyConversation) => (cmd: 'rename' | 'delete') => {
+  if (cmd === 'rename') {
+    handleRenameConversation(conv);
+  } else {
+    handleDeleteConversation(conv);
+  }
+};
 </script>
 
 <template>
@@ -276,7 +284,7 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
           >
             <span class="chat-title">{{ conv.name || '未命名对话' }}</span>
             
-            <el-dropdown trigger="click" @command="(cmd) => { if(cmd === 'rename') handleRenameConversation(conv); else if(cmd === 'delete') handleDeleteConversation(conv); }" class="chat-actions">
+            <el-dropdown trigger="click" @command="createConversationCommandHandler(conv)" class="chat-actions">
               <span class="el-dropdown-link" @click.stop>
                 <el-icon><MoreFilled /></el-icon>
               </span>

@@ -20,7 +20,7 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
 
-const type = ref(1); // 1: 公众号, 2: 服务号
+const type = ref<1 | 2>(1); // 1: 公众号, 2: 服务号
 
 // 定义每个类型的独立状态接口
 interface StateItem {
@@ -33,7 +33,7 @@ interface StateItem {
 }
 
 // 状态 Map：key 为 type 值
-const stateMap = reactive<Record<number, StateItem>>({
+const stateMap = reactive<Record<1 | 2, StateItem>>({
   1: {
     targetUrl: '',
     templateUrl: '',
@@ -53,7 +53,7 @@ const stateMap = reactive<Record<number, StateItem>>({
 });
 
 // 当前激活的状态
-const currentState = computed(() => stateMap[type.value]);
+const currentState = computed<StateItem>(() => stateMap[type.value]);
 
 const dialogVisible = computed({
   get: () => props.visible,
