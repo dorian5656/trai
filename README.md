@@ -67,8 +67,8 @@ python backend/client_app/build.py
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
 
-- **本地文档**: [http://localhost:5689/api/v1/docs](http://localhost:5689/api/v1/docs)
-- **OpenAPI JSON**: [http://localhost:5689/api/v1/openapi.json](http://localhost:5689/api/v1/openapi.json)
+- **本地文档**: [http://localhost:5689/api_trai/v1/docs](http://localhost:5689/api_trai/v1/docs)
+- **OpenAPI JSON**: [http://localhost:5689/api_trai/v1/openapi.json](http://localhost:5689/api_trai/v1/openapi.json)
 
 ## 🔧 环境依赖 (GPU 版)
 
@@ -132,6 +132,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_04_1653
+- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
+- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
+- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
+- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
 ### 2026_02_04_0936
 - **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
 - **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
@@ -144,7 +150,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
 
 ### 2026_02_03_1108
-- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复 `/api_trai/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
 - **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
 - **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
 
@@ -176,7 +182,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
 
 ### 2026_02_02_1436
-- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api_trai/v1/ai/chat/completions`.
 - **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
 - **后端**: 优化项目结构, 清理临时测试脚本.
 
@@ -293,7 +299,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ### 2026_01_28_0900
 - **后端**: 集成 Dify AI 平台.
   - 新增 `DifyApp` 工具类 (`app/utils/dify_utils.py`), 封装对话与会话管理 API.
-  - 新增 Dify 路由模块 (`app/routers/dify`), 提供 `/api/v1/dify/chat` 流式对话接口.
+  - 新增 Dify 路由模块 (`app/routers/dify`), 提供 `/api_trai/v1/dify/chat` 流式对话接口.
   - 配置项: `DIFY_API_BASE_URL` 和 `DIFY_API_KEY`.
 
 ### 2026_01_27_1745
@@ -329,7 +335,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ### 2026_01_27_1158
 - **后端**: 增强 S3 对象存储功能。
-  - 新增文件代理下载接口 (`/api/v1/upload/files/{path}`), 解决内网 S3 无法直接访问的问题。
+  - 新增文件代理下载接口 (`/api_trai/v1/upload/files/{path}`), 解决内网 S3 无法直接访问的问题。
   - 自动配置 S3 存储桶的 CORS 策略与公开读权限。
   - 更新依赖 `requirements_windows_gpu.txt` (新增 `aioboto3` 等)。
 
@@ -357,7 +363,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ### 2026_01_27_0947
 - **后端**: 重构 AI 模块，将 `routers/chat` 迁移至 `routers/ai`。
-- **后端**: 集成 DeepSeek API 对话接口 (`/api/v1/ai/chat/completions`)。
+- **后端**: 集成 DeepSeek API 对话接口 (`/api_trai/v1/ai/chat/completions`)。
   - 支持流式/非流式对话 (目前默认非流式)。
   - 需要在 `.env` 中配置 `DEEPSEEK_API_KEY`。
 - **后端**: 修复 `test_ai_chat.py` 验证脚本及相关依赖。
