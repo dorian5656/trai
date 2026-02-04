@@ -4,24 +4,26 @@
 // 描述：错误类型定义
 
 /**
- * 错误类型枚举
+ * 错误类型常量对象 (替代 enum 以支持 erasableSyntaxOnly)
  */
-export enum ErrorType {
+export const ErrorType = {
   /** 网络错误 */
-  NETWORK_ERROR = 'NETWORK_ERROR',
+  NETWORK_ERROR: 'NETWORK_ERROR',
   /** 未授权（401） */
-  UNAUTHORIZED = 'UNAUTHORIZED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
   /** 禁止访问（403） */
-  FORBIDDEN = 'FORBIDDEN',
+  FORBIDDEN: 'FORBIDDEN',
   /** 资源不存在（404） */
-  NOT_FOUND = 'NOT_FOUND',
+  NOT_FOUND: 'NOT_FOUND',
   /** 请求参数错误（400） */
-  BAD_REQUEST = 'BAD_REQUEST',
+  BAD_REQUEST: 'BAD_REQUEST',
   /** 服务器内部错误（500） */
-  SERVER_ERROR = 'SERVER_ERROR',
+  SERVER_ERROR: 'SERVER_ERROR',
   /** 业务逻辑错误 */
-  BUSINESS_ERROR = 'BUSINESS_ERROR'
-}
+  BUSINESS_ERROR: 'BUSINESS_ERROR'
+} as const;
+
+export type ErrorType = typeof ErrorType[keyof typeof ErrorType];
 
 /**
  * 应用错误接口

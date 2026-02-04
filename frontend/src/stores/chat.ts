@@ -50,9 +50,10 @@ export const useChatStore = defineStore('chat', () => {
   // 更新临时会话为真实会话
   const updateTempDifyConversation = (tempId: string, realId: string) => {
     const index = difyConversations.value.findIndex(c => c.id === tempId);
-    if (index !== -1) {
-      difyConversations.value[index].id = realId;
-      difyConversations.value[index].is_temp = false;
+    const conversation = difyConversations.value[index];
+    if (index !== -1 && conversation) {
+      conversation.id = realId;
+      conversation.is_temp = false;
       // 如果当前选中的是临时 ID，也更新为真实 ID
       if (difySessionId.value === tempId) {
         difySessionId.value = realId;

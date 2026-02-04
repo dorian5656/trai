@@ -7,13 +7,14 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { User, Lock, Message, Iphone, UserFilled } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/user';
 import { register } from '@/api/auth';
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 const loading = ref(false);
 const isRegister = ref(false); // 切换登录/注册模式
@@ -107,6 +108,27 @@ const toggleMode = () => {
   registerForm.email = '';
   registerForm.phone = '';
 };
+
+onMounted(async () => {
+  const code = route.query.code as string;
+  if (code) {
+    loading.value = true;
+    try {
+      ElMessage.info('正在进行企业微信授权登录...');
+      await userStore.loginByWecom(code);
+      ElMessage.success('企业微信登录成功');
+      router.push('/');
+    } catch (error) {
+      console.error(error);
+      ElMessage.error('企业微信登录失败，请重试或使用账号密码登录');
+      // 清除 URL 中的 code 参数，避免刷新再次触发
+      router.replace('/login');
+    } finally {
+      loading.value = false;
+    }
+  }
+});
+
 </script>
 
 <template>

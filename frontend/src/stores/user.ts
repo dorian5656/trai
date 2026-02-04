@@ -5,7 +5,7 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { login as loginApi, type LoginParams } from '@/api/auth';
+import { login as loginApi, wecomLogin as wecomLoginApi, type LoginParams } from '@/api/auth';
 import { getUserInfo, type UserInfo } from '@/api/user';
 import { ElMessage } from 'element-plus';
 
@@ -34,6 +34,24 @@ export const useUserStore = defineStore('user', () => {
       return true;
     } catch (error) {
       console.error('登录失败:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * 企业微信登录
+   */
+  const loginByWecom = async (code: string) => {
+    try {
+      const res = await wecomLoginApi(code);
+      token.value = res.access_token;
+      localStorage.setItem('token', res.access_token);
+      
+      // 登录成功后立即获取用户信息
+      await fetchUserInfo();
+      return true;
+    } catch (error) {
+      console.error('企业微信登录失败:', error);
       throw error;
     }
   };
@@ -99,6 +117,7 @@ export const useUserStore = defineStore('user', () => {
     username,
     avatar,
     login,
+    loginByWecom,
     logout,
     fetchUserInfo,
     init,
