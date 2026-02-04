@@ -132,6 +132,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_04_0936
+- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
+- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
+- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
+- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
+
 ### 2026_02_03_1723
 - **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
 - **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
