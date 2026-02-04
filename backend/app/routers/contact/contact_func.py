@@ -17,14 +17,25 @@ from backend.app.utils.email_utils import EmailUtils
 # =============================================================================
 
 class LeadSubmitRequest(BaseModel):
-    name: str = Field(..., description="姓名")
-    phone: str = Field(..., description="电话")
-    product: Optional[str] = Field(None, description="感兴趣产品")
-    region: Optional[str] = Field(None, description="区域")
-    clientIp: Optional[str] = Field(None, description="客户端IP")
-    userAgent: Optional[str] = Field(None, description="浏览器UA")
-    submitTime: Optional[str] = Field(None, description="提交时间 (ISO格式)")
-    submissionId: Optional[str] = Field(None, description="提交ID (前端生成)")
+    name: str = Field(..., description="姓名", examples=["张三"])
+    phone: str = Field(..., description="电话", examples=["13800138000"])
+    product: Optional[str] = Field(None, description="感兴趣产品", examples=["TRAI-Pro"])
+    region: Optional[str] = Field(None, description="区域", examples=["北京"])
+    clientIp: Optional[str] = Field(None, description="客户端IP", examples=["127.0.0.1"])
+    userAgent: Optional[str] = Field(None, description="浏览器UA", examples=["Mozilla/5.0..."])
+    submitTime: Optional[str] = Field(None, description="提交时间 (ISO格式)", examples=["2026-02-04T12:00:00"])
+    submissionId: Optional[str] = Field(None, description="提交ID (前端生成)", examples=["sub-123456"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "张三",
+                "phone": "13800138000",
+                "product": "TRAI-Pro",
+                "region": "北京"
+            }
+        }
+    }
 
 class LeadSubmitResponse(BaseModel):
     code: int = 200

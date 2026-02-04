@@ -6,6 +6,7 @@
 # 描述：AI 图像/多模态路由模块
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from backend.app.routers.ai.image_func import (
     ImageChatRequest, ImageChatResponse, ImageManager,
     ImageGenRequest, ImageGenResponse
@@ -14,6 +15,32 @@ from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.response import ResponseHelper, ResponseModel
 
 router = APIRouter()
+
+@router.post("/chat/image/stream", summary="多模态对话 (Qwen-VL) - 流式")
+async def chat_with_image_stream(
+    request: ImageChatRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """
+    多模态对话接口 (流式 SSE)
+
+    Args:
+        request (ImageChatRequest): 请求体
+        current_user (User): 当前登录用户
+
+    Returns:
+        StreamingResponse: SSE 流式响应
+    """
+    async def event_generator():
+        try:
+            async for chunk in ImageManager.chat_with_image_stream(request):
+                # SSE 格式
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.post("/chat/image", response_model=ResponseModel, summary="多模态对话 (Qwen-VL)")
 async def chat_with_image(
