@@ -10,6 +10,7 @@ export const useAppStore = defineStore('app', () => {
   // ✅ 侧边栏状态
   const isSidebarOpen = ref(true); // PC 端默认展开
   const isMobileSidebarOpen = ref(false); // 移动端默认收起
+  const showLoginModal = ref(false); // 登录模态框状态
 
   // ✅ 切换 PC 侧边栏
   const toggleSidebar = () => {
@@ -26,11 +27,24 @@ export const useAppStore = defineStore('app', () => {
     isMobileSidebarOpen.value = false;
   };
 
+  // ✅ 打开登录模态框
+  const openLoginModal = () => {
+    showLoginModal.value = true;
+  };
+
+  // ✅ 关闭登录模态框
+  const closeLoginModal = () => {
+    showLoginModal.value = false;
+  };
+
   return {
     isSidebarOpen,
     isMobileSidebarOpen,
+    showLoginModal,
     toggleSidebar,
     toggleMobileSidebar,
     closeMobileSidebar,
+    openLoginModal,
+    closeLoginModal,
   };
 });
