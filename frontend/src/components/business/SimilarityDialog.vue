@@ -6,7 +6,7 @@
 -->
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, reactive } from 'vue';
 import { predictSimilarity, type PredictRequest } from '@/api/rrdsppg';
 import { uploadFile } from '@/api/common';
 import { ElMessage, type UploadRequestOptions, type UploadFile } from 'element-plus';
@@ -21,14 +21,39 @@ const emit = defineEmits<{
 }>();
 
 const type = ref(1); // 1: 公众号, 2: 服务号
-const targetUrl = ref('');
-const templateUrl = ref('');
-const loading = ref(false);
-const result = ref<any>(null);
 
-// 上传状态
-const targetLoading = ref(false);
-const templateLoading = ref(false);
+// 定义每个类型的独立状态接口
+interface StateItem {
+  targetUrl: string;
+  templateUrl: string;
+  result: any;
+  loading: boolean;
+  targetLoading: boolean;
+  templateLoading: boolean;
+}
+
+// 状态 Map：key 为 type 值
+const stateMap = reactive<Record<number, StateItem>>({
+  1: {
+    targetUrl: '',
+    templateUrl: '',
+    result: null,
+    loading: false,
+    targetLoading: false,
+    templateLoading: false,
+  },
+  2: {
+    targetUrl: '',
+    templateUrl: '',
+    result: null,
+    loading: false,
+    targetLoading: false,
+    templateLoading: false,
+  }
+});
+
+// 当前激活的状态
+const currentState = computed(() => stateMap[type.value]);
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -38,54 +63,62 @@ const dialogVisible = computed({
 // 监听弹窗关闭，重置数据
 watch(() => props.visible, (newVal) => {
   if (!newVal) {
-    result.value = null;
-    loading.value = false;
-    targetUrl.value = '';
-    templateUrl.value = '';
-    targetLoading.value = false;
-    templateLoading.value = false;
+    // 遍历所有状态进行重置
+    Object.values(stateMap).forEach(state => {
+      state.result = null;
+      state.loading = false;
+      state.targetUrl = '';
+      state.templateUrl = '';
+      state.targetLoading = false;
+      state.templateLoading = false;
+    });
+    // 重置为默认 tab
+    type.value = 1;
   }
 });
 
 // 自定义上传处理
 const handleUploadTarget = async (options: UploadRequestOptions) => {
-  targetLoading.value = true;
+  const state = currentState.value;
+  state.targetLoading = true;
   try {
     // 明确传递 module='rrdsppg' 参数
     const res = await uploadFile(options.file as File, 'rrdsppg');
-    targetUrl.value = res.url;
+    state.targetUrl = res.url;
     ElMessage.success('目标图片上传成功');
   } catch (error) {
     console.error(error);
     ElMessage.error('目标图片上传失败');
   } finally {
-    targetLoading.value = false;
+    state.targetLoading = false;
   }
 };
 
 const handleUploadTemplate = async (options: UploadRequestOptions) => {
-  templateLoading.value = true;
+  const state = currentState.value;
+  state.templateLoading = true;
   try {
     // 明确传递 module='rrdsppg' 参数
     const res = await uploadFile(options.file as File, 'rrdsppg');
-    templateUrl.value = res.url;
+    state.templateUrl = res.url;
     ElMessage.success('模板图片上传成功');
   } catch (error) {
     console.error(error);
     ElMessage.error('模板图片上传失败');
   } finally {
-    templateLoading.value = false;
+    state.templateLoading = false;
   }
 };
 
 const submit = async () => {
-  if (!targetUrl.value || !templateUrl.value) {
+  const state = currentState.value;
+  if (!state.targetUrl || !state.templateUrl) {
     ElMessage.warning('请先上传目标图片和模板图片');
     return;
   }
 
-  loading.value = true;
-  result.value = null;
+  state.loading = true;
+  state.result = null;
 
   try {
     // 2. 构造 JSON 请求
@@ -106,19 +139,19 @@ const submit = async () => {
       taskId: 1222, // 示例值
       userId: 221,  // 示例值
       type: typeVal,
-      templatePath: templateUrl.value.trim(),
-      targetPath: targetUrl.value.trim(),
+      templatePath: state.templateUrl.trim(),
+      targetPath: state.targetUrl.trim(),
       itzx: 0
     };
 
     const res = await predictSimilarity(payload);
-    result.value = res;
+    state.result = res;
     ElMessage.success('识别成功');
   } catch (error) {
     // 错误已在 request.ts 中统一处理，此处仅需处理 loading
     console.error(error);
   } finally {
-    loading.value = false;
+    state.loading = false;
   }
 };
 </script>
@@ -127,7 +160,7 @@ const submit = async () => {
   <el-dialog
     v-model="dialogVisible"
     title="相似度识别"
-    width="37.5rem"
+    width="50rem"
     destroy-on-close
   >
     <el-form label-width="6.25rem">
@@ -138,66 +171,85 @@ const submit = async () => {
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item label="目标图片">
-        <div class="upload-container">
-          <el-upload
-            class="upload-demo"
-            drag
-            action="#"
-            :http-request="handleUploadTarget"
-            :show-file-list="false"
-            accept="image/*"
-          >
-            <div v-if="targetUrl" class="preview-box">
-              <img :src="targetUrl" class="preview-img" />
-              <div class="re-upload-mask">
+      <div class="image-sections">
+        <div class="image-section">
+          <div class="section-label">目标图片</div>
+          <div class="upload-container">
+            <el-upload
+              class="upload-demo"
+              drag
+              action="#"
+              :http-request="handleUploadTarget"
+              :show-file-list="false"
+              accept="image/*"
+            >
+              <div v-if="currentState.targetUrl" class="preview-box">
+                <img :src="currentState.targetUrl" class="preview-img" />
+                <div class="re-upload-mask">
+                  <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                  <div class="el-upload__text">点击或拖拽替换</div>
+                </div>
+              </div>
+              <div v-else class="upload-placeholder">
                 <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                <div class="el-upload__text">点击或拖拽替换</div>
+                <div class="el-upload__text">
+                  拖拽上传或 <em>点击上传</em>
+                </div>
               </div>
-            </div>
-            <div v-else class="upload-placeholder">
-              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-              <div class="el-upload__text">
-                拖拽上传或 <em>点击上传</em>
-              </div>
-            </div>
-          </el-upload>
-          <div v-if="targetLoading" class="loading-text">上传中...</div>
+            </el-upload>
+            <div v-if="currentState.targetLoading" class="loading-text">上传中...</div>
+            <el-input 
+              v-model="currentState.targetUrl" 
+              placeholder="请输入图片URL" 
+              class="url-input" 
+              clearable
+            />
+          </div>
         </div>
-      </el-form-item>
 
-      <el-form-item label="模板图片">
-        <div class="upload-container">
-          <el-upload
-            class="upload-demo"
-            drag
-            action="#"
-            :http-request="handleUploadTemplate"
-            :show-file-list="false"
-            accept="image/*"
-          >
-            <div v-if="templateUrl" class="preview-box">
-              <img :src="templateUrl" class="preview-img" />
-              <div class="re-upload-mask">
+        <div class="image-section">
+          <div class="section-label">模板图片</div>
+          <div class="upload-container">
+            <el-upload
+              class="upload-demo"
+              drag
+              action="#"
+              :http-request="handleUploadTemplate"
+              :show-file-list="false"
+              accept="image/*"
+            >
+              <div v-if="currentState.templateUrl" class="preview-box">
+                <img :src="currentState.templateUrl" class="preview-img" />
+                <div class="re-upload-mask">
+                  <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                  <div class="el-upload__text">点击或拖拽替换</div>
+                </div>
+              </div>
+              <div v-else class="upload-placeholder">
                 <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                <div class="el-upload__text">点击或拖拽替换</div>
+                <div class="el-upload__text">
+                  拖拽上传或 <em>点击上传</em>
+                </div>
               </div>
-            </div>
-            <div v-else class="upload-placeholder">
-              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-              <div class="el-upload__text">
-                拖拽上传或 <em>点击上传</em>
-              </div>
-            </div>
-          </el-upload>
-          <div v-if="templateLoading" class="loading-text">上传中...</div>
+            </el-upload>
+            <div v-if="currentState.templateLoading" class="loading-text">上传中...</div>
+            <el-input 
+              v-model="currentState.templateUrl" 
+              placeholder="请输入图片URL" 
+              class="url-input" 
+              clearable
+            />
+          </div>
         </div>
-      </el-form-item>
+      </div>
 
-      <div v-if="result" class="result-box">
+      <div v-if="currentState.result" class="result-box">
         <h4>识别结果:</h4>
-        <el-card shadow="never" class="json-card">
-          <pre>{{ JSON.stringify(result, null, 2) }}</pre>
+        <div class="similarity-score" v-if="currentState.result.similarity_score !== undefined">
+          相似度：<span class="score-value">{{ (currentState.result.similarity_score * 100).toFixed(2) }}%</span>
+        </div>
+        <el-card v-else shadow="never" class="json-card">
+          <pre>{{ JSON.stringify(currentState.result, null, 2) }}</pre>
         </el-card>
       </div>
     </el-form>
@@ -205,8 +257,8 @@ const submit = async () => {
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submit" :loading="loading">
-          {{ loading ? '识别中...' : '开始识别' }}
+        <el-button type="primary" @click="submit" :loading="currentState.loading">
+          {{ currentState.loading ? '识别中...' : '开始识别' }}
         </el-button>
       </span>
     </template>
@@ -214,6 +266,34 @@ const submit = async () => {
 </template>
 
 <style scoped>
+.image-sections {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.image-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.section-label {
+  font-weight: bold;
+  margin-bottom: 0.625rem;
+  color: #606266;
+}
+.url-input {
+  margin-top: 0.625rem;
+}
+.similarity-score {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #303133;
+  margin-top: 0.625rem;
+}
+.score-value {
+  color: #409eff;
+}
 .result-box {
   margin-top: 1.25rem;
 }

@@ -20,8 +20,8 @@ const normalizeUrl = (url: string): string => {
 // 服务端地址 (e.g. http://localhost:5777)
 export const SERVER_URL = normalizeUrl(getEnv('VITE_APP_SERVER_URL', 'http://localhost:5777'));
 
-// API 基础路径 (e.g. /api/v1)
-export const API_BASE_URL = getEnv('VITE_APP_BASE_URL', '/api/v1');
+// API 基础路径 (e.g. /api_trai/v1)
+export const API_BASE_URL = getEnv('VITE_APP_BASE_URL', '/api_trai/v1');
 
 // 完整的 API URL
 export const API_URL = `${SERVER_URL}${API_BASE_URL.startsWith('/') ? API_BASE_URL : '/' + API_BASE_URL}`;
