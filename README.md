@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf
+conda activate trai_31014_whf_trai_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf python=3.10.14
-    conda activate trai_31014_whf
+0. conda create -n trai_31014_whf_trai_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_trai_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -131,6 +131,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 2026_02_04_0845
+- **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
 
 ### 2026_02_03_1108
 - **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
