@@ -57,18 +57,20 @@ const handleEnter = (e: KeyboardEvent) => {
     <div v-if="uploadedFiles.length > 0" class="file-list">
       <div v-for="file in uploadedFiles" :key="file.id" class="file-card">
         <div class="file-preview">
-          <!-- 图片预览 -->
-          <img v-if="file.url" :src="file.url" alt="preview" @click="emit('previewFile', file)" style="cursor: pointer" />
+          <!-- 图片预览 (必须是图片类型且有URL) -->
+          <img v-if="file.url && file.type.startsWith('image/')" :src="file.url" alt="preview" @click="emit('previewFile', file)" style="cursor: pointer" />
           <!-- 其他文件图标 -->
           <div v-else class="file-icon">
             <!-- Excel 图标 -->
             <div v-if="file.name.endsWith('.xlsx') || file.name.endsWith('.xls')" style="width: 24px; height: 24px" v-html="icons.excel"></div>
+            <!-- Audio 图标 -->
+            <div v-else-if="file.name.endsWith('.mp3') || file.name.endsWith('.wav') || file.name.endsWith('.m4a') || file.type.startsWith('audio/')" style="width: 24px; height: 24px" v-html="icons.audio"></div>
             <!-- 默认文件图标 -->
             <div v-else style="width: 24px; height: 24px" v-html="icons.fileDefault"></div>
           </div>
           
           <!-- 上传/解析 遮罩 -->
-          <div v-if="file.status !== 'done'" class="upload-mask">
+          <div v-if="file.status !== 'done' || (file.progress < 100 && file.status === 'uploading')" class="upload-mask">
             <div v-if="file.status === 'uploading'" class="progress-ring">
               <svg width="24" height="24" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>

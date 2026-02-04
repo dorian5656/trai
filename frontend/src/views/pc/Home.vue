@@ -342,13 +342,15 @@ const handleLogout = () => {
       @close="showMeetingRecorder = false" 
     />
 
-    <!-- 图片预览组件 -->
-    <el-image-viewer
-      v-if="showViewer"
-      :url-list="previewUrlList"
-      :initial-index="initialIndex"
-      @close="closeViewer"
-    />
+    <!-- 图片预览组件 (挂载到 body 以确保全屏覆盖) -->
+    <Teleport to="body">
+      <el-image-viewer
+        v-if="showViewer"
+        :url-list="previewUrlList"
+        :initial-index="initialIndex"
+        @close="closeViewer"
+      />
+    </Teleport>
   </div>
 </template>
 
