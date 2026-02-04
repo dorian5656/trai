@@ -70,7 +70,7 @@ const handleEnter = (e: KeyboardEvent) => {
           </div>
           
           <!-- 上传/解析 遮罩 -->
-          <div v-if="file.status !== 'done' || (file.progress < 100 && file.status === 'uploading')" class="upload-mask">
+          <div v-if="file.status !== 'done'" class="upload-mask">
             <div v-if="file.status === 'uploading'" class="progress-ring">
               <svg width="24" height="24" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>

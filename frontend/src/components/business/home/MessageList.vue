@@ -93,7 +93,7 @@ defineExpose({
           
           <div class="content-bubble">
              <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
-             <div v-else>{{ msg.content }}</div>
+             <div v-else class="markdown-body user-content" v-html="renderMarkdown(msg.content)"></div>
           </div>
 
           <!-- AI 消息下方的操作栏 -->
@@ -184,6 +184,26 @@ defineExpose({
           pre { background: #f7f8fa; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; color: #333; border: 1px solid #e5e6eb; }
           code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
           pre code { color: inherit; background-color: transparent; padding: 0; }
+          
+          /* 通用图片样式 */
+          img {
+            max-width: 100%;
+            border-radius: 0.375rem;
+            margin: 0.5rem 0;
+            display: block;
+          }
+        }
+
+        /* 用户消息特定样式调整 */
+        .user-content {
+          :deep(a) {
+             color: #fff;
+             text-decoration: underline;
+          }
+          :deep(code) {
+             background-color: rgba(255, 255, 255, 0.2);
+             color: #fff;
+          }
         }
       }
 

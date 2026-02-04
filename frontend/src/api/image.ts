@@ -40,3 +40,28 @@ export interface ImageGenResponse {
 export const generateImage = (data: ImageGenRequest) => {
   return request.post<any, ImageGenResponse | Array<{ url: string }>>('/ai/image/generations', data);
 };
+
+/**
+ * 图像识别/多模态对话请求参数
+ */
+export interface ImageChatRequest {
+  messages: Array<{
+    role: string;
+    content: Array<{
+      type: 'text' | 'image';
+      text?: string;
+      image?: string;
+    }>;
+  }>;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+}
+
+/**
+ * 图像识别接口
+ * @param data 请求参数
+ */
+export const chatWithImage = (data: ImageChatRequest) => {
+  return request.post<any, any>('/ai/image/chat/image', data);
+};
