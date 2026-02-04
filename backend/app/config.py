@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # 基础配置
     PROJECT_NAME: str = "TRAI Backend"
     VERSION: str = "0.1.0"
-    API_V1_STR: str = "/api/v1"
+    API_V1_STR: str = "/api_trai/v1"
     
     # 环境配置
     ENV: str = os.getenv("ENV", "dev")
