@@ -20,6 +20,8 @@ import ChatInput from '@/components/business/home/ChatInput.vue';
 import MessageList from '@/components/business/home/MessageList.vue';
 import { fetchDifyConversations } from '@/api/dify';
 import type { DifyConversation } from '@/types/chat';
+import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
+import { ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -119,7 +121,8 @@ watch(result, (newVal) => {
 
 // 加载历史会话
 const loadConversations = async () => {
-  if (!userStore.username) return;
+  // 确保用户名有效且不是默认值
+  if (!userStore.username || userStore.username === '未登录') return;
   try {
     const res = await fetchDifyConversations(userStore.username);
     if (res && res.data) {
@@ -129,6 +132,18 @@ const loadConversations = async () => {
     console.error('加载历史会话失败', e);
   }
 };
+
+// 监听登录状态变化，自动刷新会话列表
+watch(
+  () => userStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      loadConversations();
+    } else {
+      chatStore.clearAllConversations();
+    }
+  }
+);
 
 // 初始化用户信息
 onMounted(async () => {
@@ -170,11 +185,51 @@ const handleSwitchSession = (conversationId: string) => {
 };
 
 const handleLogin = () => {
-  router.push('/login');
+  appStore.openLoginModal();
 };
 
 const handleLogout = () => {
   userStore.logout();
+};
+
+const handleRenameConversation = async (conv: DifyConversation) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名会话', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputValue: conv.name,
+      inputPattern: /\S/,
+      inputErrorMessage: '名称不能为空',
+    });
+
+    if (value && value !== conv.name) {
+      // await renameDifyConversation(conv.id, value, userStore.username);
+      chatStore.renameDifyConversation(conv.id, value);
+      ElMessage.success('重命名成功 (仅前端演示)');
+    }
+  } catch {
+    // 用户点击取消，不做任何操作
+  }
+};
+
+const handleDeleteConversation = async (conv: DifyConversation) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该会话吗？删除后无法恢复。',
+      '删除确认',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+    
+    // await deleteDifyConversation(conv.id, userStore.username);
+    chatStore.removeDifyConversation(conv.id);
+    ElMessage.success('删除成功 (仅前端演示)');
+  } catch {
+    // 用户点击取消
+  }
 };
 </script>
 
@@ -219,7 +274,19 @@ const handleLogout = () => {
             :class="{ active: conv.id === chatStore.difySessionId }"
             @click="handleSwitchSession(conv.id)"
           >
-            {{ conv.name || '未命名对话' }}
+            <span class="chat-title">{{ conv.name || '未命名对话' }}</span>
+            
+            <el-dropdown trigger="click" @command="(cmd) => { if(cmd === 'rename') handleRenameConversation(conv); else if(cmd === 'delete') handleDeleteConversation(conv); }" class="chat-actions">
+              <span class="el-dropdown-link" @click.stop>
+                <el-icon><MoreFilled /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename" :icon="Edit">重命名</el-dropdown-item>
+                  <el-dropdown-item command="delete" :icon="Delete" style="color: var(--el-color-danger)">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </template>
         
@@ -482,8 +549,48 @@ const handleLogout = () => {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      &:hover { background-color: #e5e6eb; }
-      &.active { background-color: #e8f3ff; color: #165dff; }
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      .chat-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+      }
+      
+      .chat-actions {
+        opacity: 0;
+        transition: opacity 0.2s;
+        margin-left: 0.5rem;
+        flex-shrink: 0;
+        
+        .el-icon {
+          font-size: 1rem;
+          color: #86909c;
+          padding: 0.125rem;
+          border-radius: 0.125rem;
+          &:hover {
+             background-color: rgba(0,0,0,0.05);
+             color: #1d2129;
+          }
+        }
+      }
+
+      &:hover { 
+        background-color: #e5e6eb; 
+        .chat-actions {
+           opacity: 1;
+        }
+      }
+      
+      &.active { 
+        background-color: #e8f3ff; 
+        color: #165dff; 
+        .chat-actions {
+           opacity: 1; /* 选中时常显 */
+        }
+      }
     }
   }
 

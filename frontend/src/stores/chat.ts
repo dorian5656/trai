@@ -7,8 +7,8 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { Message, ChatSession, DifyConversation } from '@/types/chat';
 import { v4 as uuidv4 } from 'uuid';
-import { generateImage } from '@/api/image';
-import { streamDifyChat } from '@/utils/stream';
+import { generateImage, chatWithImage } from '@/api/image';
+import { streamDifyChat, streamImageChat } from '@/utils/stream';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/stores/user';
@@ -29,6 +29,23 @@ export const useChatStore = defineStore('chat', () => {
   const difyConversations = ref<DifyConversation[]>([]);
   // Dify 当前 conversation_id
   const difySessionId = ref<string | null>(null);
+
+  // 删除 Dify 会话
+  const removeDifyConversation = (id: string) => {
+    difyConversations.value = difyConversations.value.filter(c => c.id !== id);
+    if (difySessionId.value === id) {
+      difySessionId.value = null;
+      messages.value = [];
+    }
+  };
+
+  // 重命名 Dify 会话
+  const renameDifyConversation = (id: string, newName: string) => {
+    const conversation = difyConversations.value.find(c => c.id === id);
+    if (conversation) {
+      conversation.name = newName;
+    }
+  };
 
   // 添加临时会话到列表首部
   const addTempDifyConversation = (title: string = '新对话') => {
@@ -135,6 +152,14 @@ export const useChatStore = defineStore('chat', () => {
      }
   };
 
+  // 清空所有会话数据 (登出时调用)
+  const clearAllConversations = () => {
+    sessions.value = [];
+    difyConversations.value = [];
+    currentSessionId.value = null;
+    difySessionId.value = null;
+  };
+
   // 发送消息核心逻辑
   const sendMessage = async (
     content: string, 
@@ -149,7 +174,13 @@ export const useChatStore = defineStore('chat', () => {
     }
     
     if (files.length > 0) {
-      const fileNames = files.map(f => `[文件: ${f.name}]`).join(' ');
+      const fileNames = files.map(f => {
+        // 如果是图片且有 URL，使用 Markdown 图片语法
+        if (f.url && f.type.startsWith('image/')) {
+          return `\n![${f.name}](${f.url})\n`;
+        }
+        return `[文件: ${f.name}]`;
+      }).join(' ');
       fullContent = `${fileNames} ${fullContent}`;
     }
 
@@ -197,11 +228,66 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
+    // 4. 处理图片识别技能
+    if (skill && skill.label === '图片识别') {
+      // 检查是否有上传的图片
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) {
+        ElMessage.warning('请上传一张图片进行识别');
+        isSending.value = false;
+        return;
+      }
+      
+      // 取第一张图片
+      const imageFile = imageFiles[0];
+      if (!imageFile.url) {
+         ElMessage.warning('图片上传尚未完成，请稍后重试');
+         isSending.value = false;
+         return;
+      }
+
+      // 添加 AI 占位消息
+      addMessage('assistant', '正在分析图片...');
+
+      // 使用真实流式接口
+      await streamImageChat(
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image' as const, image: imageFile.url },
+                { type: 'text' as const, text: content || '这张图片里有什么?' }
+              ]
+            }
+          ],
+          model: 'Qwen/Qwen3-VL-4B-Instruct',
+          temperature: 0.7,
+          max_tokens: 512
+        },
+        (text: string) => {
+          updateLastMessage(text);
+        },
+        () => {
+          isSending.value = false;
+        },
+        (err) => {
+          isSending.value = false;
+          console.error('图片识别失败:', err);
+          const appError = ErrorHandler.handleHttpError(err);
+          updateLastMessage(`❌ 识别失败: ${appError.message}`);
+        }
+      );
+      
+      return;
+    }
+
     // 4. 处理普通对话 (Dify)
     addMessage('assistant', ''); // 占位
 
     const userStore = useUserStore();
     const username = userStore.username || 'guest';
+    const isPublic = !userStore.isLoggedIn;
     
     // 记录开始时的 conversationId
     const initialConversationId = difySessionId.value;
@@ -217,6 +303,7 @@ export const useChatStore = defineStore('chat', () => {
         query: fullContent,
         user: username,
         conversation_id: difySessionId.value || undefined,
+        isPublic,
       },
       (text: string, conversationId?: string) => {
         updateLastMessage(text);
@@ -273,6 +360,8 @@ export const useChatStore = defineStore('chat', () => {
     setDifySessionId,
     addTempDifyConversation,
     updateTempDifyConversation,
+    removeDifyConversation,
+    renameDifyConversation,
     // 新增
     isSending,
     sendMessage,

@@ -70,13 +70,26 @@ watch(result, (newVal) => {
   }
 });
 
+// 监听登录状态变化，自动刷新会话列表
+watch(
+  () => userStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      // 移动端暂无 loadConversations 逻辑，如后续添加可在此处调用
+      // chatStore.loadConversations(); 
+    } else {
+      chatStore.clearAllConversations();
+    }
+  }
+);
+
 // 初始化用户信息
 onMounted(() => {
   userStore.init();
 });
 
 const handleLogin = () => {
-  router.push('/login');
+  appStore.openLoginModal();
 };
 
 const handleLogout = () => {
