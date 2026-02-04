@@ -67,7 +67,7 @@ class ImageGenRequest(BaseModel):
     文生图请求
     """
     prompt: str = Field(..., description="提示词")
-    model: str = Field("FLUX.2-dev", description="模型名称")
+    model: str = Field("Z-Image-Turbo", description="模型名称")
     size: str = Field("1024x1024", description="图片尺寸")
     n: int = Field(1, description="生成数量")
 

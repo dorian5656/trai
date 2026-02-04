@@ -462,6 +462,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
 - **前端**: 完成移动端抽屉式导航与自适应布局开发.
 
+### 2026_02_04_1012
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
+
 ### 2026_01_26_1644
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.
 
