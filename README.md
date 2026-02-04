@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf
+conda activate trai_31014_whf_trai_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf python=3.10.14
-    conda activate trai_31014_whf
+0. conda create -n trai_31014_whf_trai_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_trai_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -131,6 +131,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 2026_02_04_0845
+- **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
 
 ### 2026_02_03_1108
 - **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
@@ -458,6 +461,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
 - **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
 - **前端**: 完成移动端抽屉式导航与自适应布局开发.
+
+### 2026_02_04_1012
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
 
 ### 2026_01_26_1644
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.

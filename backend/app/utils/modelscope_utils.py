@@ -10,7 +10,7 @@ from anyio import to_thread
 # 尝试导入 modelscope 相关库 (可选依赖)
 try:
     # 优先尝试从 transformers 导入模型类 (更通用)
-    from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
     from qwen_vl_utils import process_vision_info
     _MODELSCOPE_AVAILABLE = True
 except ImportError:
@@ -192,11 +192,12 @@ class ModelScopeUtils:
             logger.info(f"[{model_name}] 使用设备: {device}")
 
             # 根据模型类型加载
-            if "Qwen3-VL" in model_name or "Qwen2.5-VL" in model_name:
-                # 注意: Qwen2.5/Qwen3 VL 通常使用 Qwen2VLForConditionalGeneration 类加载
-                model = Qwen2VLForConditionalGeneration.from_pretrained(
+            if "Qwen3-VL" in model_name or "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
+                # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
+                model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                     model_path,
                     torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
+                    ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
                 ).to(device)
                 processor = AutoProcessor.from_pretrained(model_path)
             else:

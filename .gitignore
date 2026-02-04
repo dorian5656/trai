@@ -86,6 +86,8 @@ ipython_config.py
 .env.*
 backend/.env
 backend/.env.*
+frontend/.env
+frontend/.env.*
 
 # Temporary Files
 backend/temp/
@@ -100,3 +102,11 @@ backend/app/models/Tongyi-MAI/
 backend/app/models/iic/
 backend/app/models/Qwen/
 backend/app/models/Robbyant/
+
+# Test Files
+test_audio.wav
+scripts/
+*.wav
+*.mp3
+*.m4a
+*.mp4
