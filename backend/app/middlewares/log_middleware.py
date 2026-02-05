@@ -244,6 +244,34 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             # 使用 PGUtils 插入日志
             await PGUtils.execute_update(sql, params)
             
+            # --- 集成飞书推送 ---
+            try:
+                # 过滤掉健康检查等高频无用日志
+                if "/monitor/health" not in request.url.path:
+                    from backend.app.utils.feishu_utils import feishu_bot
+                    
+                    user_info = "Guest"
+                    auth_header = request.headers.get("Authorization")
+                    if auth_header and auth_header.startswith("Bearer "):
+                        user_info = "User (Bearer)"
+                        
+                    log_content = (
+                        f"📡 **API Request Log**\n"
+                        f"👤 User: {user_info}\n"
+                        f"🌍 IP: {client_host}\n"
+                        f"📝 Method: {request.method}\n"
+                        f"🔗 Path: {request.url.path}\n"
+                        f"🔢 Status: {status_code}\n"
+                        f"⏱️ Time: {duration_ms:.2f}ms\n"
+                    )
+                    
+                    if is_error and error_detail:
+                        log_content += f"❌ Error: {error_detail[:500]}\n"
+                        
+                    feishu_bot.send_webhook_message(log_content)
+            except Exception as fe:
+                logger.error(f"飞书日志推送失败: {fe}")
+            
         except Exception as e:
             # 日志写入失败不能影响主流程，仅打印本地日志
             logger.error(f"写入请求日志失败: {e}")

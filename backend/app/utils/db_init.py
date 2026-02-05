@@ -213,23 +213,29 @@ class DBInitializer:
     async def init_user_images_table(self, conn):
         """
         初始化用户图片表 (user_images)
+        支持上传和 AI 生成的图片记录
         """
         table_name = "user_images"
+        
+        # [Update 2026-02-05] 增加 prompt, model, meta_data 字段支持文生图历史
         ddl = """
         CREATE TABLE IF NOT EXISTS user_images (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id VARCHAR(50) NOT NULL,
             filename VARCHAR(255) NOT NULL,
-            s3_key VARCHAR(500) NOT NULL,
+            s3_key VARCHAR(500),
             url TEXT NOT NULL,
             size BIGINT,
             mime_type VARCHAR(100),
             module VARCHAR(50) DEFAULT 'common',
+            source VARCHAR(20) DEFAULT 'upload',
+            prompt TEXT,
+            meta_data JSONB,
             is_deleted BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
             updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
         );
-        COMMENT ON TABLE user_images IS '用户上传图片记录表';
+        COMMENT ON TABLE user_images IS '用户图片表，存储上传和AI生成的图片记录';
         COMMENT ON COLUMN user_images.id IS '主键ID';
         COMMENT ON COLUMN user_images.user_id IS '用户ID (关联 sys_users.username)';
         COMMENT ON COLUMN user_images.filename IS '原始文件名';
@@ -237,7 +243,10 @@ class DBInitializer:
         COMMENT ON COLUMN user_images.url IS '访问URL';
         COMMENT ON COLUMN user_images.size IS '文件大小(字节)';
         COMMENT ON COLUMN user_images.mime_type IS '文件类型';
-        COMMENT ON COLUMN user_images.module IS '所属模块';
+        COMMENT ON COLUMN user_images.module IS '所属模块 (upload/gen/ocr)';
+        COMMENT ON COLUMN user_images.source IS '来源 (upload=上传, generated=AI生成)';
+        COMMENT ON COLUMN user_images.prompt IS '生成提示词 (仅AI生成有效)';
+        COMMENT ON COLUMN user_images.meta_data IS '元数据 (模型参数等)';
         COMMENT ON COLUMN user_images.is_deleted IS '是否已删除';
         COMMENT ON COLUMN user_images.created_at IS '创建时间';
         COMMENT ON COLUMN user_images.updated_at IS '更新时间';
@@ -249,8 +258,22 @@ class DBInitializer:
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_images_user_id ON user_images(user_id)")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_images_created_at ON user_images(created_at DESC)")
             
+            # 尝试修复/升级旧表结构
+            try:
+                # 2026-02-05: 增加文生图相关字段
+                await conn.execute("ALTER TABLE user_images ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'upload'")
+                await conn.execute("ALTER TABLE user_images ADD COLUMN IF NOT EXISTS prompt TEXT")
+                await conn.execute("ALTER TABLE user_images ADD COLUMN IF NOT EXISTS meta_data JSONB")
+                
+                await conn.execute("ALTER TABLE user_images ALTER COLUMN created_at TYPE TIMESTAMP(0) USING created_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE user_images ALTER COLUMN updated_at TYPE TIMESTAMP(0) USING updated_at::TIMESTAMP(0)")
+                await conn.execute("ALTER TABLE user_images ALTER COLUMN created_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+                await conn.execute("ALTER TABLE user_images ALTER COLUMN updated_at SET DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')")
+            except Exception as e:
+                logger.warning(f"尝试更新 user_images 表结构时出现非致命错误: {e}")
+            
             logger.success(f"表 {table_name} 初始化成功")
-            await self._update_table_registry(conn, table_name, "用户上传图片记录表，关联用户与S3存储")
+            await self._update_table_registry(conn, table_name, "用户图片表，关联用户与S3存储，支持AI生成记录")
         except Exception as e:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e

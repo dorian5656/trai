@@ -72,7 +72,6 @@ async def chat_message_public(
 
 @router.get("/conversations", summary="获取会话列表")
 async def get_conversations(
-    user: str,
     last_id: Optional[str] = None,
     limit: int = 20,
     app_name: str = "guanwang",
@@ -81,12 +80,11 @@ async def get_conversations(
     """
     获取 Dify 会话列表
     """
-    return await DifyFunc.get_conversations(user=user, last_id=last_id, limit=limit, app_name=app_name)
+    return await DifyFunc.get_conversations(user=current_user.username, last_id=last_id, limit=limit, app_name=app_name)
 
 @router.get("/messages", summary="获取会话历史消息")
 async def get_conversation_messages(
     conversation_id: str,
-    user: str,
     first_id: Optional[str] = None,
     limit: int = 20,
     app_name: str = "guanwang",
@@ -95,12 +93,11 @@ async def get_conversation_messages(
     """
     获取 Dify 会话历史消息
     """
-    return await DifyFunc.get_conversation_messages(conversation_id=conversation_id, user=user, first_id=first_id, limit=limit, app_name=app_name)
+    return await DifyFunc.get_conversation_messages(conversation_id=conversation_id, user=current_user.username, first_id=first_id, limit=limit, app_name=app_name)
 
 @router.post("/conversations/{conversation_id}/rename", summary="会话重命名")
 async def rename_conversation(
     conversation_id: str,
-    user: str,
     name: Optional[str] = None,
     auto_generate: bool = False,
     app_name: str = "guanwang",
@@ -109,17 +106,16 @@ async def rename_conversation(
     """
     会话重命名
     """
-    return await DifyFunc.rename_conversation(conversation_id=conversation_id, user=user, name=name, auto_generate=auto_generate, app_name=app_name)
+    return await DifyFunc.rename_conversation(conversation_id=conversation_id, user=current_user.username, name=name, auto_generate=auto_generate, app_name=app_name)
 
 @router.post("/conversations/{conversation_id}/delete", summary="删除会话")
 async def delete_conversation(
     conversation_id: str,
-    user: str,
     app_name: str = "guanwang",
     current_user = Depends(get_current_active_user)
 ):
     """
     删除会话
     """
-    result = await DifyFunc.delete_conversation(conversation_id=conversation_id, user=user, app_name=app_name)
+    result = await DifyFunc.delete_conversation(conversation_id=conversation_id, user=current_user.username, app_name=app_name)
     return {"success": result}
