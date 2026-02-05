@@ -95,9 +95,9 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 创建新会话
-  const createSession = (title: string = '新对话') => {
+  const createSession = (title: string = '新对话', fixedId?: string) => {
     const newSession: ChatSession = {
-      id: Date.now().toString(), // 简单ID生成
+      id: fixedId || Date.now().toString(),
       title,
       messages: [],
       updatedAt: Date.now(),
@@ -158,6 +158,41 @@ export const useChatStore = defineStore('chat', () => {
     difyConversations.value = [];
     currentSessionId.value = null;
     difySessionId.value = null;
+  };
+
+  // 使用历史记录替换当前消息 (Dify 历史回显)
+  const replaceMessagesFromDify = (history: any[], title?: string, sessionId?: string) => {
+    if (!currentSessionId.value) {
+      createSession(title || '新对话', sessionId);
+    }
+    const session = sessions.value.find(s => s.id === currentSessionId.value);
+    if (!session) return;
+    if (title) {
+      session.title = title;
+    }
+    session.messages = [];
+    history.forEach((item: any) => {
+      const ts = typeof item?.created_at === 'number' ? item.created_at * 1000 : Date.now();
+      const userText = typeof item?.data?.query === 'string' ? item.data.query : (typeof item?.query === 'string' ? item.query : '');
+      const aiText = typeof item?.data?.answer === 'string' ? item.data.answer : (typeof item?.answer === 'string' ? item.answer : '');
+      if (userText) {
+        session.messages.push({
+          id: Date.now().toString() + Math.random(),
+          role: 'user',
+          content: userText,
+          timestamp: ts,
+        });
+      }
+      if (aiText) {
+        session.messages.push({
+          id: Date.now().toString() + Math.random(),
+          role: 'assistant',
+          content: aiText,
+          timestamp: ts,
+        });
+      }
+    });
+    session.updatedAt = Date.now();
   };
 
   // 发送消息核心逻辑
@@ -367,6 +402,6 @@ export const useChatStore = defineStore('chat', () => {
     isSending,
     sendMessage,
     stopGenerating,
-    clearAllConversations
+    replaceMessagesFromDify,
   };
 });
