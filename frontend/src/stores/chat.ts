@@ -35,7 +35,7 @@ export const useChatStore = defineStore('chat', () => {
     difyConversations.value = difyConversations.value.filter(c => c.id !== id);
     if (difySessionId.value === id) {
       difySessionId.value = null;
-      messages.value = [];
+      clearSession();
     }
   };
 
@@ -365,6 +365,7 @@ export const useChatStore = defineStore('chat', () => {
     // 新增
     isSending,
     sendMessage,
-    stopGenerating
+    stopGenerating,
+    clearAllConversations
   };
 });
