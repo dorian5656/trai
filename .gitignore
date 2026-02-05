@@ -112,3 +112,6 @@ scripts/
 *.mp4
 
 scripts/
+frontend/nignx.txt
+frontend/src/auto-imports.d.ts
+frontend/src/components.d.ts
