@@ -1,0 +1,4 @@
+{
+    "API_URL": "http://192.168.100.119:5777/api_trai/v1/rrdsppg/predict",
+    "UPDATE_CHECK_URL": "http://192.168.100.119:5777/static/update/version.json"
+}

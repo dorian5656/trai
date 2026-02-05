@@ -9,3 +9,6 @@
 from .login_page import LoginPage
 from .modelscope_page import ModelScopePage
 from .deepseek_page import DeepSeekPage
+from .image_gen_page import ImageGenPage
+from .image_parse_page import ImageParsePage
+from .rrdsppg_page import RrdsppgPage

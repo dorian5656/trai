@@ -10,9 +10,9 @@ import os
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QListWidget, QStackedWidget, QListWidgetItem, QFrame, QPushButton, QStyle)
 from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
 
-from pages import LoginPage, ModelScopePage, DeepSeekPage
+from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -70,12 +70,16 @@ class MainWindow(QMainWindow):
         self.sidebar.setObjectName("sidebar") # 用于QSS
         self.sidebar.setFrameShape(QFrame.Shape.NoFrame) # 无边框
         self.sidebar.setFocusPolicy(Qt.FocusPolicy.NoFocus) # 去除选中虚线框
+        self.sidebar.setIconSize(QSize(24, 24)) # 设置图标大小
         self.sidebar.currentRowChanged.connect(self.display_page)
         
         # 添加侧边栏选项
-        self.add_sidebar_item("登录/注册")
-        self.add_sidebar_item("ModelScope 工具")
-        self.add_sidebar_item("DeepSeek 对话")
+        self.add_sidebar_item("登录/注册", "👤")
+        self.add_sidebar_item("ModelScope 工具", "🛠️")
+        self.add_sidebar_item("DeepSeek 对话", "💬")
+        self.add_sidebar_item("AI 文生图", "🎨")
+        self.add_sidebar_item("图片内容解析", "👁️")
+        self.add_sidebar_item("人人都是品牌官", "📝")
         
         # 将组件加入侧边栏容器
         self.sidebar_layout.addWidget(self.top_header)
@@ -90,11 +94,17 @@ class MainWindow(QMainWindow):
         self.login_page.login_success.connect(self.on_login_success) # 连接登录成功信号
         self.modelscope_page = ModelScopePage()
         self.deepseek_page = DeepSeekPage()
+        self.image_gen_page = ImageGenPage()
+        self.image_parse_page = ImageParsePage()
+        self.rrdsppg_page = RrdsppgPage()
         
         # 添加页面到堆叠窗口
         self.stacked_widget.addWidget(self.login_page)
         self.stacked_widget.addWidget(self.modelscope_page)
         self.stacked_widget.addWidget(self.deepseek_page)
+        self.stacked_widget.addWidget(self.image_gen_page)
+        self.stacked_widget.addWidget(self.image_parse_page)
+        self.stacked_widget.addWidget(self.rrdsppg_page)
         
         # 添加到主布局
         main_layout.addWidget(self.sidebar_container)
@@ -106,10 +116,30 @@ class MainWindow(QMainWindow):
         # 初始化权限控制
         self.update_sidebar_access(is_logged_in=False)
 
-    def add_sidebar_item(self, name):
+    def create_emoji_icon(self, emoji, size=64):
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # 优先使用 Segoe UI Emoji 字体 (Windows) 或 Apple Color Emoji (Mac)
+        font = QFont("Segoe UI Emoji", int(size * 0.6))
+        font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+        painter.setFont(font)
+        # 居中绘制
+        rect = pixmap.rect()
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, emoji)
+        painter.end()
+        return QIcon(pixmap)
+
+    def add_sidebar_item(self, name, icon_emoji=""):
         item = QListWidgetItem(name)
         item.setSizeHint(QSize(0, 50)) # 设置高度
-        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        if icon_emoji:
+            item.setIcon(self.create_emoji_icon(icon_emoji))
+            
+        # 左对齐，保证折叠后图标可见
+        item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.sidebar.addItem(item)
         
     def update_sidebar_access(self, is_logged_in):
@@ -143,6 +173,18 @@ class MainWindow(QMainWindow):
             self.user_token = ""
         try:
             self.deepseek_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.image_gen_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.image_parse_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.rrdsppg_page.set_auth_token(self.user_token)
         except Exception:
             pass
         # 登录成功后，可以自动跳转到 ModelScope 工具页（索引1）

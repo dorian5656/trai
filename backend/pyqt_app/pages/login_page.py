@@ -3,7 +3,7 @@
 
 # 文件名：login_page.py
 # 作者：liuhd
-# 日期：2026-02-04
+# 日期：2026-02-04 10:00:00
 # 描述：登录/注册页面
 
 import requests
@@ -21,7 +21,7 @@ class LoginWorker(QThread):
         self.password = password
 
     def run(self):
-        url = "http://192.168.100.119:5778/api_trai/v1/auth/login/json"
+        url = "http://192.168.100.119:5777/api_trai/v1/auth/login/json"
         headers = {"Content-Type": "application/json"}
         data = {"username": self.username, "password": self.password}
 
@@ -53,7 +53,7 @@ class RegisterWorker(QThread):
         self.phone = phone
 
     def run(self):
-        url = "http://192.168.100.119:5778:5778/api_trai/v1/auth/register"
+        url = "http://192.168.100.119:5777/api_trai/v1/auth/register"
         headers = {"Content-Type": "application/json"}
         data = {
             "username": self.username,
