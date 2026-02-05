@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf_trai_pro_20260202
+conda activate trai_31014_whf_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf_trai_pro_20260202 python=3.10.14
-    conda activate trai_31014_whf_trai_pro_20260202
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -161,8 +161,14 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
 - **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
 
+### 2026_02_05_1100
+- **后端**: 新增文件分片上传与断点续传功能 (`/upload/chunk`), 支持大文件高效传输.
+- **后端**: 优化飞书通知机制, 解决高频调用限流问题 (code 11232) 并支持图文富文本推送.
+- **后端**: 更新文生图接口, 支持本地模型 `Z-Image-Turbo` 推理并自动推送生成结果至飞书.
+- **后端**: 修复 API 文档与环境配置说明, 统一 Conda 环境名称为 `trai_31014_whf_pro_20260202`.
+
 ### 2026_02_04_0845
-- **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
+- **后端**: 更新标准环境名称为 trai_31014_whf_pro_20260202.
 
 ### 2026_02_03_1723
 - **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).

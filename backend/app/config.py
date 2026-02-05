@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     # 飞书配置
     FEISHU_TRAI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_TRAI_WEBHOOK_TOKEN", "")
     FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN", "")
+    FEISHU_IMAGE_GEN_WEBHOOK_TOKEN: str = os.getenv("FEISHU_IMAGE_GEN_WEBHOOK_TOKEN", "") # 文生图通知
     FEISHU_APP_ID: str = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET: str = os.getenv("FEISHU_APP_SECRET", "")
     

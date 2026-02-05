@@ -180,3 +180,239 @@ class AIManager:
             usage=usage,
             session_id=session_id
         )
+
+    @staticmethod
+    async def rename_chat_session(session_id: str, user_id: str, new_name: str) -> None:
+        """
+        重命名会话
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 1. 确保 chat_sessions 表存在 (Lazy creation)
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS chat_sessions (
+                        session_id VARCHAR(50) PRIMARY KEY,
+                        user_id VARCHAR(50) NOT NULL,
+                        name VARCHAR(255),
+                        created_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                        updated_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id);
+                """))
+                
+                # 2. 插入或更新
+                # 先检查是否存在
+                result = await conn.execute(
+                    text("SELECT 1 FROM chat_sessions WHERE session_id = :session_id AND user_id = :user_id"),
+                    {"session_id": session_id, "user_id": user_id}
+                )
+                
+                if result.scalar():
+                    # 更新
+                    await conn.execute(
+                        text("UPDATE chat_sessions SET name = :name, updated_at = (NOW() AT TIME ZONE 'Asia/Shanghai') WHERE session_id = :session_id AND user_id = :user_id"),
+                        {"name": new_name, "session_id": session_id, "user_id": user_id}
+                    )
+                else:
+                    # 插入 (可能是旧会话，第一次命名)
+                    # 确保该 session_id 在 messages 表里确实属于该用户
+                    msg_check = await conn.execute(
+                        text("SELECT 1 FROM chat_messages WHERE session_id = :session_id AND user_id = :user_id LIMIT 1"),
+                        {"session_id": session_id, "user_id": user_id}
+                    )
+                    if msg_check.scalar():
+                        await conn.execute(
+                            text("INSERT INTO chat_sessions (session_id, user_id, name) VALUES (:session_id, :user_id, :name)"),
+                            {"session_id": session_id, "user_id": user_id, "name": new_name}
+                        )
+                    else:
+                        raise ValueError("Session not found or permission denied")
+                        
+                logger.info(f"会话重命名成功: {session_id} -> {new_name}")
+                
+        except Exception as e:
+            logger.error(f"重命名会话失败: {e}")
+            raise e
+
+    @staticmethod
+    async def get_chat_sessions(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        获取最近的会话列表 (聚合)
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 确保 chat_sessions 表存在
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS chat_sessions (
+                        session_id VARCHAR(50) PRIMARY KEY,
+                        user_id VARCHAR(50) NOT NULL,
+                        name VARCHAR(255),
+                        created_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+                        updated_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+                    );
+                """))
+                
+                # 关联查询: messages + sessions
+                # 获取每个 session 的最后一条消息和更新时间
+                # 同时左连接 chat_sessions 获取自定义名称
+                # 使用窗口函数或 DISTINCT ON (PostgreSQL特有)
+                result = await conn.execute(
+                    text("""
+                        WITH SessionStats AS (
+                            SELECT 
+                                session_id,
+                                MAX(created_at) as last_update
+                            FROM chat_messages
+                            WHERE user_id = :user_id AND is_deleted = FALSE
+                            GROUP BY session_id
+                        ),
+                        LastMsg AS (
+                            SELECT DISTINCT ON (session_id)
+                                session_id,
+                                content,
+                                model
+                            FROM chat_messages
+                            WHERE user_id = :user_id AND is_deleted = FALSE
+                            ORDER BY session_id, created_at DESC
+                        )
+                        SELECT 
+                            ss.session_id,
+                            ss.last_update,
+                            lm.content as last_message,
+                            lm.model,
+                            cs.name as session_name
+                        FROM SessionStats ss
+                        JOIN LastMsg lm ON ss.session_id = lm.session_id
+                        LEFT JOIN chat_sessions cs ON ss.session_id = cs.session_id
+                        ORDER BY ss.last_update DESC
+                        LIMIT :limit
+                    """),
+                    {"user_id": user_id, "limit": limit}
+                )
+                
+                sessions = []
+                for row in result:
+                    # 尝试解析 last_message (可能是 JSON 字符串)
+                    content_preview = row.last_message
+                    if content_preview and content_preview.startswith("[") and content_preview.endswith("]"):
+                         try:
+                             content_list = json.loads(content_preview)
+                             # 如果是多模态列表，提取第一个文本内容
+                             for item in content_list:
+                                 if item.get("type") == "text":
+                                     content_preview = item.get("text")
+                                     break
+                                 elif item.get("text"): # 兼容旧格式
+                                     content_preview = item.get("text")
+                                     break
+                         except:
+                             pass
+                    
+                    # 截断预览
+                    if len(content_preview) > 50:
+                        content_preview = content_preview[:50] + "..."
+
+                    sessions.append({
+                        "session_id": row.session_id,
+                        "name": row.session_name, # 新增 name 字段
+                        "last_message": content_preview,
+                        "model": row.model,
+                        "updated_at": row.last_update.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                return sessions
+        except Exception as e:
+            logger.error(f"获取会话列表失败: {e}")
+            return []
+
+    @staticmethod
+    async def delete_chat_session(session_id: str, user_id: str) -> None:
+        """
+        删除会话 (软删除)
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 检查是否存在
+                result = await conn.execute(
+                    text("SELECT 1 FROM chat_messages WHERE session_id = :session_id AND user_id = :user_id LIMIT 1"),
+                    {"session_id": session_id, "user_id": user_id}
+                )
+                if not result.scalar():
+                    raise ValueError("Session not found or permission denied")
+
+                # 软删除
+                await conn.execute(
+                    text("UPDATE chat_messages SET is_deleted = TRUE WHERE session_id = :session_id AND user_id = :user_id"),
+                    {"session_id": session_id, "user_id": user_id}
+                )
+                logger.info(f"会话已删除: {session_id} (User: {user_id})")
+        except Exception as e:
+            logger.error(f"删除会话失败: {e}")
+            raise e
+
+    @staticmethod
+    async def delete_chat_message(message_id: str, user_id: str) -> None:
+        """
+        删除单条消息 (软删除)
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 检查
+                result = await conn.execute(
+                    text("SELECT id FROM chat_messages WHERE id = :id AND user_id = :user_id AND is_deleted = FALSE"),
+                    {"id": message_id, "user_id": user_id}
+                )
+                if not result.scalar():
+                    raise ValueError("Message not found or permission denied")
+
+                # 软删除
+                await conn.execute(
+                    text("UPDATE chat_messages SET is_deleted = TRUE WHERE id = :id"),
+                    {"id": message_id}
+                )
+                logger.info(f"消息已删除: {message_id}")
+        except Exception as e:
+            logger.error(f"删除消息失败: {e}")
+            raise e
+    @staticmethod
+    async def get_session_messages(session_id: str, user_id: str) -> List[Dict[str, Any]]:
+        """
+        获取特定会话的所有消息
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                result = await conn.execute(
+                    text("""
+                        SELECT id, role, content, model, created_at
+                        FROM chat_messages
+                        WHERE session_id = :session_id AND user_id = :user_id AND is_deleted = FALSE
+                        ORDER BY created_at ASC
+                    """),
+                    {"session_id": session_id, "user_id": user_id}
+                )
+                
+                messages = []
+                for row in result:
+                    content = row.content
+                    # 尝试解析 JSON 内容 (多模态)
+                    if content and content.startswith("[") and content.endswith("]"):
+                        try:
+                            content = json.loads(content)
+                        except:
+                            pass
+                            
+                    messages.append({
+                        "id": str(row.id),
+                        "role": row.role,
+                        "content": content,
+                        "model": row.model,
+                        "created_at": row.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                return messages
+        except Exception as e:
+            logger.error(f"获取会话消息失败: {e}")
+            return []

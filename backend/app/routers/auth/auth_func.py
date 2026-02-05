@@ -5,7 +5,7 @@
 # 日期：2026-01-27
 # 描述：认证模块业务逻辑 (注册/登录)
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import text
@@ -113,6 +113,14 @@ class AuthFunc:
             )
             
             logger.info(f"用户登录成功: {user.username}")
+            
+            # 发送飞书通知
+            try:
+                from backend.app.utils.feishu_utils import feishu_bot
+                feishu_bot.send_webhook_message(f"👤 **用户登录通知**\n用户: {user.username}\n姓名: {user.full_name or '未知'}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            except:
+                pass
+
             return Token(access_token=access_token, token_type="bearer")
 
     @staticmethod
