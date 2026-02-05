@@ -11,6 +11,7 @@ import { predictSimilarity, type PredictRequest } from '@/api/rrdsppg';
 import { uploadFile } from '@/api/common';
 import { ElMessage, type UploadRequestOptions, type UploadFile } from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
+import { isMobile } from '@/utils/device';
 
 const props = defineProps<{
   visible: boolean;
@@ -59,6 +60,8 @@ const dialogVisible = computed({
   get: () => props.visible,
   set: (val) => emit('update:visible', val),
 });
+
+const dialogWidth = computed(() => (isMobile() ? '90vw' : '50rem'));
 
 // 监听弹窗关闭，重置数据
 watch(() => props.visible, (newVal) => {
@@ -160,7 +163,7 @@ const submit = async () => {
   <el-dialog
     v-model="dialogVisible"
     title="相似度识别"
-    width="50rem"
+    :width="dialogWidth"
     destroy-on-close
   >
     <el-form label-width="6.25rem">
@@ -342,5 +345,25 @@ const submit = async () => {
   font-size: 0.75rem;
   color: #909399;
   margin-top: 0.3125rem;
+}
+
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    margin: 0 !important;
+  }
+  .image-sections {
+    flex-direction: column;
+  }
+  .preview-img {
+    max-height: 30vh;
+  }
+  :deep(.el-form-item__label) {
+    font-size: 0.875rem;
+  }
+  :deep(.el-button) {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+  }
 }
 </style>

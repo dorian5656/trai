@@ -1,42 +1,45 @@
-// 文件名：frontend/vite.config.ts
-// 作者：zcl
-// 日期：2026-01-27
-// 描述：Vite 构建配置
-
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    vue(),
-    AutoImport({
-      resolvers: [ElementPlusResolver()],
-      dts: 'src/auto-imports.d.ts',
-    }),
-    Components({
-      resolvers: [ElementPlusResolver()],
-      dts: 'src/components.d.ts',
-    }),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    open: true,
-    proxy: {
-      '/api_trai': {
-        target: 'http://192.168.100.119:5777',
-        changeOrigin: true,
-        // rewrite: (path) => path.replace(/^\/api_trai/, '/api_trai'), // 如果后端路径包含 /api_trai 则不需要 rewrite
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const SERVER_URL = env.VITE_APP_SERVER_URL || 'http://localhost:5777'
+  const API_BASE_URL = (env.VITE_APP_BASE_URL || '/api_trai/v1').startsWith('/')
+    ? env.VITE_APP_BASE_URL || '/api_trai/v1'
+    : `/${env.VITE_APP_BASE_URL || 'api_trai/v1'}`
+
+  const proxyKey = API_BASE_URL
+
+  return {
+    plugins: [
+      vue(),
+      AutoImport({
+        resolvers: [ElementPlusResolver()],
+        dts: 'src/auto-imports.d.ts',
+      }),
+      Components({
+        resolvers: [ElementPlusResolver()],
+        dts: 'src/components.d.ts',
+      }),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url))
+      }
+    },
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      open: true,
+      proxy: {
+        [proxyKey]: {
+          target: SERVER_URL,
+          changeOrigin: true,
+        }
       }
     }
   }
