@@ -134,6 +134,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 - **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 
+### 2026_02_05_1701
+- **前端-内容**: 同步前端代码到 zcl 分支.
+
 ### 2026_02_05_1142
 - **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
 - **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
