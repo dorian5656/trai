@@ -132,6 +132,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_05_1142
+- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
+- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
+
 ### 2026_02_05_1136
 - **前端-内容**: 抽离技能占位文案映射至 `frontend/src/constants/texts.ts`; 改造 `ChatInput` 按技能动态占位.
 - **前端-内容**: 抽离图像生成参数选项至 `frontend/src/constants/imagegen.ts`; `ChatInput` 统一从常量读取.
