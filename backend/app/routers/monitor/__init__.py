@@ -8,6 +8,7 @@
 from fastapi import APIRouter
 from backend.app.routers.monitor.hardware_router import router as hardware_router
 from backend.app.routers.monitor.ai_models_router import router as ai_models_router
+from backend.app.routers.monitor.health_router import router as health_router
 
 router = APIRouter()
 
@@ -16,3 +17,6 @@ router.include_router(hardware_router)
 
 # 注册 AI 模型监控路由 (包括 /models)
 router.include_router(ai_models_router)
+
+# 注册健康检查路由 (包括 /health)
+router.include_router(health_router)
