@@ -134,8 +134,6 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 - **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 
-### 2026_02_05_1712
-- **前端-内容**: 按功能拆分提交：API 封装更新、业务组件更新、组合式函数更新、聊天 Store 更新、PC/Mobile 视图更新。
 
 ### 2026_02_05_1704
 - **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
