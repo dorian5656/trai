@@ -21,6 +21,17 @@ class UploadResponse(BaseModel):
     content_type: Optional[str] = Field(None, description="MIME 类型")
     local_path: Optional[str] = Field(None, description="本地存储路径 (仅内部调试用)")
 
+class ChunkInitResponse(BaseModel):
+    """分片上传初始化响应"""
+    upload_id: str = Field(..., description="上传任务ID")
+    uploaded_chunks: list[int] = Field([], description="已上传的分片索引")
+
+class ChunkMergeResponse(BaseModel):
+    """分片合并响应"""
+    url: str = Field(..., description="文件访问 URL")
+    filename: str = Field(..., description="文件名")
+    size: int = Field(..., description="文件总大小")
+
 class UserImage(Base):
     """用户图片表"""
     __tablename__ = "user_images"

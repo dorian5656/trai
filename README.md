@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf_trai_pro_20260202
+conda activate trai_31014_whf_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf_trai_pro_20260202 python=3.10.14
-    conda activate trai_31014_whf_trai_pro_20260202
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -165,9 +165,6 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
 - **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
 - **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
-
-### 2026_02_04_0845
-- **后端**: 更新标准环境名称为 trai_31014_whf_trai_pro_20260202.
 
 ### 2026_02_03_1723
 - **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
@@ -254,6 +251,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 功能增强: 新增自动登录、系统托盘、退出/注销选项.
   - 图像识别: 修复 S3 上传路径错误, 增加拖拽上传与多模态对话功能.
   - 打包优化: `build.py` 支持自动包含图标 (`pppg.ico`).
+
+### 2026_02_05_0931
+- **后端**: 修复依赖版本冲突, 确保环境稳定性.
+  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
+  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
+  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
+  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
 
 ### 2026_01_29_1353
 - **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.

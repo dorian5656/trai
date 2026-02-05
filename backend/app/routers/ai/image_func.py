@@ -140,6 +140,87 @@ class ImageManager:
     """
     
     @staticmethod
+    async def get_image_history(user_id: str, page: int = 1, size: int = 20) -> Dict[str, Any]:
+        """
+        获取文生图历史记录
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 统计总数 (仅查询 source='generated')
+                total = await conn.execute(
+                    text("SELECT COUNT(*) FROM user_images WHERE user_id = :user_id AND source = 'generated' AND is_deleted = FALSE"),
+                    {"user_id": user_id}
+                )
+                total_count = total.scalar()
+                
+                # 分页查询
+                offset = (page - 1) * size
+                result = await conn.execute(
+                    text("""
+                        SELECT id, url, prompt, meta_data, created_at
+                        FROM user_images 
+                        WHERE user_id = :user_id AND source = 'generated' AND is_deleted = FALSE
+                        ORDER BY created_at DESC
+                        LIMIT :limit OFFSET :offset
+                    """),
+                    {"user_id": user_id, "limit": size, "offset": offset}
+                )
+                
+                items = []
+                for row in result:
+                    meta = row.meta_data if row.meta_data else {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta)
+                        except:
+                            meta = {}
+                            
+                    items.append({
+                        "id": str(row.id),
+                        "url": row.url,
+                        "prompt": row.prompt,
+                        "model": meta.get("model", "unknown"),
+                        "created_at": row.created_at.strftime("%Y-%m-%d %H:%M:%S") if row.created_at else None
+                    })
+                    
+                return {
+                    "total": total_count,
+                    "items": items,
+                    "page": page,
+                    "size": size
+                }
+        except Exception as e:
+            logger.error(f"获取文生图历史失败: {e}")
+            raise ValueError(f"Failed to fetch image history: {e}")
+
+    @staticmethod
+    async def delete_image_history(image_id: str, user_id: str) -> None:
+        """
+        删除文生图历史 (软删除)
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 检查记录是否存在且属于该用户
+                result = await conn.execute(
+                    text("SELECT id FROM user_images WHERE id = :id AND user_id = :user_id AND is_deleted = FALSE"),
+                    {"id": image_id, "user_id": user_id}
+                )
+                if not result.scalar():
+                    raise ValueError("Image not found or permission denied")
+
+                # 执行软删除
+                await conn.execute(
+                    text("UPDATE user_images SET is_deleted = TRUE, updated_at = (NOW() AT TIME ZONE 'Asia/Shanghai') WHERE id = :id"),
+                    {"id": image_id}
+                )
+                logger.info(f"文生图记录已删除: {image_id}")
+        except Exception as e:
+            logger.error(f"删除文生图历史失败: {e}")
+            raise e
+
+    @staticmethod
     async def chat_with_image_stream(request: ImageChatRequest):
         """
         多模态对话 (Qwen-VL) - 流式响应
@@ -303,6 +384,43 @@ class ImageManager:
                                         "meta_data": json.dumps({"model": request.model, "provider": "dify"})
                                     }
                                 )
+                                # 发送 Feishu 通知 (图文)
+                                try:
+                                    from backend.app.utils.feishu_utils import feishu_bot
+                                    
+                                    # 1. 尝试下载图片以获取 bytes
+                                    async with httpx.AsyncClient() as client:
+                                        resp = await client.get(img_url)
+                                        if resp.status_code == 200:
+                                            img_bytes = resp.content
+                                            # 2. 上传到飞书获取 image_key
+                                            image_key = feishu_bot.upload_image(img_bytes)
+                                            
+                                            if image_key:
+                                                # 3. 构造富文本消息
+                                                post_content = [
+                                                    [{"tag": "text", "text": f"Prompt: {request.prompt}"}],
+                                                    [{"tag": "text", "text": f"Model: {request.model}"}],
+                                                    [{"tag": "text", "text": f"URL: {img_url}"}],
+                                                    [{"tag": "img", "image_key": image_key}]
+                                                ]
+                                                feishu_bot.send_webhook_post(
+                                                    title="🎨 [文生图完成]",
+                                                    content=post_content,
+                                                    webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
+                                                )
+                                            else:
+                                                # 上传失败，降级为纯文本
+                                                notify_content = f"🎨 [文生图完成]\n📝 Prompt: {request.prompt}\n🤖 Model: {request.model}\n🖼️ URL: {img_url}\n(图片上传飞书失败)"
+                                                feishu_bot.send_webhook_message(notify_content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
+                                        else:
+                                            # 下载失败
+                                            notify_content = f"🎨 [文生图完成]\n📝 Prompt: {request.prompt}\n🤖 Model: {request.model}\n🖼️ URL: {img_url}\n(图片下载失败)"
+                                            feishu_bot.send_webhook_message(notify_content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
+
+                                except Exception as fe:
+                                    logger.error(f"发送飞书通知失败: {fe}")
+
                 except Exception as e:
                     logger.error(f"Failed to save generated image to DB: {e}")
 
@@ -370,6 +488,34 @@ class ImageManager:
                             "meta_data": json.dumps({"model": request.model, "provider": "z-image"})
                         }
                     )
+                # 发送 Feishu 通知 (图文)
+                try:
+                    from backend.app.utils.feishu_utils import feishu_bot
+                    
+                    # 1. 上传到飞书获取 image_key (我们已经有 img_bytes)
+                    image_key = feishu_bot.upload_image(img_bytes)
+                    
+                    if image_key:
+                        # 2. 构造富文本消息
+                        post_content = [
+                            [{"tag": "text", "text": f"Prompt: {request.prompt}"}],
+                            [{"tag": "text", "text": f"Model: {request.model}"}],
+                            [{"tag": "text", "text": f"URL: {final_url}"}],
+                            [{"tag": "img", "image_key": image_key}]
+                        ]
+                        feishu_bot.send_webhook_post(
+                            title="🎨 [本地文生图完成]",
+                            content=post_content,
+                            webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
+                        )
+                    else:
+                         # 降级
+                         notify_content = f"🎨 [本地文生图完成]\n📝 Prompt: {request.prompt}\n🤖 Model: {request.model}\n🖼️ URL: {final_url}\n(图片上传飞书失败)"
+                         feishu_bot.send_webhook_message(notify_content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
+
+                except Exception as fe:
+                    logger.error(f"发送飞书通知失败: {fe}")
+
             except Exception as e:
                 logger.error(f"Failed to save generated Z-Image to DB: {e}")
 
