@@ -30,6 +30,9 @@ MANIFEST
 *.manifest
 *.spec
 
+# exe文件
+*.exe
+
 # 安装程序日志
 pip-log.txt
 pip-delete-this-directory.txt
