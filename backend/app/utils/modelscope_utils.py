@@ -10,11 +10,18 @@ from anyio import to_thread
 # 尝试导入 modelscope 相关库 (可选依赖)
 try:
     # 优先尝试从 transformers 导入模型类 (更通用)
-    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+    from transformers import Qwen2_5_VLForConditionalGeneration, Qwen3VLForConditionalGeneration, AutoProcessor
     from qwen_vl_utils import process_vision_info
     _MODELSCOPE_AVAILABLE = True
 except ImportError:
-    _MODELSCOPE_AVAILABLE = False
+    try:
+        # Fallback if Qwen3 is not available
+        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from qwen_vl_utils import process_vision_info
+        Qwen3VLForConditionalGeneration = None
+        _MODELSCOPE_AVAILABLE = True
+    except ImportError:
+        _MODELSCOPE_AVAILABLE = False
     logger.warning("⚠️ transformers 或 qwen_vl_utils 未安装，ModelScopeUtils 功能受限")
 
 class ModelScopeUtils:
@@ -192,16 +199,24 @@ class ModelScopeUtils:
             logger.info(f"[{model_name}] 使用设备: {device}")
 
             # 根据模型类型加载
-            if "Qwen3-VL" in model_name or "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
-                # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
-                model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
-                    ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
-                ).to(device)
-                processor = AutoProcessor.from_pretrained(model_path)
+            if "Qwen3-VL" in model_name:
+                if Qwen3VLForConditionalGeneration is None:
+                     raise ImportError("当前 transformers 版本不支持 Qwen3-VL")
+                model_class = Qwen3VLForConditionalGeneration
+            elif "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
+                model_class = Qwen2_5_VLForConditionalGeneration
             else:
-                raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+                 # Default fallback or error
+                 raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+
+            # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
+            model = model_class.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
+                # trust_remote_code=True, # 允许加载自定义代码
+                ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
+            ).to(device)
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             
             cls._instances[model_name] = {
                 "model": model,
@@ -218,7 +233,7 @@ class ModelScopeUtils:
             raise RuntimeError(f"Failed to load model {model_name}: {e}")
 
     @classmethod
-    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int) -> str:
+    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int, streamer=None) -> str:
         """
         同步执行推理逻辑 (将被运行在线程池中)
         """
@@ -251,24 +266,84 @@ class ModelScopeUtils:
             # 移至设备
             inputs = inputs.to(device)
 
+            # Debug Log: Print Input Shapes
+            logger.info(f"[{model_name}] Input Keys: {list(inputs.keys())}")
+            if "pixel_values" in inputs:
+                logger.info(f"[{model_name}] pixel_values shape: {inputs['pixel_values'].shape}")
+            if "image_grid_thw" in inputs:
+                logger.info(f"[{model_name}] image_grid_thw: {inputs['image_grid_thw']}")
+            if "input_ids" in inputs:
+                logger.info(f"[{model_name}] input_ids shape: {inputs['input_ids'].shape}")
+
             # 4. 生成
             logger.info(f"[{model_name}] 开始推理...")
-            generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
-            
-            # 5. 解码
-            generated_ids_trimmed = [
-                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
-            
-            output_text = processor.batch_decode(
-                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )
-            
-            result = output_text[0]
-            logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
-            return result
+            if streamer:
+                # 使用 streamer 进行流式生成
+                model.generate(**inputs, max_new_tokens=max_new_tokens, streamer=streamer)
+                return "" # 流式模式下返回值由 streamer 处理，这里返回空或最后累积的文本
+            else:
+                generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+                
+                # 5. 解码
+                generated_ids_trimmed = [
+                    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                ]
+                
+                output_text = processor.batch_decode(
+                    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+                )
+                
+                result = output_text[0]
+                logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
+                return result
             
         return "Unsupported model architecture"
+
+    @classmethod
+    async def chat_completion_stream(
+        cls, 
+        messages: List[Dict[str, Any]], 
+        model_name: str = "Qwen/Qwen3-VL-4B-Instruct",
+        max_new_tokens: int = 512
+    ):
+        """
+        执行对话推理 (异步流式)
+        """
+        from transformers import TextIteratorStreamer
+        import threading
+
+        # 加载模型 (获取 processor)
+        # 注意: 这里需要在主线程加载，因为 load_model 可能涉及下载和 GPU 操作
+        async with cls._inference_lock:
+            instance = cls._load_model(model_name)
+            processor = instance["processor"]
+            
+            # 创建 Streamer
+            streamer = TextIteratorStreamer(processor, skip_prompt=True, skip_special_tokens=True)
+            
+            # 在新线程中运行 generate
+            # 注意: generate 是阻塞的，必须在线程中运行，否则会阻塞 event loop 导致无法 yield
+            thread = threading.Thread(
+                target=cls._run_inference_sync, 
+                kwargs={
+                    "model_name": model_name,
+                    "messages": messages,
+                    "max_new_tokens": max_new_tokens,
+                    "streamer": streamer
+                }
+            )
+            thread.start()
+
+            # 在主线程中 yield streamer 的输出
+            # streamer 是一个迭代器，会阻塞等待新 token
+            try:
+                for new_text in streamer:
+                    yield new_text
+            except Exception as e:
+                logger.error(f"流式生成异常: {e}")
+                yield f"[ERROR: {str(e)}]"
+            finally:
+                thread.join()
 
     @classmethod
     async def chat_completion(
@@ -288,7 +363,8 @@ class ModelScopeUtils:
                     cls._run_inference_sync,
                     model_name,
                     messages,
-                    max_new_tokens
+                    max_new_tokens,
+                    None # No streamer
                 )
                 return result
                 

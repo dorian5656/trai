@@ -52,6 +52,11 @@ def create_app() -> FastAPI:
     async def startup_event():
         logger.info(f"服务启动: {settings.PROJECT_NAME} ({settings.ENV})")
         
+        # 0. 数据库初始化与 Dify 同步
+        from backend.app.utils.db_init import DBInitializer
+        logger.info("🚀 [Startup] 正在检查数据库并同步 Dify 应用配置...")
+        await DBInitializer().run()
+        
         # 1. 同步环境配置到数据库
         await EnvSync.sync()
 

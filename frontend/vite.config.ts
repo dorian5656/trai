@@ -27,5 +27,17 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    open: true,
+    proxy: {
+      '/api_trai': {
+        target: 'http://192.168.100.119:5777',
+        changeOrigin: true,
+        // rewrite: (path) => path.replace(/^\/api_trai/, '/api_trai'), // 如果后端路径包含 /api_trai 则不需要 rewrite
+      }
+    }
   }
 })

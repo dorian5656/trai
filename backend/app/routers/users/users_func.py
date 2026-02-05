@@ -49,18 +49,38 @@ class UserAudit(BaseModel):
     """
     用户审核请求模型
     """
-    username: str = Field(..., description="待审核用户名")
-    is_active: bool = Field(..., description="审核结果 (True:通过, False:拒绝/禁用)")
-    remark: Optional[str] = Field(None, description="审核备注")
+    username: str = Field(..., description="待审核用户名", examples=["A8888"])
+    is_active: bool = Field(..., description="审核结果 (True:通过, False:拒绝/禁用)", examples=[True])
+    remark: Optional[str] = Field(None, description="审核备注", examples=["Approved by admin"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "A8888",
+                "is_active": True,
+                "remark": "Approved"
+            }
+        }
+    }
 
 # 修改密码请求
 class PasswordChange(BaseModel):
     """
     修改密码请求模型
     """
-    old_password: str = Field(..., description="旧密码")
-    new_password: str = Field(..., min_length=6, description="新密码 (至少6位)")
-    reason: str = Field(..., min_length=1, description="修改密码原因")
+    old_password: str = Field(..., description="旧密码", examples=["oldpassword"])
+    new_password: str = Field(..., min_length=6, description="新密码 (至少6位)", examples=["newpassword"])
+    reason: str = Field(..., min_length=1, description="修改密码原因", examples=["Routine change"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "old_password": "oldpassword",
+                "new_password": "newpassword",
+                "reason": "Routine change"
+            }
+        }
+    }
 
 class UsersFunc:
     """

@@ -25,18 +25,41 @@ class Message(BaseModel):
     """
     对话消息模型
     """
-    role: str = Field(..., description="角色 (user/assistant/system)")
-    content: Union[str, List[Dict[str, Any]]] = Field(..., description="消息内容 (文本或多模态列表)")
+    role: str = Field(..., description="角色 (user/assistant/system)", examples=["user"])
+    content: Union[str, List[Dict[str, Any]]] = Field(..., description="消息内容 (文本或多模态列表)", examples=["Hello, how are you?"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "role": "user",
+                "content": "Hello, how are you?"
+            }
+        }
+    }
 
 class ChatRequest(BaseModel):
     """
     AI 对话请求模型
     """
     messages: List[Message] = Field(..., description="历史消息列表")
-    model: str = Field("deepseek-chat", description="模型名称 (deepseek-chat/Qwen3-VL-4B-Instruct)")
-    temperature: float = Field(0.7, description="温度系数 (0-2)")
-    max_tokens: int = Field(512, description="最大 Token 数")
-    session_id: Optional[str] = Field(None, description="会话ID (若不传则自动生成)")
+    model: str = Field("deepseek-chat", description="模型名称 (deepseek-chat/Qwen3-VL-4B-Instruct)", examples=["deepseek-chat"])
+    temperature: float = Field(0.7, description="温度系数 (0-2)", examples=[0.7])
+    max_tokens: int = Field(512, description="最大 Token 数", examples=[512])
+    session_id: Optional[str] = Field(None, description="会话ID (若不传则自动生成)", examples=["uuid-v4-string"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Tell me a joke."}
+                ],
+                "model": "deepseek-chat",
+                "temperature": 0.7,
+                "max_tokens": 512
+            }
+        }
+    }
 
 class ChatResponse(BaseModel):
     """

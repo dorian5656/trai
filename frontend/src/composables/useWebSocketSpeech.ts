@@ -4,10 +4,12 @@
 // 描述：WebSocket 语音识别 (实时麦克风 + 文件流式)
 
 import { ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ErrorHandler } from '@/utils/errorHandler';
 import request from '@/utils/request';
+import { WS_BASE_URL, API_BASE_URL } from '@/config';
+import { ElMessage } from 'element-plus';
 
-const WS_URL = `${import.meta.env.VITE_APP_MAIN_URL || 'http://localhost:5777'}`.replace('http', 'ws') + '/speech/ws/transcribe';
+const WS_URL = `${WS_BASE_URL}${API_BASE_URL}/speech/ws/transcribe`;
 
 export function useWebSocketSpeech() {
   const isConnected = ref(false);
@@ -148,7 +150,7 @@ export function useWebSocketSpeech() {
       isRecording.value = true;
     } catch (e: any) {
       console.error('Microphone Error:', e);
-      ElMessage.error('无法访问麦克风: ' + e.message);
+      ErrorHandler.showError(ErrorHandler.handleHttpError(e));
       closeWebSocket();
     }
   };
@@ -207,7 +209,7 @@ export function useWebSocketSpeech() {
 
     } catch (e: any) {
       console.error('Upload Error:', e);
-      ElMessage.error('转写失败: ' + (e.message || '未知错误'));
+      ErrorHandler.showError(ErrorHandler.handleHttpError(e));
       interimText.value = '';
       errorMsg.value = e.message;
     } finally {
