@@ -131,13 +131,24 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+- **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
+- **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
+
+### 2026_02_05_1142
+- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
+- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
+
+### 2026_02_05_1136
+- **前端-内容**: 抽离技能占位文案映射至 `frontend/src/constants/texts.ts`; 改造 `ChatInput` 按技能动态占位.
+- **前端-内容**: 抽离图像生成参数选项至 `frontend/src/constants/imagegen.ts`; `ChatInput` 统一从常量读取.
+- **前端-内容**: 抽离技能列表至 `frontend/src/constants/skills.ts`; 重构 `useSkills` 引用常量.
+- **前端-内容**: 移动端与 PC 欢迎标题、侧边栏与按钮文案改为常量驱动 (`views/mobile/Home.vue`, `views/pc/Home.vue`).
 
 ### 2026_02_04_1649
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
 - **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
 - **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
 - **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
-
 ### 2026_02_04_1648
 - **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
 - **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.

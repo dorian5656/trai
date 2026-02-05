@@ -350,6 +350,42 @@ const handleCopy = () => {
     50% { opacity: 0; }
 }
 
+@media (max-width: 768px) {
+  .recorder-card {
+    width: 95vw;
+    height: 80vh;
+    border-radius: 12px;
+    .card-header {
+      padding: 12px 16px;
+      .title {
+        font-size: 16px;
+        .icon { width: 18px; height: 18px; }
+      }
+      :deep(svg) { width: 18px; height: 18px; }
+    }
+    .card-body {
+      padding: 16px;
+      .result-area {
+        padding: 16px;
+        .placeholder { padding-top: 40px; }
+        .text-content { font-size: 14px; }
+      }
+    }
+    .card-footer {
+      padding: 12px 16px;
+      .actions { gap: 10px; }
+      .action-btn {
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        .mic-icon, .upload-icon { width: 16px; height: 16px; }
+      }
+      .text-btn { font-size: 13px; padding: 6px 10px; }
+    }
+  }
+}
+
+
 @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(245, 63, 63, 0.4); }
     70% { box-shadow: 0 0 0 10px rgba(245, 63, 63, 0); }

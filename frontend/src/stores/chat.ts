@@ -366,6 +366,7 @@ export const useChatStore = defineStore('chat', () => {
     // 新增
     isSending,
     sendMessage,
-    stopGenerating
+    stopGenerating,
+    clearAllConversations
   };
 });

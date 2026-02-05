@@ -5,10 +5,12 @@
 描述：聊天输入框组件
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { UploadFile } from '@/composables/useFileUpload';
 import type { Skill } from '@/composables/useSkills';
 import { icons } from '@/assets/icons';
+import { IMAGEGEN_MODEL_OPTIONS, RATIO_OPTIONS, STYLE_OPTIONS, TEMPLATE_OPTIONS } from '@/constants/imagegen';
+import { PLACEHOLDER_TEXT, SKILL_PLACEHOLDERS } from '@/constants/texts';
 
 const props = defineProps<{
   modelValue: string;
@@ -43,6 +45,29 @@ const handleEnter = (e: KeyboardEvent) => {
     emit('send');
   }
 };
+
+const modelName = ref('Seedream 4.5');
+const ratio = ref('1:1');
+const styleName = ref('默认');
+const templateName = ref('默认');
+
+const modelOptions = IMAGEGEN_MODEL_OPTIONS.map(i => i.label);
+const ratioOptions = RATIO_OPTIONS.map(i => i.label);
+const styleOptions = STYLE_OPTIONS.map(i => i.label);
+const templateOptions = TEMPLATE_OPTIONS.map(i => i.label);
+
+const onModelCommand = (cmd: string) => { modelName.value = cmd; };
+const onRatioCommand = (cmd: string) => { ratio.value = cmd; };
+const onStyleCommand = (cmd: string) => { styleName.value = cmd; };
+const onTemplateCommand = (cmd: string) => { templateName.value = cmd; };
+
+const placeholderText = computed(() => {
+  const skill = props.activeSkill;
+  if (skill && skill.label) {
+    return SKILL_PLACEHOLDERS[skill.label] ?? PLACEHOLDER_TEXT.withSkillDefault;
+  }
+  return PLACEHOLDER_TEXT.default;
+});
 </script>
 
 <template>
@@ -116,9 +141,9 @@ const handleEnter = (e: KeyboardEvent) => {
       @keyup.enter="handleEnter"
       @keyup.esc="emit('removeSkill')"
       :disabled="isSending"
-      :placeholder="activeSkill ? '请输入内容...' : '发消息 or 输入“/”选择技能'" 
+      :placeholder="placeholderText" 
     />
-    <div class="input-actions">
+    <div v-show="!(activeSkill && activeSkill.label === '图像生成')" class="input-actions">
       <!-- 上传按钮 -->
       <button class="icon-btn" @click="triggerFileInput">
         <span style="width: 20px; height: 20px; display: block" v-html="icons.attachment"></span>
@@ -137,6 +162,82 @@ const handleEnter = (e: KeyboardEvent) => {
         <span v-if="isListening" style="width: 20px; height: 20px; display: block" v-html="icons.micListening"></span>
         <span v-else style="width: 20px; height: 20px; display: block" v-html="icons.micNormal"></span>
       </button>
+      <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
+        <span v-if="isSending" style="width: 14px; height: 14px; display: block" v-html="icons.sendSending"></span>
+        <span v-else style="width: 16px; height: 16px; display: block" v-html="icons.sendNormal"></span>
+      </button>
+    </div>
+    <div v-show="activeSkill && activeSkill.label === '图像生成'" class="param-bar">
+      <button class="chip" @click="triggerFileInput">
+        <span class="chip-icon" v-html="icons.attachment"></span>
+        <span class="chip-text">参考图</span>
+      </button>
+      
+      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
+        <template #reference>
+          <button class="chip active">
+            <span class="chip-icon" v-html="icons.star"></span>
+            <span class="chip-text">{{ modelName }}</span>
+            <span class="chip-chevron" v-html="icons.chevronDown"></span>
+          </button>
+        </template>
+        <div class="popover-list">
+          <div class="popover-item" v-for="opt in modelOptions" :key="opt" @click="onModelCommand(opt)" :class="{ active: opt === modelName }">
+            <span class="item-text">{{ opt }}</span>
+            <span v-if="opt === modelName" class="item-check" v-html="icons.check"></span>
+          </div>
+        </div>
+      </el-popover>
+      
+      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
+        <template #reference>
+          <button class="chip">
+            <span class="chip-icon" v-html="icons.ratio"></span>
+            <span class="chip-text">比例 {{ ratio }}</span>
+            <span class="chip-chevron" v-html="icons.chevronDown"></span>
+          </button>
+        </template>
+        <div class="popover-list">
+          <div class="popover-item" v-for="opt in ratioOptions" :key="opt" @click="onRatioCommand(opt)" :class="{ active: opt === ratio }">
+            <span class="item-text">{{ opt }}</span>
+            <span v-if="opt === ratio" class="item-check" v-html="icons.check"></span>
+          </div>
+        </div>
+      </el-popover>
+      
+      <el-popover placement="top-start" trigger="click" :width="200" popper-class="chip-popover">
+        <template #reference>
+          <button class="chip">
+            <span class="chip-icon" v-html="icons.palette"></span>
+            <span class="chip-text">风格 {{ styleName }}</span>
+            <span class="chip-chevron" v-html="icons.chevronDown"></span>
+          </button>
+        </template>
+        <div class="popover-list">
+          <div class="popover-item" v-for="opt in styleOptions" :key="opt" @click="onStyleCommand(opt)" :class="{ active: opt === styleName }">
+            <span class="item-text">{{ opt }}</span>
+            <span v-if="opt === styleName" class="item-check" v-html="icons.check"></span>
+          </div>
+        </div>
+      </el-popover>
+      
+      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
+        <template #reference>
+          <button class="chip">
+            <span class="chip-icon" v-html="icons.template"></span>
+            <span class="chip-text">模板 {{ templateName }}</span>
+            <span class="chip-chevron" v-html="icons.chevronDown"></span>
+          </button>
+        </template>
+        <div class="popover-list">
+          <div class="popover-item" v-for="opt in templateOptions" :key="opt" @click="onTemplateCommand(opt)" :class="{ active: opt === templateName }">
+            <span class="item-text">{{ opt }}</span>
+            <span v-if="opt === templateName" class="item-check" v-html="icons.check"></span>
+          </div>
+        </div>
+      </el-popover>
+      
+      <div class="spacer"></div>
       <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
         <span v-if="isSending" style="width: 14px; height: 14px; display: block" v-html="icons.sendSending"></span>
         <span v-else style="width: 16px; height: 16px; display: block" v-html="icons.sendNormal"></span>
@@ -462,6 +563,151 @@ const handleEnter = (e: KeyboardEvent) => {
       &:hover { background: #0e42d2; }
       &:disabled { background: #94bfff; cursor: not-allowed; }
     }
+  }
+  
+  .param-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.375rem;
+    
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      height: 1.875rem;
+      padding: 0 0.625rem;
+      border: 1px solid #e5e6eb;
+      background: #f7f8fa;
+      color: #4e5969;
+      border-radius: 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      
+      &:hover {
+        background: #fff;
+        box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.06);
+      }
+      
+      &.active {
+        background: #eef2ff;
+        border-color: #d0d4ff;
+        color: #1d2129;
+      }
+      
+      .chip-icon {
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .chip-text {
+        font-size: 0.8125rem;
+        white-space: nowrap;
+      }
+      .chip-chevron {
+        width: 12px;
+        height: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #86909c;
+      }
+    }
+
+    .param-select {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.3125rem 0.625rem;
+      border: 1px solid #e5e6eb;
+      border-radius: 1.25rem;
+      background: #fff;
+      transition: box-shadow 0.2s, border-color 0.2s;
+      height: 1.875rem;
+      
+      &:hover {
+        border-color: #d0d1d6;
+        box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.06);
+      }
+      
+      .select-text {
+        font-size: 0.8125rem;
+        color: #4e5969;
+        white-space: nowrap;
+      }
+
+      .el-select {
+        width: 7.5rem;
+        
+        .el-input__wrapper {
+          box-shadow: none;
+          background: transparent;
+          border-radius: 0.875rem;
+          padding: 0 0.25rem;
+          height: 1.375rem;
+          
+          .el-input__inner {
+            font-size: 0.8125rem;
+          }
+        }
+      }
+    }
+    
+    .spacer { flex: 1; }
+    
+    .send-btn {
+      background: #165dff;
+      color: white;
+      border: none;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      margin-left: 0.5rem;
+      &:hover { background: #0e42d2; }
+      &:disabled { background: #94bfff; cursor: not-allowed; }
+    }
+    
+  }
+}
+.chip-popover {
+  padding: 0.5rem !important;
+  border-radius: 0.75rem !important;
+  background: #fff !important;
+  border: 1px solid #e5e6eb !important;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12) !important;
+  
+  .popover-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .popover-item {
+    font-size: 0.875rem;
+    color: #1d2129;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .popover-item:hover {
+    background: #f2f3f5;
+  }
+  .popover-item.active {
+    background: #eef2ff;
+    color: #165dff;
+  }
+  .popover-item .item-check {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    display: inline-flex;
   }
 }
 </style>
