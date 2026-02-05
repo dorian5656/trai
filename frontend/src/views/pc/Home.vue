@@ -7,21 +7,16 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAppStore } from '@/stores/app';
-import { useChatStore } from '@/stores/chat';
-import { useUserStore } from '@/stores/user';
+import { useAppStore, useChatStore, useUserStore } from '@/stores';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import { ElMessage, ElImageViewer } from 'element-plus';
-import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
-import { useFileUpload } from '@/composables/useFileUpload';
-import { useSkills } from '@/composables/useSkills';
-import SkillSelector from '@/components/business/home/SkillSelector.vue';
-import ChatInput from '@/components/business/home/ChatInput.vue';
-import MessageList from '@/components/business/home/MessageList.vue';
+import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
+import { SkillSelector, ChatInput, MessageList } from '@/modules/chat';
 import { fetchDifyConversations } from '@/api/dify';
 import type { DifyConversation } from '@/types/chat';
 import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
 import { ElMessageBox } from 'element-plus';
+import { PC_TEXT, MOBILE_TEXT } from '@/constants/texts';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -121,10 +116,10 @@ watch(result, (newVal) => {
 
 // 加载历史会话
 const loadConversations = async () => {
-  // 确保用户名有效且不是默认值
-  if (!userStore.username || userStore.username === '未登录') return;
+  const username = userStore.username;
+  if (!username || username === '未登录') return;
   try {
-    const res = await fetchDifyConversations(userStore.username);
+    const res = await fetchDifyConversations(username);
     if (res && res.data) {
       chatStore.difyConversations = (res.data as unknown) as DifyConversation[];
     }
@@ -305,7 +300,7 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
       </div>
       
       <div class="sidebar-footer" v-show="appStore.isSidebarOpen">
-        <div class="footer-item">关于驼人GPT</div>
+        <div class="footer-item">{{ PC_TEXT.sidebarFooter }}</div>
       </div>
     </aside>
 
@@ -318,10 +313,10 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
         </button>
         <div class="right-actions">
           <div v-if="userStore.isLoggedIn" class="user-actions">
-            <span class="welcome-text">欢迎, {{ userStore.username }}</span>
-            <button class="logout-btn" @click="handleLogout">退出</button>
+            <span class="welcome-text">{{ PC_TEXT.topBar.welcomePrefix }}{{ userStore.username }}</span>
+            <button class="logout-btn" @click="handleLogout">{{ PC_TEXT.topBar.logout }}</button>
           </div>
-          <button v-else class="login-btn" @click="handleLogin">登录</button>
+          <button v-else class="login-btn" @click="handleLogin">{{ PC_TEXT.topBar.login }}</button>
         </div>
       </header>
 
@@ -367,7 +362,7 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
         <!-- 欢迎页：无消息时显示 -->
         <div class="welcome-area" v-else>
           <div class="welcome-card">
-            <h1 class="greeting">你好，我是驼人GPT</h1>
+            <h1 class="greeting">{{ MOBILE_TEXT.welcomeTitle }}</h1>
             <div class="input-area-wrapper">
               <ChatInput 
                 v-model="inputMessage"

@@ -5,17 +5,17 @@
 描述：移动端主页组件 (修复输入框显示问题)
 -->
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue';
+import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAppStore } from '@/stores/app';
-import { useChatStore } from '@/stores/chat';
-import { useUserStore } from '@/stores/user';
-import { ElImageViewer } from 'element-plus';
-import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
-import { useFileUpload } from '@/composables/useFileUpload';
-import { useSkills } from '@/composables/useSkills';
-import ChatInput from '@/components/business/home/ChatInput.vue';
-import MessageList from '@/components/business/home/MessageList.vue';
+import { useAppStore, useChatStore, useUserStore } from '@/stores';
+import { ElImageViewer, ElMessage } from 'element-plus';
+import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
+import { ChatInput, MessageList } from '@/modules/chat';
+import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
+import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
+import { fetchDifyConversations, fetchConversationMessages } from '@/api/dify';
+import type { DifyConversation } from '@/types/chat';
+import { MOBILE_TEXT } from '@/constants/texts';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -28,6 +28,8 @@ const { allSkills, activeSkill, handleSkillClick, removeSkill } = useSkills();
 const inputMessage = ref('');
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
+const showSimilarityDialog = ref(false);
+const showMeetingRecorder = ref(false);
 
 // 自动滚动
 watch(
@@ -75,8 +77,7 @@ watch(
   () => userStore.isLoggedIn,
   (isLoggedIn) => {
     if (isLoggedIn) {
-      // 移动端暂无 loadConversations 逻辑，如后续添加可在此处调用
-      // chatStore.loadConversations(); 
+      loadConversations();
     } else {
       chatStore.clearAllConversations();
     }
@@ -84,9 +85,35 @@ watch(
 );
 
 // 初始化用户信息
-onMounted(() => {
-  userStore.init();
+onMounted(async () => {
+  await userStore.init();
+  if (userStore.isLoggedIn) {
+    loadConversations();
+  }
 });
+
+const loadConversations = async () => {
+  try {
+    const username = userStore.username;
+    if (!username || username === '未登录') return;
+    const res = await fetchDifyConversations(username, 50, 'guanwang');
+    let list: DifyConversation[] = [];
+    if (Array.isArray(res)) {
+      list = res as unknown as DifyConversation[];
+    } else if (res && (res as any).data) {
+      list = (res as any).data as DifyConversation[];
+    }
+    chatStore.difyConversations = list;
+  } catch (e) {
+    console.error('加载会话失败', e);
+  }
+};
+
+const handleSwitchDify = (conv: DifyConversation) => {
+  chatStore.clearSession();
+  chatStore.setDifySessionId(conv.id);
+  ElMessage.success('已切换会话上下文');
+};
 
 const handleLogin = () => {
   appStore.openLoginModal();
@@ -97,15 +124,35 @@ const handleLogout = () => {
 };
 
 const handleMobileSkillClick = (skill: any) => {
-  // 移动端简单处理，暂不弹窗
-  if (skill.label !== '相似度识别') {
-    handleSkillClick(skill);
-    // Focus input
-    nextTick(() => {
-      const input = document.querySelector('.input-box input') as HTMLInputElement;
-      if (input) input.focus();
-    });
+  if (skill.label === '会议记录') {
+    showMeetingRecorder.value = true;
+    return;
   }
+  if (skill.label === '相似度识别') {
+    showSimilarityDialog.value = true;
+    return;
+  }
+  handleSkillClick(skill);
+  nextTick(() => {
+    const input = document.querySelector('.input-box input') as HTMLInputElement;
+    if (input) input.focus();
+  });
+};
+
+const recentItems = computed(() => {
+  const locals = chatStore.sessions.map(s => ({ id: s.id, title: s.title, type: 'local' as const }));
+  const dify = chatStore.difyConversations.map(c => ({ id: c.id, title: c.name || '新对话', type: 'dify' as const }));
+  return [...locals, ...dify];
+});
+
+const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
+  if (item.type === 'local') {
+    chatStore.switchSession(item.id);
+  } else {
+    const conv = chatStore.difyConversations.find(c => c.id === item.id);
+    if (conv) handleSwitchDify(conv);
+  }
+  appStore.closeMobileSidebar();
 };
 </script>
 
@@ -122,13 +169,13 @@ const handleMobileSkillClick = (skill: any) => {
             <img :src="userStore.avatar" alt="Avatar" />
           </div>
           <div class="avatar" v-else>👩‍💻</div>
-          <span class="username">{{ userStore.isLoggedIn ? userStore.username : '驼人GPT' }}</span>
+          <span class="username">{{ userStore.isLoggedIn ? userStore.username : MOBILE_TEXT.sidebar.usernameFallback }}</span>
         </div>
-        <button class="close-btn" @click="appStore.closeMobileSidebar">✕</button>
+        <button class="close-btn" @click="appStore.closeMobileSidebar">{{ MOBILE_TEXT.sidebar.closeBtn }}</button>
       </div>
       
       <div class="action-area">
-        <button class="new-chat-btn" @click="chatStore.createSession()">📝 新对话</button>
+        <button class="new-chat-btn" @click="chatStore.createSession()">{{ MOBILE_TEXT.sidebar.newChatBtn }}</button>
       </div>
 
       <!-- <nav class="menu-list">
@@ -138,19 +185,17 @@ const handleMobileSkillClick = (skill: any) => {
       </nav> -->
 
       <div class="recent-chats">
-        <div class="section-title">最近对话</div>
-        <div 
-          v-for="session in chatStore.sessions" 
-          :key="session.id" 
+        <div class="section-title">{{ MOBILE_TEXT.sidebar.recentSectionTitle }}</div>
+        <div
+          v-for="item in recentItems"
+          :key="`${item.type}-${item.id}`"
           class="chat-item"
-          @click="chatStore.switchSession(session.id); appStore.closeMobileSidebar()"
-        >
-          {{ session.title }}
-        </div>
+          @click="handleRecentClick(item)"
+        >{{ item.title }}</div>
       </div>
       
       <div class="sidebar-footer">
-        <button class="footer-btn">ℹ️ 关于驼人GPT</button>
+        <button class="footer-btn">{{ MOBILE_TEXT.sidebar.aboutBtn }}</button>
       </div>
     </aside>
 
@@ -158,13 +203,13 @@ const handleMobileSkillClick = (skill: any) => {
     <header class="mobile-header">
       <div class="left">
         <button class="icon-btn" @click="appStore.toggleMobileSidebar">☰</button>
-        <button class="new-chat-pill" @click="chatStore.createSession()">📝 新对话</button>
+        <button class="new-chat-pill" @click="chatStore.createSession()">{{ MOBILE_TEXT.header.newChatPill }}</button>
       </div>
       <div class="right">
         <div v-if="userStore.isLoggedIn" class="user-actions">
-          <button class="logout-btn" @click="handleLogout">退出</button>
+          <button class="logout-btn" @click="handleLogout">{{ MOBILE_TEXT.header.logout }}</button>
         </div>
-        <button v-else class="login-btn" @click="handleLogin">登录</button>
+        <button v-else class="login-btn" @click="handleLogin">{{ MOBILE_TEXT.header.login }}</button>
       </div>
     </header>
 
@@ -201,7 +246,7 @@ const handleMobileSkillClick = (skill: any) => {
 
       <!-- 欢迎页：无消息时显示 -->
       <div v-else class="welcome-wrapper">
-        <h1 class="greeting">你好，我是驼人GPT</h1>
+        <h1 class="greeting">{{ MOBILE_TEXT.welcomeTitle }}</h1>
 
         <div class="input-area-wrapper">
           <ChatInput 
@@ -245,6 +290,19 @@ const handleMobileSkillClick = (skill: any) => {
       :url-list="previewUrlList"
       :initial-index="initialIndex"
       @close="closeViewer"
+    />
+
+    <!-- 相似度识别弹窗 -->
+    <SimilarityDialog
+      v-if="showSimilarityDialog"
+      :visible="showSimilarityDialog"
+      @update:visible="(val) => showSimilarityDialog = val"
+    />
+
+    <!-- 会议记录组件 -->
+    <MeetingRecorder 
+      v-if="showMeetingRecorder" 
+      @close="showMeetingRecorder = false" 
     />
   </div>
 </template>

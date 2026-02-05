@@ -34,6 +34,15 @@ export const fetchDifyConversations = (user: string, limit: number = 20, app_nam
 };
 
 /**
+ * 获取指定会话的历史消息
+ */
+export const fetchConversationMessages = (conversation_id: string, user: string, limit: number = 50, app_name: string = 'guanwang') => {
+  return request.get<any>('/dify/messages', {
+    params: { conversation_id, user, limit, app_name }
+  });
+};
+
+/**
  * 官网专用公开对话接口 (流式)
  * URL: /dify/chat/public
  */
