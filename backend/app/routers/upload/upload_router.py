@@ -5,18 +5,148 @@
 # 日期：2026-01-27
 # 描述：文件上传路由
 
-from fastapi import APIRouter, UploadFile, File, Form, Depends
+from fastapi import APIRouter, UploadFile, File, Form, Depends, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from backend.app.routers.upload.upload_func import UploadResponse
+from backend.app.routers.upload.upload_func import UploadResponse, ChunkInitResponse, ChunkMergeResponse
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.logger import logger
+import uuid
 
 router = APIRouter()
 
 from backend.app.utils.pg_utils import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.routers.upload.upload_func import UserImage, UserAudio
+
+# =============================================================================
+# 分片上传相关路由
+# =============================================================================
+
+@router.post("/chunk/init", response_model=ChunkInitResponse, summary="初始化分片上传")
+async def init_chunk_upload(
+    filename: str = Body(..., embed=True),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    初始化分片上传任务
+    
+    返回 upload_id，后续分片上传需携带此 ID。
+    同时检查是否有已存在的断点（断点续传），返回已上传的分片索引。
+    """
+    # 简单生成 upload_id，实际可以使用 hash(filename + user_id + size) 来支持更严格的断点检测
+    # 这里为了演示，直接生成新的 ID，或者如果用户传了 MD5 更好。
+    # 为了支持简单的"同名文件断点续传"，我们可以尝试用 hash
+    upload_id = str(uuid.uuid4())
+    
+    # 检查是否有历史残留 (暂时不自动关联旧 ID，由前端管理 upload_id 或此处不做复杂逻辑)
+    # 如果前端想续传，应该在客户端缓存 upload_id。
+    # 这里我们假设是新的上传，或者前端通过其他方式（如 MD5）向后端查询进度。
+    
+    # 获取已上传分片 (对于新生成的 upload_id 肯定是空的)
+    uploaded_chunks = UploadUtils.get_uploaded_chunks(upload_id)
+    
+    logger.info(f"用户 {current_user.username} 初始化分片上传: {filename} -> {upload_id}")
+    
+    return ChunkInitResponse(
+        upload_id=upload_id,
+        uploaded_chunks=uploaded_chunks
+    )
+
+@router.get("/chunk/progress", summary="查询上传进度 (断点续传)")
+async def get_chunk_progress(
+    upload_id: str = Query(..., description="上传任务ID"),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    查询指定 upload_id 的上传进度
+    """
+    uploaded_chunks = UploadUtils.get_uploaded_chunks(upload_id)
+    return {"upload_id": upload_id, "uploaded_chunks": uploaded_chunks}
+
+@router.post("/chunk/upload", summary="上传单个分片")
+async def upload_chunk(
+    upload_id: str = Form(...),
+    part_number: int = Form(..., description="分片序号 (从1开始)"),
+    file: UploadFile = File(...),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    上传单个分片文件
+    """
+    # 读取分片数据
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="分片数据为空")
+        
+    chunk_path = await UploadUtils.save_chunk(upload_id, part_number, data)
+    
+    return {"status": "success", "upload_id": upload_id, "part_number": part_number, "size": len(data)}
+
+@router.post("/chunk/merge", response_model=ChunkMergeResponse, summary="合并分片")
+async def merge_chunks(
+    upload_id: str = Body(...),
+    filename: str = Body(...),
+    total_parts: int = Body(...),
+    module: str = Body("common"),
+    current_user = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    所有分片上传完成后，调用此接口进行合并
+    """
+    logger.info(f"用户 {current_user.username} 请求合并分片: {upload_id}, 文件名: {filename}, 总分片: {total_parts}")
+    
+    # 1. 执行合并
+    url, local_path, size = await UploadUtils.merge_chunks(upload_id, filename, total_parts, module)
+    
+    # 2. 记录到数据库 (复用 upload_file 的逻辑)
+    try:
+        ext = filename.lower().split('.')[-1] if '.' in filename else ""
+        is_audio = False
+        if f".{ext}" in UploadUtils.ALLOWED_EXTENSIONS.get('audio', {}):
+            is_audio = True
+            
+        if is_audio:
+            new_audio = UserAudio(
+                user_id=current_user.username,
+                filename=filename,
+                s3_key=local_path,
+                url=url,
+                size=size,
+                mime_type=f"audio/{ext}", # 简易判断
+                module=module,
+                source="chunk_upload"
+            )
+            db.add(new_audio)
+            await db.commit()
+            await db.refresh(new_audio)
+        else:
+            new_image = UserImage(
+                user_id=current_user.username,
+                filename=filename,
+                s3_key=local_path,
+                url=url,
+                size=size,
+                mime_type=f"application/octet-stream", # 暂时无法准确获取
+                module=module,
+                source="chunk_upload"
+            )
+            db.add(new_image)
+            await db.commit()
+            await db.refresh(new_image)
+            
+        logger.info(f"分片合并文件已记录到数据库")
+        
+    except Exception as e:
+        logger.error(f"保存分片记录失败: {e}")
+        # 不阻断返回
+        
+    return ChunkMergeResponse(
+        url=url,
+        filename=filename,
+        size=size
+    )
 
 @router.post("/common", response_model=UploadResponse, summary="通用文件上传")
 async def upload_file(

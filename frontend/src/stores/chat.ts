@@ -239,7 +239,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // 取第一张图片
-      const imageFile = imageFiles[0];
+      const imageFile = imageFiles[0]!;
       if (!imageFile.url) {
          ElMessage.warning('图片上传尚未完成，请稍后重试');
          isSending.value = false;
@@ -355,6 +355,7 @@ export const useChatStore = defineStore('chat', () => {
     updateLastMessage,
     abortController,
     clearSession,
+    clearAllConversations,
     difyConversations,
     difySessionId,
     setDifySessionId,

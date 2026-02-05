@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf
+conda activate trai_31014_whf_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -67,8 +67,8 @@ python backend/client_app/build.py
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
 
-- **本地文档**: [http://localhost:5689/api_trai/v1/docs](http://localhost:5689/api_trai/v1/docs)
-- **OpenAPI JSON**: [http://localhost:5689/api_trai/v1/openapi.json](http://localhost:5689/api_trai/v1/openapi.json)
+- **本地文档**: [http://localhost:5689/api/v1/docs](http://localhost:5689/api/v1/docs)
+- **OpenAPI JSON**: [http://localhost:5689/api/v1/openapi.json](http://localhost:5689/api/v1/openapi.json)
 
 ## 🔧 环境依赖 (GPU 版)
 
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf python=3.10.14
-    conda activate trai_31014_whf
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -131,8 +131,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
-
-### 2026_02_05_1145
+- **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 - **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 
 ### 2026_02_05_1142
@@ -145,6 +144,16 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端-内容**: 抽离技能列表至 `frontend/src/constants/skills.ts`; 重构 `useSkills` 引用常量.
 - **前端-内容**: 移动端与 PC 欢迎标题、侧边栏与按钮文案改为常量驱动 (`views/mobile/Home.vue`, `views/pc/Home.vue`).
 
+### 2026_02_05_1129
+- **文档**: 更新开发规范 (`00_backend_workflow_whf.md`), 明确 README 日志必须按时间倒序排列.
+- **文档**: 修正 README.md 中历史日志的排序问题.
+
+### 2026_02_05_1125
+- **后端**: 新增文件分片上传与断点续传功能 (`/upload/chunk`), 支持大文件高效传输.
+- **后端**: 优化飞书通知机制, 解决高频调用限流问题 (code 11232) 并支持图文富文本推送.
+- **后端**: 更新文生图接口, 支持本地模型 `Z-Image-Turbo` 推理并自动推送生成结果至飞书.
+- **后端**: 修复 API 文档与环境配置说明, 统一 Conda 环境名称为 `trai_31014_whf_pro_20260202`.
+
 ### 2026_02_04_1649
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
 - **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
@@ -153,6 +162,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ### 2026_02_04_1648
 - **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
 - **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
+### 2026_02_04_1541
+- **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
+- **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
+- **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
 
 ### 2026_02_04_1415
 - **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
@@ -174,7 +188,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
 
 ### 2026_02_03_1108
-- **后端**: 修复 `/api_trai/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
 - **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
 - **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
 
@@ -206,7 +220,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
 
 ### 2026_02_02_1436
-- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api_trai/v1/ai/chat/completions`.
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
 - **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
 - **后端**: 优化项目结构, 清理临时测试脚本.
 
@@ -253,6 +267,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 功能增强: 新增自动登录、系统托盘、退出/注销选项.
   - 图像识别: 修复 S3 上传路径错误, 增加拖拽上传与多模态对话功能.
   - 打包优化: `build.py` 支持自动包含图标 (`pppg.ico`).
+
+### 2026_02_05_0931
+- **后端**: 修复依赖版本冲突, 确保环境稳定性.
+  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
+  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
+  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
+  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
 
 ### 2026_01_29_1353
 - **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.
@@ -323,7 +344,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ### 2026_01_28_0900
 - **后端**: 集成 Dify AI 平台.
   - 新增 `DifyApp` 工具类 (`app/utils/dify_utils.py`), 封装对话与会话管理 API.
-  - 新增 Dify 路由模块 (`app/routers/dify`), 提供 `/api_trai/v1/dify/chat` 流式对话接口.
+  - 新增 Dify 路由模块 (`app/routers/dify`), 提供 `/api/v1/dify/chat` 流式对话接口.
   - 配置项: `DIFY_API_BASE_URL` 和 `DIFY_API_KEY`.
 
 ### 2026_01_27_1745
@@ -359,7 +380,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ### 2026_01_27_1158
 - **后端**: 增强 S3 对象存储功能。
-  - 新增文件代理下载接口 (`/api_trai/v1/upload/files/{path}`), 解决内网 S3 无法直接访问的问题。
+  - 新增文件代理下载接口 (`/api/v1/upload/files/{path}`), 解决内网 S3 无法直接访问的问题。
   - 自动配置 S3 存储桶的 CORS 策略与公开读权限。
   - 更新依赖 `requirements_windows_gpu.txt` (新增 `aioboto3` 等)。
 
@@ -387,7 +408,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ### 2026_01_27_0947
 - **后端**: 重构 AI 模块，将 `routers/chat` 迁移至 `routers/ai`。
-- **后端**: 集成 DeepSeek API 对话接口 (`/api_trai/v1/ai/chat/completions`)。
+- **后端**: 集成 DeepSeek API 对话接口 (`/api/v1/ai/chat/completions`)。
   - 支持流式/非流式对话 (目前默认非流式)。
   - 需要在 `.env` 中配置 `DEEPSEEK_API_KEY`。
 - **后端**: 修复 `test_ai_chat.py` 验证脚本及相关依赖。
@@ -499,6 +520,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
 - **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
 - **前端**: 完成移动端抽屉式导航与自适应布局开发.
+
+### 2026_02_04_1012
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
 
 ### 2026_01_26_1644
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.

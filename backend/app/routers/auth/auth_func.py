@@ -5,7 +5,7 @@
 # 日期：2026-01-27
 # 描述：认证模块业务逻辑 (注册/登录)
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import text
@@ -26,19 +26,19 @@ class UserBase(BaseModel):
     用户基础信息模型
     用于定义用户通用的属性字段
     """
-    username: str = Field(..., description="用户名")
-    full_name: Optional[str] = Field(None, description="真实姓名")
-    email: Optional[str] = Field(None, description="邮箱")
-    phone: Optional[str] = Field(None, description="手机号")
-    wecom_userid: Optional[str] = Field(None, description="企业微信 UserID")
-    avatar: Optional[str] = Field(None, description="头像 URL")
+    username: str = Field(..., description="用户名", examples=["A8888"])
+    full_name: Optional[str] = Field(None, description="真实姓名", examples=["张三"])
+    email: Optional[str] = Field(None, description="邮箱", examples=["zhangsan@example.com"])
+    phone: Optional[str] = Field(None, description="手机号", examples=["13800138000"])
+    wecom_userid: Optional[str] = Field(None, description="企业微信 UserID", examples=["zhangsan"])
+    avatar: Optional[str] = Field(None, description="头像 URL", examples=["https://example.com/avatar.jpg"])
 
 # 用户注册请求
 class UserCreate(UserBase):
     """
     用户注册请求模型
     """
-    password: str = Field(..., min_length=6, description="密码")
+    password: str = Field(..., min_length=6, description="密码", examples=["123456"])
     
     @field_validator('username')
     def validate_username(cls, v):
@@ -52,13 +52,25 @@ class UserCreate(UserBase):
             raise ValueError('用户名格式必须为 A 加 4 位数字 (例如: A0001)')
         return v
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "A8888",
+                "full_name": "张三",
+                "email": "zhangsan@example.com",
+                "phone": "13800138000",
+                "password": "secretpassword"
+            }
+        }
+    }
+
 # Token 响应
 class Token(BaseModel):
     """
     JWT Token 响应模型
     """
-    access_token: str = Field(..., description="访问令牌")
-    token_type: str = Field(..., description="令牌类型 (Bearer)")
+    access_token: str = Field(..., description="访问令牌", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
+    token_type: str = Field(..., description="令牌类型 (Bearer)", examples=["bearer"])
 
 class AuthFunc:
     """
@@ -101,6 +113,14 @@ class AuthFunc:
             )
             
             logger.info(f"用户登录成功: {user.username}")
+            
+            # 发送飞书通知
+            try:
+                from backend.app.utils.feishu_utils import feishu_bot
+                feishu_bot.send_webhook_message(f"👤 **用户登录通知**\n用户: {user.username}\n姓名: {user.full_name or '未知'}\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            except:
+                pass
+
             return Token(access_token=access_token, token_type="bearer")
 
     @staticmethod

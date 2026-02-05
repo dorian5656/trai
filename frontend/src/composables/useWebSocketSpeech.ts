@@ -7,6 +7,7 @@ import { ref } from 'vue';
 import { ErrorHandler } from '@/utils/errorHandler';
 import request from '@/utils/request';
 import { WS_BASE_URL, API_BASE_URL } from '@/config';
+import { ElMessage } from 'element-plus';
 
 const WS_URL = `${WS_BASE_URL}${API_BASE_URL}/speech/ws/transcribe`;
 
