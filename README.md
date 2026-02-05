@@ -144,15 +144,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端-内容**: 抽离技能列表至 `frontend/src/constants/skills.ts`; 重构 `useSkills` 引用常量.
 - **前端-内容**: 移动端与 PC 欢迎标题、侧边栏与按钮文案改为常量驱动 (`views/mobile/Home.vue`, `views/pc/Home.vue`).
 
-### 2026_02_05_1129
-- **文档**: 更新开发规范 (`00_backend_workflow_whf.md`), 明确 README 日志必须按时间倒序排列.
-- **文档**: 修正 README.md 中历史日志的排序问题.
-
-### 2026_02_05_1125
-- **后端**: 新增文件分片上传与断点续传功能 (`/upload/chunk`), 支持大文件高效传输.
-- **后端**: 优化飞书通知机制, 解决高频调用限流问题 (code 11232) 并支持图文富文本推送.
-- **后端**: 更新文生图接口, 支持本地模型 `Z-Image-Turbo` 推理并自动推送生成结果至飞书.
-- **后端**: 修复 API 文档与环境配置说明, 统一 Conda 环境名称为 `trai_31014_whf_pro_20260202`.
+### 2026_02_05_1724
+- **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
+- **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
+- **后端**: 清理冗余测试脚本与临时文件.
 
 ### 2026_02_04_1649
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
