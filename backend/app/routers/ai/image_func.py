@@ -380,6 +380,34 @@ class ImageManager:
                  # UploadUtils.save_from_bytes 已经做到了这一点。
                  pass
 
+            # Feishu Push Logic (Triggered by keyword in prompt)
+            try:
+                if "A6666" in request.prompt or "飞书" in request.prompt:
+                    from backend.app.yibaocode.feishu import feishu_service
+                    import tempfile
+                    
+                    logger.info("Triggering Feishu push...")
+                    # Create temp file for Feishu upload
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        tmp.write(img_bytes)
+                        tmp.flush()
+                        tmp_path = tmp.name
+                    
+                    try:
+                        # Upload to Feishu (sync call, might block briefly)
+                        image_key = feishu_service.upload_image(tmp_path)
+                        
+                        # Send Image
+                        feishu_service.send_image_to_webhook(image_key)
+                        
+                        # Send Text
+                        feishu_service.send_group_message(f"【文生图完成】\nPrompt: {request.prompt}\nUser: {user_id}\nURL: {final_url}")
+                        logger.info("Feishu push successful")
+                    finally:
+                        os.unlink(tmp_path)
+            except Exception as e:
+                logger.error(f"Feishu push failed: {e}")
+
             images_data.append({"url": final_url})
             logger.info(f"Generated image: {object_key} (URL: {final_url})")
             
