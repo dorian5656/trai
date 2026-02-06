@@ -349,11 +349,8 @@ class UploadUtils:
                     # 或者直接读取流 (消耗后端流量但兼容性好)
                     
                     # 确定 Bucket
+                    # 统一使用 S3_BUCKET_NAME (默认 trai)，不再区分 image/audio 专用 bucket
                     bucket_name = settings.S3_BUCKET_NAME
-                    if file_key.startswith("speech/") and settings.S3_SPEECH_BUCKET_NAME:
-                        bucket_name = settings.S3_SPEECH_BUCKET_NAME
-                    elif settings.S3_IMAGE_BUCKET_NAME and any(file_key.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
-                         bucket_name = settings.S3_IMAGE_BUCKET_NAME
 
                     # 这里为了解决用户无法访问 S3 IP 的问题，必须代理流
                     response = await s3.get_object(Bucket=bucket_name, Key=file_key)
@@ -462,13 +459,9 @@ class UploadUtils:
                     file_content = await f.read()
                 
                 # 获取文件类型以确定 Bucket
-                file_type = cls._get_file_type(ext)
+                # 统一使用 S3_BUCKET_NAME (默认 trai)，不再区分 image/audio 专用 bucket
                 bucket_name = settings.S3_BUCKET_NAME
-                if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
-                    bucket_name = settings.S3_IMAGE_BUCKET_NAME
-                elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
-                    bucket_name = settings.S3_SPEECH_BUCKET_NAME
-                    
+                
                 # 构造一个模拟的 UploadFile (这有点 hack，但能复用 _save_to_s3)
                 # 或者直接调用底层 boto3
                 
