@@ -159,6 +159,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 验证 rrdsppg 接口 OCR 清洗逻辑 (保留标点过滤), 确认功能正常.
 - **文档**: 更新项目日志与 README.
 
+### 2026_02_06_1416
+- **客户端**: 统一 PyQt6 客户端配置管理, 将 `login`, `deepseek`, `image_gen`, `image_parse`, `rrdsppg` 等模块的接口与默认参数集中至 `backend/pyqt_app/pages/config.json`, 通过单例 `config_loader.py` 读取.
+- **客户端**: 修复登录页默认账号密码硬编码问题, 改为从配置文件读取.
+- **客户端**: `RrdsppgPage` 移除所有硬编码参数 (模板/目标图片 URL、task_id、user_id、类型枚举), 全部改为读取配置文件.
+- **客户端**: 优化上传目录初始化逻辑, 确保 `temp/web_upload` 目录在运行时自动创建, 避免文件保存失败.
+
 ### 2026_02_05_1724
 - **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
 - **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
