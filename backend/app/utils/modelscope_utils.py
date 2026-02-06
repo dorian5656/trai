@@ -244,6 +244,39 @@ class ModelScopeUtils:
         
         # Qwen-VL 特有处理逻辑
         if "Qwen" in model_name:
+            # 0. 预处理 messages 中的图片 (支持 base64/blob/url)
+            # qwen_vl_utils.process_vision_info 需要本地路径或可访问的 HTTP URL
+            # 如果是 blob: 开头的 URL，这是浏览器内部地址，后端无法直接访问
+            # 如果是 base64，qwen_vl_utils 通常支持
+            
+            for msg in messages:
+                if msg.get("role") == "user" and isinstance(msg.get("content"), list):
+                    for content_item in msg["content"]:
+                        if content_item.get("type") == "image":
+                            image_url = content_item.get("image", "")
+                            # 如果 image 是 dict 格式 ({"url": "..."})
+                            if isinstance(image_url, dict):
+                                image_url = image_url.get("url", "")
+                                
+                            # 处理 blob: 开头的 URL (无法直接访问)
+                            if image_url.startswith("blob:"):
+                                logger.warning(f"检测到 blob URL: {image_url}，后端无法直接访问。请确保前端上传图片并传递真实 URL 或 Base64。")
+                                raise ValueError(f"不支持 blob: 格式的图片 URL ({image_url})。请先上传图片到服务器，使用 http/https 链接或 base64 编码。")
+                            
+                            # 处理相对路径 /static/... (转为本地绝对路径)
+                            # 场景: 本地上传模式，且没有配置 S3
+                            if image_url.startswith("/static/"):
+                                # 假设项目根目录在 backend/..
+                                # base_dir = /home/code_dev/trai/backend
+                                base_dir = Path(__file__).resolve().parent.parent.parent
+                                # local_path = /home/code_dev/trai/backend/static/...
+                                local_path = base_dir / image_url.lstrip("/")
+                                if local_path.exists():
+                                    logger.info(f"将相对路径转换为本地绝对路径: {image_url} -> {local_path}")
+                                    content_item["image"] = str(local_path)
+                                else:
+                                    logger.warning(f"本地文件不存在: {local_path}")
+                                    
             # 1. 应用聊天模板
             text = processor.apply_chat_template(
                 messages, 

@@ -11,6 +11,7 @@ from backend.app.routers.auth import auth_router
 from backend.app.routers.users import users_router
 from backend.app.routers.ai import chat_router as ai_chat
 from backend.app.routers.ai import image_router as ai_image
+from backend.app.routers.ai import video_router as ai_video
 from backend.app.routers.upload import upload_router
 from backend.app.routers import monitor
 from backend.app.routers import wecom
@@ -29,6 +30,7 @@ api_router.include_router(upload_router.router, prefix="/upload", tags=["文件�
 # 注册 AI 路由
 api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI 智能对话"])
 api_router.include_router(ai_image.router, prefix="/ai/image", tags=["AI 图像服务"])
+api_router.include_router(ai_video.router, prefix="/ai/video", tags=["AI 视频服务"])
 # 注册 监控路由
 api_router.include_router(monitor.router, prefix="/monitor", tags=["系统监控"])
 # 注册 人人都是品牌官 业务路由
