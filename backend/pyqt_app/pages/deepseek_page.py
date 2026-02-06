@@ -15,6 +15,7 @@ import requests
 import os
 import tempfile
 from datetime import datetime
+from .config_loader import config
 
 class ChatLineEdit(QLineEdit):
     """支持图片粘贴的输入框"""
@@ -429,7 +430,7 @@ class DeepSeekPage(QWidget):
             
         try:
             # 构造上传请求
-            url = "http://192.168.100.119:5777/api_trai/v1/upload/common"
+            url = config["deepseek"]["upload_url"]
             headers = {"Authorization": f"Bearer {self.auth_token}"}
             data = {"module": "chat"}
             
@@ -586,19 +587,20 @@ class ChatWorker(QThread):
         self.token = token
         self.content = content
     def run(self):
-        url = "http://192.168.100.119:5777/api_trai/v1/ai/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.token}"
-        }
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "user", "content": self.content}
-            ],
-            "temperature": 0.7
-        }
         try:
+            url = config["deepseek"]["chat_url"]
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.token}"
+            }
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "user", "content": self.content}
+                ],
+                "temperature": 0.7
+            }
+        
             resp = requests.post(url, json=payload, headers=headers, timeout=100)
             if resp.status_code == 200:
                 data = resp.json()

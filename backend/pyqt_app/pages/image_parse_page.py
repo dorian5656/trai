@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 # 文件名：image_parse_page.py
-# 作者：whf
-# 日期：2026-02-05
+# 作者：liuhd
+# 日期：2026-02-05 13:53
 # 描述：图片内容解析页面
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -16,6 +16,7 @@ import tempfile
 from datetime import datetime
 import json
 import sys
+from .config_loader import config
 
 class ChatLineEdit(QLineEdit):
     """支持图片粘贴的输入框"""
@@ -53,7 +54,7 @@ class ImageAnalysisWorker(QThread):
 
     def run(self):
         try:
-            url = "http://192.168.100.119:5777/api_trai/v1/ai/image/chat/image/stream"
+            url = config["image_parse"]["api_url"]
             headers = {
                 "accept": "application/json",
                 "Content-Type": "application/json",
@@ -313,7 +314,7 @@ class FullProcessWorker(QThread):
         file_url = ""
         try:
             # 使用 5777 端口上传
-            upload_url = "http://192.168.100.119:5777/api_trai/v1/upload/common"
+            upload_url = config["image_parse"]["upload_url"]
             headers = {"Authorization": f"Bearer {self.token}"}
             data = {"module": "image_parse"}
             
@@ -346,7 +347,7 @@ class FullProcessWorker(QThread):
 
         # 2. 调用解析 API
         try:
-            analyze_url = "http://192.168.100.119:5777/api_trai/v1/ai/image/chat/image/stream"
+            analyze_url = config["image_parse"]["api_url"]
             headers = {
                 "accept": "application/json",
                 "Content-Type": "application/json",

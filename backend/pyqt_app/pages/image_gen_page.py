@@ -14,6 +14,7 @@ import requests
 import json
 import os
 from datetime import datetime
+from .config_loader import config
 
 class ImageGenWorker(QThread):
     finished_signal = pyqtSignal(bool, str, dict) # success, message, data
@@ -24,20 +25,20 @@ class ImageGenWorker(QThread):
         self.prompt = prompt
 
     def run(self):
-        url = "http://192.168.100.119:5777/api_trai/v1/ai/image/generations"
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "accept": "application/json"
-        }
-        data = {
-            "model": "Z-Image-Turbo",
-            "n": 1,
-            "prompt": self.prompt,
-            "size": "1024x1024"
-        }
-        
         try:
+            url = config["image_gen"]["api_url"]
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "accept": "application/json"
+            }
+            data = {
+                "model": "Z-Image-Turbo",
+                "n": 1,
+                "prompt": self.prompt,
+                "size": "1024x1024"
+            }
+        
             response = requests.post(url, headers=headers, json=data, timeout=120) # 生成图片可能较慢
             if response.status_code == 200:
                 self.finished_signal.emit(True, "生成成功", response.json())

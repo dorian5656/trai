@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QMessageBox, QFrame, QStackedWidget, QGraphicsDropShadowEffect)
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from .config_loader import config
 
 class LoginWorker(QThread):
     finished_signal = pyqtSignal(bool, str, dict)
@@ -21,11 +22,11 @@ class LoginWorker(QThread):
         self.password = password
 
     def run(self):
-        url = "http://192.168.100.119:5777/api_trai/v1/auth/login/json"
-        headers = {"Content-Type": "application/json"}
-        data = {"username": self.username, "password": self.password}
-
         try:
+            url = config["login"]["api_url"]
+            headers = {"Content-Type": "application/json"}
+            data = {"username": self.username, "password": self.password}
+
             response = requests.post(url, json=data, headers=headers, timeout=10)
             if response.status_code == 200:
                 result = response.json()
@@ -53,17 +54,17 @@ class RegisterWorker(QThread):
         self.phone = phone
 
     def run(self):
-        url = "http://192.168.100.119:5777/api_trai/v1/auth/register"
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "username": self.username,
-            "password": self.password,
-            "full_name": self.full_name,
-            "email": self.email,
-            "phone": self.phone
-        }
-
         try:
+            url = config["login"]["register_url"]
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "username": self.username,
+                "password": self.password,
+                "full_name": self.full_name,
+                "email": self.email,
+                "phone": self.phone
+            }
+
             response = requests.post(url, json=data, headers=headers, timeout=10)
             if response.status_code == 200:
                 result = response.json()
@@ -194,8 +195,12 @@ class LoginPage(QWidget):
         layout.addWidget(self.login_pass_input)
 
         # 预填充默认账号密码 (调试用)
-        self.login_user_input.setText("A6666")
-        self.login_pass_input.setText("123456")
+        default_user = config["login"].get("default_username", "")
+        default_pass = config["login"].get("default_password", "")
+        if default_user:
+            self.login_user_input.setText(default_user)
+        if default_pass:
+            self.login_pass_input.setText(default_pass)
 
         # 按钮
         btn_layout = QHBoxLayout()

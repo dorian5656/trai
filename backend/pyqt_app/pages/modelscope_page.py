@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# 文件名：modelscope_tool_gui.py
+# 文件名：modelscope_page.py
 # 作者：liuhd
 # 日期：2026-02-03 09:38:00
 # 描述：ModelScope 模型上传工具 (PyQt6 GUI版)
@@ -25,12 +25,13 @@ sys.path.append(str(Path(__file__).resolve().parents[3]))
 from loguru import logger
 from modelscope.hub.api import HubApi
 from modelscope.hub.snapshot_download import snapshot_download
+from .config_loader import config
 
 # 默认配置
-DEFAULT_MODEL_ID = "TRAI/heart_like"
-DEFAULT_UPLOAD_DIR = r"D:\AI\TRAI\heart_like"
-DEFAULT_DOWNLOAD_DIR = r"D:\AI"
-DEFAULT_ACCESS_TOKEN = "ms-a04e0d45-5264-451d-942c-7638c05a5c93"
+DEFAULT_MODEL_ID = config["modelscope"]["default_model_id"]
+DEFAULT_UPLOAD_DIR = config["modelscope"]["default_upload_dir"]
+DEFAULT_DOWNLOAD_DIR = config["modelscope"]["default_download_dir"]
+DEFAULT_ACCESS_TOKEN = config["modelscope"]["api_key"]
 DEFAULT_COMMIT_MSG = "输入提交模型的说明"
 
 class StreamLogger:
@@ -424,14 +425,14 @@ class ModelScopePage(QWidget):
         # 保存原始 stderr 以便发生错误时恢复或打印
         self.original_stderr = sys.__stderr__ if sys.__stderr__ else sys.stderr
 
-        # 重定向 stdout 和 stderr 到 sink (捕获 tqdm 进度条)
-        # 必须同时替换 sys.stdout/stderr 和 sys.__stdout__/stderr，以防库绕过重定向
-        sys.stdout = self.stream_logger
+        # 重定向 stderr 到 sink (捕获 tqdm 进度条)
+        # 注意：不再重定向 stdout，避免捕获其他模块的 print 输出
+        # sys.stdout = self.stream_logger
         sys.stderr = self.stream_logger
         
         # 尝试覆盖原始流，防止某些库直接使用 sys.__stderr__
         try:
-            sys.__stdout__ = self.stream_logger
+            # sys.__stdout__ = self.stream_logger
             sys.__stderr__ = self.stream_logger
         except AttributeError:
             pass # 某些环境可能不允许修改 __stderr__
