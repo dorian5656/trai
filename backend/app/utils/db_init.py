@@ -853,6 +853,61 @@ class DBInitializer:
             if local_conn:
                 await local_conn.close()
 
+    async def init_ai_video_tasks_table(self, conn):
+        """
+        初始化 AI 视频生成任务表 (ai_video_tasks)
+        """
+        table_name = "ai_video_tasks"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS ai_video_tasks (
+            id SERIAL PRIMARY KEY,
+            task_id VARCHAR(64) NOT NULL UNIQUE,
+            user_id VARCHAR(64),
+            prompt TEXT NOT NULL,
+            model VARCHAR(64) DEFAULT 'Wan2.1-T2V-1.3B',
+            status VARCHAR(32) DEFAULT 'pending',
+            video_url VARCHAR(512),
+            cover_url VARCHAR(512),
+            width INTEGER,
+            height INTEGER,
+            duration FLOAT,
+            cost_time FLOAT,
+            error_msg TEXT,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE ai_video_tasks IS 'AI视频生成任务表';
+        COMMENT ON COLUMN ai_video_tasks.id IS '主键ID';
+        COMMENT ON COLUMN ai_video_tasks.task_id IS '任务ID (UUID)';
+        COMMENT ON COLUMN ai_video_tasks.user_id IS '用户ID';
+        COMMENT ON COLUMN ai_video_tasks.prompt IS '提示词';
+        COMMENT ON COLUMN ai_video_tasks.model IS '模型名称';
+        COMMENT ON COLUMN ai_video_tasks.status IS '状态: pending/processing/success/failed';
+        COMMENT ON COLUMN ai_video_tasks.video_url IS '视频地址 (S3/Local)';
+        COMMENT ON COLUMN ai_video_tasks.cover_url IS '封面图地址';
+        COMMENT ON COLUMN ai_video_tasks.width IS '宽度';
+        COMMENT ON COLUMN ai_video_tasks.height IS '高度';
+        COMMENT ON COLUMN ai_video_tasks.duration IS '视频时长(秒)';
+        COMMENT ON COLUMN ai_video_tasks.cost_time IS '生成耗时(秒)';
+        COMMENT ON COLUMN ai_video_tasks.error_msg IS '错误信息';
+        COMMENT ON COLUMN ai_video_tasks.created_at IS '创建时间';
+        COMMENT ON COLUMN ai_video_tasks.updated_at IS '更新时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_video_tasks_task_id ON ai_video_tasks(task_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_video_tasks_user_id ON ai_video_tasks(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_video_tasks_status ON ai_video_tasks(status)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_video_tasks_created_at ON ai_video_tasks(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "AI视频生成任务表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
     async def init_tables(self):
         """
         连接目标数据库，创建表结构。
@@ -1000,7 +1055,10 @@ class DBInitializer:
             # 6.3 初始化客户留资表
             await self.init_customer_leads_table(conn)
 
-            # 6.4 初始化 Dify 应用表
+            # 6.4 初始化 AI 视频任务表
+            await self.init_ai_video_tasks_table(conn)
+
+            # 6.5 初始化 Dify 应用表
             await self.init_dify_apps_table(conn)
             
             # 7. 初始化超级管理员

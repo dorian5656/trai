@@ -53,6 +53,35 @@ class FeishuBot:
         except Exception as e:
             logger.error(f"飞书消息发送异常: {e}")
 
+    def send_webhook_card(self, card_content: dict, webhook_token: str = None):
+        """
+        发送交互式卡片到飞书 Webhook
+        :param card_content: 卡片内容 (即 card 字段的值)
+        :param webhook_token: Webhook Token
+        """
+        token = webhook_token or self.default_webhook_token
+        if not token:
+            logger.warning("未配置 Webhook Token, 跳过发送飞书卡片")
+            return
+
+        url = f"https://open.feishu.cn/open-apis/bot/v2/hook/{token}"
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "msg_type": "interactive",
+            "card": card_content
+        }
+
+        try:
+            response = requests.post(url, json=data, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+            if result.get("code") == 0 or result.get("StatusCode") == 0:
+                logger.info("飞书卡片发送成功")
+            else:
+                logger.error(f"飞书卡片发送失败: {result}")
+        except Exception as e:
+            logger.error(f"飞书卡片发送异常: {e}")
+
     def get_tenant_access_token(self):
         """
         获取 tenant_access_token (用于调用飞书服务端API)
@@ -116,6 +145,50 @@ class FeishuBot:
                 return None
         except Exception as e:
             logger.error(f"飞书图片上传异常: {e}")
+            return None
+
+    def upload_file(self, file_path: str, file_type: str = "mp4") -> str:
+        """
+        上传文件到飞书并获取 file_key
+        :param file_path: 本地文件路径
+        :param file_type: 文件类型 (mp4, pdf, doc, etc.)
+        :return: file_key or None
+        """
+        token = self.get_tenant_access_token()
+        if not token:
+            return None
+
+        url = "https://open.feishu.cn/open-apis/im/v1/files"
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        try:
+            from pathlib import Path
+            path = Path(file_path)
+            if not path.exists():
+                logger.error(f"文件不存在: {file_path}")
+                return None
+                
+            with open(path, "rb") as f:
+                files = {
+                    "file": (path.name, f, "application/octet-stream")
+                }
+                data = {
+                    "file_type": file_type,
+                    "file_name": path.name
+                }
+                response = requests.post(url, headers=headers, files=files, data=data)
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("code") == 0:
+                    file_key = result.get("data", {}).get("file_key")
+                    logger.info(f"飞书文件上传成功, file_key: {file_key}")
+                    return file_key
+                else:
+                    logger.error(f"飞书文件上传失败: {result}")
+                    return None
+        except Exception as e:
+            logger.error(f"飞书文件上传异常: {e}")
             return None
 
     def send_webhook_post(self, title: str, content: list, webhook_token: str = None):
@@ -196,6 +269,46 @@ class FeishuBot:
             self.send_webhook_message(fallback_content, webhook_token)
         except Exception as e:
             logger.error(f"飞书降级发送也失败: {e}")
+
+    def send_webhook_media(self, file_key: str, image_key: str = None, msg_type: str = "media", webhook_token: str = None):
+        """
+        尝试通过 Webhook 发送媒体消息 (注意: 官方文档通常不支持，这里作为尝试)
+        :param file_key: 文件 Key
+        :param image_key: 封面 Key (可选)
+        :param msg_type: 消息类型 (media/video/file)
+        :param webhook_token: Webhook Token
+        """
+        token = webhook_token or self.default_webhook_token
+        if not token:
+            return False
+
+        url = f"https://open.feishu.cn/open-apis/bot/v2/hook/{token}"
+        headers = {"Content-Type": "application/json"}
+        
+        content = {
+            "file_key": file_key
+        }
+        if image_key:
+            content["image_key"] = image_key
+            
+        data = {
+            "msg_type": msg_type,
+            "content": content
+        }
+
+        try:
+            response = requests.post(url, json=data, headers=headers)
+            # 不抛出异常，只记录结果
+            result = response.json()
+            if result.get("code") == 0 or result.get("StatusCode") == 0:
+                logger.info(f"飞书媒体消息发送成功 ({msg_type})")
+                return True
+            else:
+                logger.warning(f"飞书媒体消息发送失败 ({msg_type}): {result}")
+                return False
+        except Exception as e:
+            logger.error(f"飞书媒体消息发送异常: {e}")
+            return False
 
 # 单例实例
 feishu_bot = FeishuBot()

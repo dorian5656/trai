@@ -65,18 +65,24 @@ class UploadUtils:
         date_str = time.strftime("%Y%m%d")
         file_id = str(uuid.uuid4()).replace("-", "")
         new_filename = f"{file_id}{ext}"
-        object_name = f"{module}/{date_str}/{new_filename}" # S3 Key 或相对路径
+        
+        # Determine prefix based on file_type
+        prefix = "files"
+        if file_type == 'image': 
+            prefix = "images"
+        elif file_type == 'audio': 
+            prefix = "speech"
+        elif file_type == 'video': 
+            prefix = "video"
+            
+        object_name = f"{prefix}/{module}/{date_str}/{new_filename}" # S3 Key 或相对路径
         
         file_size = len(data)
         
         # 4. 判断存储方式
         if settings.S3_ENABLED:
-            # S3 模式
+            # S3 模式 - 统一使用 trai Bucket
             bucket_name = settings.S3_BUCKET_NAME
-            if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
-                bucket_name = settings.S3_IMAGE_BUCKET_NAME
-            elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
-                bucket_name = settings.S3_SPEECH_BUCKET_NAME
             
             session = aioboto3.Session()
             try:
@@ -170,20 +176,26 @@ class UploadUtils:
             # raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
 
         # 3. 生成存储路径
-        # 格式: {module}/{yyyyMMdd}/{uuid}{ext}
+        # 格式: {prefix}/{module}/{yyyyMMdd}/{uuid}{ext}
         date_str = time.strftime("%Y%m%d")
         file_id = str(uuid.uuid4()).replace("-", "")
         new_filename = f"{file_id}{ext}"
-        object_name = f"{module}/{date_str}/{new_filename}" # S3 Key 或相对路径
+        
+        # Determine prefix based on file_type
+        prefix = "files"
+        if file_type == 'image': 
+            prefix = "images"
+        elif file_type == 'audio': 
+            prefix = "speech"
+        elif file_type == 'video': 
+            prefix = "video"
+            
+        object_name = f"{prefix}/{module}/{date_str}/{new_filename}" # S3 Key 或相对路径
         
         # 4. 判断存储方式
         if settings.S3_ENABLED:
             # 确定 Bucket
             bucket_name = settings.S3_BUCKET_NAME
-            if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
-                bucket_name = settings.S3_IMAGE_BUCKET_NAME
-            elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
-                bucket_name = settings.S3_SPEECH_BUCKET_NAME
                 
             return await cls._save_to_s3(file, object_name, bucket_name)
         else:
@@ -291,7 +303,14 @@ class UploadUtils:
                 # 生成访问 URL
                 if settings.S3_PUBLIC_DOMAIN:
                     # 如果配置了 CDN/自定义域名
-                    url = f"{settings.S3_PUBLIC_DOMAIN}/{object_name}"
+                    # 注意: S3_PUBLIC_DOMAIN 应该包含 bucket 名或者路径前缀，视具体配置而定
+                    # 这里假设 S3_PUBLIC_DOMAIN = "https://ai.tuoren.com/trai"
+                    # object_name = "images/gen/..."
+                    # 结果 = "https://ai.tuoren.com/trai/images/gen/..."
+                    
+                    # 移除可能的末尾斜杠
+                    domain = settings.S3_PUBLIC_DOMAIN.rstrip("/")
+                    url = f"{domain}/{object_name}"
                 else:
                     # 默认使用 Endpoint 拼接
                     url = f"{settings.S3_ENDPOINT_URL}/{bucket_name}/{object_name}"
