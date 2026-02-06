@@ -10,7 +10,7 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 #### 1. 激活环境
 
 ```bash
-conda activate trai_31014_whf
+conda activate trai_31014_whf_pro_20260202
 ```
 
 #### 2. 启动服务
@@ -83,8 +83,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf python=3.10.14
-    conda activate trai_31014_whf
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -132,8 +132,69 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_05_1724
+- **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
+- **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
+- **后端**: 清理冗余测试脚本与临时文件.
+
+### 2026_02_04_1649
+- **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
+- **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
+- **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
+- **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
+
+### 2026_02_04_1648
+- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
+- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
+### 2026_02_04_1541
+- **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
+- **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
+- **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
+
+### 2026_02_04_1415
+- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
+- **后端**: 修正 YOLO 模型加载路径配置 (`config.py`).
+
+### 2026_02_04_1130
+- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
+- **构建**: 更新 Vite 配置与通用组件 (`SimilarityDialog`).
+
+### 2026_02_04_0936
+- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
+- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
+- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
+- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
+
+### 2026_02_03_1723
+- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
+- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
+- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
+
+### 2026_02_03_1108
+- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
+- **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
+
+
+### 2026_02_03_1015
+- **后端**: 修复留资模块 (`contact`) 文件头模板不符合规范的问题.
+- **后端**: 同步更新 `.env.example` 配置文件, 补充企业微信、飞书、纷享销客等配置项.
+- **文档**: 更新 README.md 中的 PaddleOCR 和 Torch 版本号.
+
+### 2026_02_03_1000
+- **后端**: 留资模块功能完善与修复.
+  - 留资通知支持多邮箱 (QQ/163) 和 飞书 Webhook 同步.
+  - 修复数据库插入事务提交问题 (`PGUtils.fetch_one_commit`), 解决数据未持久化 BUG.
+
+### 2026_02_03_0929
+- **后端**: 新增客户留资业务模块 (`contact`), 支持数据入库与邮件通知.
+- **后端**: 实现 `customer_leads` 表的自动初始化与元数据注册.
+- **后端**: 规范化 API 文档注释 (Args/Returns), 并修复配置项兼容性问题.
+- **后端**: 重构 `DBInitializer`, 统一管理所有业务表的创建与迁移.
+
 ### 2026_02_02_1719
-- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 2.6.1/2.5.2) 并优化 GPU 检测逻辑.
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 `paddleocr==2.6.1.3`, `paddlepaddle-gpu==2.5.2`) 并锁定 `torch==2.10.0`, 优化 GPU 检测逻辑.
 - **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
 
 ### 2026_02_02_1618
@@ -190,6 +251,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 功能增强: 新增自动登录、系统托盘、退出/注销选项.
   - 图像识别: 修复 S3 上传路径错误, 增加拖拽上传与多模态对话功能.
   - 打包优化: `build.py` 支持自动包含图标 (`pppg.ico`).
+
+### 2026_02_05_0931
+- **后端**: 修复依赖版本冲突, 确保环境稳定性.
+  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
+  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
+  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
+  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
 
 ### 2026_01_29_1353
 - **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.
@@ -436,6 +504,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
 - **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
 - **前端**: 完成移动端抽屉式导航与自适应布局开发.
+
+### 2026_02_04_1012
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
 
 ### 2026_01_26_1644
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.

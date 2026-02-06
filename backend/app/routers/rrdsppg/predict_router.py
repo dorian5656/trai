@@ -39,12 +39,25 @@ from pydantic import BaseModel, Field
 
 class YoloRequest(BaseModel):
     # conf: Optional[float] = Field(0.25, description="置信度阈值") # 已废弃
-    taskId: Optional[int] = Field(None, description="任务ID")
-    userId: Optional[int] = Field(None, description="用户ID")
-    type: Optional[int] = Field(None, description="类型")
-    itzx: Optional[int] = Field(None, description="来源标识")
-    templatePath: Optional[str] = Field(None, description="模板图片URL (用于比对)")
-    targetPath: Optional[str] = Field(None, description="目标图片URL")
+    taskId: Optional[int] = Field(None, description="任务ID", examples=[1001])
+    userId: Optional[int] = Field(None, description="用户ID", examples=[101])
+    type: Optional[int] = Field(None, description="类型", examples=[1])
+    itzx: Optional[int] = Field(None, description="来源标识", examples=[0])
+    templatePath: Optional[str] = Field(None, description="模板图片URL (用于比对)", examples=["https://example.com/template.jpg"])
+    targetPath: Optional[str] = Field(None, description="目标图片URL", examples=["https://example.com/target.jpg"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "taskId": 1001,
+                "userId": 101,
+                "type": 1,
+                "itzx": 0,
+                "templatePath": "https://example.com/template.jpg",
+                "targetPath": "https://example.com/target.jpg"
+            }
+        }
+    }
 
 import os
 

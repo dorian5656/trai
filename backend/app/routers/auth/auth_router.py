@@ -14,7 +14,7 @@ router = APIRouter()
 @router.post("/login", response_model=Token, summary="用户登录")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """
-    OAuth2 兼容的 Token 登录接口
+    OAuth2 兼容的 Token 登录接口 (Content-Type: application/x-www-form-urlencoded)
 
     Args:
         form_data (OAuth2PasswordRequestForm): 表单数据
@@ -26,6 +26,31 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             - access_token (str): JWT Token
             - token_type (str): Bearer
     """
+    return await AuthFunc.login_for_access_token(form_data)
+
+class LoginRequest(UserCreate):
+    pass
+
+@router.post("/login/json", response_model=Token, summary="用户登录 (JSON)")
+async def login_json(user_in: LoginRequest):
+    """
+    JSON 格式的 Token 登录接口 (Content-Type: application/json)
+
+    Args:
+        user_in (LoginRequest): 登录数据
+            - username (str): 用户名
+            - password (str): 密码
+
+    Returns:
+        Token: 访问令牌
+    """
+    # 构造 OAuth2PasswordRequestForm 兼容对象
+    class MockForm:
+        def __init__(self, username, password):
+            self.username = username
+            self.password = password
+            
+    form_data = MockForm(username=user_in.username, password=user_in.password)
     return await AuthFunc.login_for_access_token(form_data)
 
 @router.post("/wecom-login", response_model=Token, summary="企业微信静默登录")

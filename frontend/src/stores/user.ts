@@ -5,9 +5,10 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { login as loginApi, type LoginParams } from '@/api/auth';
+import { login as loginApi, wecomLogin as wecomLoginApi, type LoginParams } from '@/api/auth';
 import { getUserInfo, type UserInfo } from '@/api/user';
 import { ElMessage } from 'element-plus';
+import { useAppStore } from './app';
 
 export const useUserStore = defineStore('user', () => {
   // State
@@ -26,14 +27,48 @@ export const useUserStore = defineStore('user', () => {
   const login = async (loginForm: LoginParams) => {
     try {
       const res = await loginApi(loginForm);
+      if (!res || !res.access_token) {
+        throw new Error('登录响应格式错误: 缺少 access_token');
+      }
       token.value = res.access_token;
       localStorage.setItem('token', res.access_token);
       
       // 登录成功后立即获取用户信息
       await fetchUserInfo();
+      
+      // 关闭登录模态框
+      const appStore = useAppStore();
+      appStore.closeLoginModal();
+      
       return true;
     } catch (error) {
       console.error('登录失败:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * 企业微信登录
+   */
+  const loginByWecom = async (code: string) => {
+    try {
+      const res = await wecomLoginApi(code);
+      if (!res || !res.access_token) {
+        throw new Error('登录响应格式错误: 缺少 access_token');
+      }
+      token.value = res.access_token;
+      localStorage.setItem('token', res.access_token);
+      
+      // 登录成功后立即获取用户信息
+      await fetchUserInfo();
+      
+      // 关闭登录模态框
+      const appStore = useAppStore();
+      appStore.closeLoginModal();
+      
+      return true;
+    } catch (error) {
+      console.error('企业微信登录失败:', error);
       throw error;
     }
   };
@@ -80,6 +115,7 @@ export const useUserStore = defineStore('user', () => {
     token.value = '';
     userInfo.value = null;
     localStorage.removeItem('token');
+    
     ElMessage.success('已退出登录');
   };
 
@@ -99,6 +135,7 @@ export const useUserStore = defineStore('user', () => {
     username,
     avatar,
     login,
+    loginByWecom,
     logout,
     fetchUserInfo,
     init,

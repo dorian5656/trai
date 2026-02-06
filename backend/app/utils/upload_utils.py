@@ -10,6 +10,7 @@ import uuid
 import time
 import json
 import aioboto3
+import aiofiles
 from pathlib import Path
 from typing import List, Optional, Tuple
 from fastapi import UploadFile, HTTPException
@@ -363,3 +364,151 @@ class UploadUtils:
             if ext in extensions:
                 return type_name
         return None
+
+    # =========================================================================
+    # 分片上传支持
+    # =========================================================================
+
+    @classmethod
+    def get_chunk_dir(cls, upload_id: str) -> Path:
+        """获取分片临时存储目录"""
+        chunk_dir = cls.BASE_UPLOAD_DIR / ".chunks" / upload_id
+        if not chunk_dir.exists():
+            chunk_dir.mkdir(parents=True, exist_ok=True)
+        return chunk_dir
+
+    @classmethod
+    async def save_chunk(cls, upload_id: str, part_number: int, data: bytes) -> str:
+        """保存单个分片"""
+        chunk_dir = cls.get_chunk_dir(upload_id)
+        # 使用 padding 格式文件名方便排序 (part_0001, part_0002...)
+        chunk_path = chunk_dir / f"part_{part_number:05d}"
+        
+        try:
+            # 异步写文件
+            import aiofiles
+            async with aiofiles.open(chunk_path, "wb") as f:
+                await f.write(data)
+            return str(chunk_path)
+        except Exception as e:
+            logger.error(f"保存分片失败: {e}")
+            raise HTTPException(status_code=500, detail="分片保存失败")
+
+    @classmethod
+    async def merge_chunks(cls, upload_id: str, filename: str, total_parts: int, module: str = "common") -> Tuple[str, str, int]:
+        """
+        合并分片并保存为最终文件
+        """
+        chunk_dir = cls.get_chunk_dir(upload_id)
+        if not chunk_dir.exists():
+            raise HTTPException(status_code=404, detail="分片任务不存在或已过期")
+
+        # 1. 检查分片完整性
+        # 列出所有 part_xxxxx 文件
+        chunks = sorted([p for p in chunk_dir.glob("part_*")])
+        if len(chunks) != total_parts:
+            # 检查是否有遗漏
+            existing_indices = {int(p.name.split('_')[1]) for p in chunks}
+            missing = set(range(1, total_parts + 1)) - existing_indices
+            if missing:
+                raise HTTPException(status_code=400, detail=f"分片不完整，缺失: {list(missing)[:10]}...")
+        
+        # 2. 合并文件
+        date_str = time.strftime("%Y%m%d")
+        ext = Path(filename).suffix.lower() or ".bin"
+        new_filename = f"{upload_id}{ext}"  # 使用 upload_id 作为文件名，保证唯一性
+        
+        # 最终合并后的本地临时路径
+        merged_temp_path = chunk_dir / new_filename
+        
+        try:
+            with open(merged_temp_path, "wb") as outfile:
+                for chunk_path in chunks:
+                    with open(chunk_path, "rb") as infile:
+                        shutil.copyfileobj(infile, outfile)
+            
+            file_size = merged_temp_path.stat().st_size
+            
+            # 3. 移动/上传到最终位置 (复用 save_from_bytes 逻辑，但这里已经有文件了)
+            # 为了复用逻辑且支持 S3，我们读取合并后的文件内容再调用 save_from_bytes
+            # 或者优化：如果是本地存储，直接 move；如果是 S3，则上传。
+            
+            object_name = f"{module}/{date_str}/{new_filename}"
+            
+            if settings.S3_ENABLED:
+                # S3 模式：读取文件流上传
+                # 注意：对于超大文件，这里应该使用 multipart upload，但为了复用 _save_to_s3，暂且读入内存
+                # TODO: 优化 S3 大文件上传
+                async with aiofiles.open(merged_temp_path, "rb") as f:
+                    file_content = await f.read()
+                
+                # 获取文件类型以确定 Bucket
+                file_type = cls._get_file_type(ext)
+                bucket_name = settings.S3_BUCKET_NAME
+                if file_type == 'image' and settings.S3_IMAGE_BUCKET_NAME:
+                    bucket_name = settings.S3_IMAGE_BUCKET_NAME
+                elif file_type == 'audio' and settings.S3_SPEECH_BUCKET_NAME:
+                    bucket_name = settings.S3_SPEECH_BUCKET_NAME
+                    
+                # 构造一个模拟的 UploadFile (这有点 hack，但能复用 _save_to_s3)
+                # 或者直接调用底层 boto3
+                
+                session = aioboto3.Session()
+                async with session.client(
+                    's3',
+                    endpoint_url=settings.S3_ENDPOINT_URL,
+                    aws_access_key_id=settings.S3_ACCESS_KEY,
+                    aws_secret_access_key=settings.S3_SECRET_KEY,
+                    region_name=settings.S3_REGION_NAME
+                ) as s3:
+                    await s3.put_object(
+                        Bucket=bucket_name,
+                        Key=object_name,
+                        Body=file_content,
+                        ACL='public-read'
+                    )
+                    
+                    if settings.S3_PUBLIC_DOMAIN:
+                        url = f"{settings.S3_PUBLIC_DOMAIN}/{object_name}"
+                    else:
+                        url = f"{settings.S3_ENDPOINT_URL}/{bucket_name}/{object_name}"
+                        
+                    result = (url, object_name, file_size)
+            else:
+                # 本地模式：移动文件
+                final_dir = cls.BASE_UPLOAD_DIR / module / date_str
+                if not final_dir.exists():
+                    final_dir.mkdir(parents=True, exist_ok=True)
+                
+                final_path = final_dir / new_filename
+                shutil.move(str(merged_temp_path), str(final_path))
+                
+                relative_path = f"/static/uploads/{module}/{date_str}/{new_filename}"
+                result = (relative_path, str(final_path), file_size)
+                
+            # 4. 清理分片目录
+            shutil.rmtree(chunk_dir)
+            logger.info(f"分片合并完成并清理: {upload_id} -> {result[0]}")
+            
+            return result
+
+        except Exception as e:
+            logger.error(f"合并分片失败: {e}")
+            raise HTTPException(status_code=500, detail=f"合并失败: {str(e)}")
+
+    @classmethod
+    def get_uploaded_chunks(cls, upload_id: str) -> List[int]:
+        """获取已上传的分片编号列表"""
+        chunk_dir = cls.BASE_UPLOAD_DIR / ".chunks" / upload_id
+        if not chunk_dir.exists():
+            return []
+        
+        # 提取文件名中的 part_xxxxx
+        indices = []
+        for p in chunk_dir.glob("part_*"):
+            try:
+                idx = int(p.name.split('_')[1])
+                indices.append(idx)
+            except:
+                pass
+        return sorted(indices)

@@ -56,12 +56,12 @@
           <label>所在区域 <span class="required">*</span></label>
           <input 
             type="text" 
-            v-model="formState.contact.zona" 
+            v-model="formState.contact.region" 
             placeholder="例如：河南省长垣市"
-            :class="{ 'error': formState.errors.zona }"
-            @input="formState.errors.zona = ''"
+            :class="{ 'error': formState.errors.region }"
+            @input="formState.errors.region = ''"
           />
-          <span class="error-msg" v-if="formState.errors.zona">{{ formState.errors.zona }}</span>
+          <span class="error-msg" v-if="formState.errors.region">{{ formState.errors.region }}</span>
         </div>
         
         <div class="form-actions">
@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { reactive, onMounted } from 'vue';
-import { submitCustomerInfo, type CustomerData } from '@/api/customer';
+import { submitContactLead } from '@/api/contact';
 
 const emit = defineEmits(['close', 'submit']);
 
@@ -99,13 +99,13 @@ const formState = reactive({
     name: '',
     phone: '',
     product: '',
-    zona: ''
-  } as CustomerData,
+    region: ''
+  },
   errors: {
     name: '',
     phone: '',
     product: '',
-    zona: ''
+    region: ''
   },
   submitResult: {
     success: false,
@@ -155,12 +155,12 @@ const validateForm = () => {
   }
 
   // Zona validation
-  const zona = formState.contact.zona.trim();
-  if (!zona) {
-    formState.errors.zona = '请填写您所在的区域';
+  const region = formState.contact.region.trim();
+  if (!region) {
+    formState.errors.region = '请填写您所在的区域';
     isValid = false;
   } else {
-    formState.errors.zona = '';
+    formState.errors.region = '';
   }
 
   return isValid;
@@ -174,18 +174,25 @@ const submitContactForm = async () => {
     formState.submitResult.showResult = false;
     
     try {
-      const result = await submitCustomerInfo(formState.contact);
+      const result = await submitContactLead(formState.contact);
       
-      formState.submitResult = {
-        success: result.success,
-        message: result.message,
-        showResult: true
-      };
+      if (result.code === 200) {
+        formState.submitResult = {
+          success: true,
+          message: result.msg,
+          showResult: true
+        };
+      } else {
+        formState.submitResult = {
+          success: false,
+          message: result.msg,
+          showResult: true
+        };
+      }
       
-      if (result.success) {
+      if (result.code === 200) {
         setTimeout(() => {
           emit('submit', formState.contact);
-          // handleClose(); // Let user close it or close automatically
         }, 1500);
       }
       

@@ -16,11 +16,13 @@ async def get_wecom_user(user_id: str = Query(..., description="企业微信用�
     """
     根据 ID 获取企业微信用户详情
 
-    Args:
-        user_id (str): 企业微信用户ID
+    **Args:**
 
-    Returns:
-        dict: 用户信息
+    - `user_id` (str): 企业微信用户ID
+
+    **Returns:**
+
+    - `dict`: 用户信息
     """
     try:
         data = await wecom_service.get_user_info(user_id)
@@ -33,11 +35,13 @@ async def get_wecom_departments(id: int = Query(None, description="部门ID")):
     """
     获取企业微信部门列表
 
-    Args:
-        id (int, optional): 部门ID (不传则获取全量/根部门)
+    **Args:**
 
-    Returns:
-        dict: 部门列表数据
+    - `id` (int, optional): 部门ID (不传则获取全量/根部门)
+
+    **Returns:**
+
+    - `dict`: 部门列表数据
     """
     try:
         data = await wecom_service.get_departments(id)
@@ -50,8 +54,9 @@ async def sync_wecom_data():
     """
     同步企业微信的部门和用户数据到本地数据库 (sys_departments, sys_users)
 
-    Returns:
-        dict: 同步结果统计
+    **Returns:**
+
+    - `dict`: 同步结果统计
     """
     try:
         data = await wecom_service.sync_data()

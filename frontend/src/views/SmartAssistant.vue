@@ -704,6 +704,14 @@ $shadow: rgba(0, 0, 0, 0.15);
       :deep(code) { font-family: monospace; }
       :deep(.leave-contact) { cursor: pointer; color: $primary; text-decoration: underline; }
       
+      /* 限制图片大小，确保完整显示 */
+      :deep(img) {
+        max-width: 100%;
+        max-height: 300px;
+        object-fit: contain;
+        border-radius: 4px;
+      }
+      
       &.thinking {
         position: relative;
         &:after {
