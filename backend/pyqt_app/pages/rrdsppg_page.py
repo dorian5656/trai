@@ -1,3 +1,11 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# 文件名：rrdsppg_page.py
+# 作者：liuhd
+# 日期：2026-02-06 11:55:00
+# 描述：RRDSPPG 测试工具 (PyQt6 GUI版)
+
 import os
 import requests
 import json
@@ -15,46 +23,7 @@ from PyQt6.QtCore import (
     Qt, QThread, pyqtSignal, QRegularExpression
 )
 import threading
-
-# 配置文件处理
-
-
-CONFIG_FILE = "config.json"
-
-DEFAULT_CONFIG = {
-    "API_URL": "http://192.168.100.119:5777/api_trai/v1/rrdsppg/predict",
-    "UPDATE_CHECK_URL": "http://192.168.100.119:5777/static/update/version.json"
-}
-
-def load_config():
-    """加载配置文件，优先查找当前工作目录"""
-    config = DEFAULT_CONFIG.copy()
-    
-    # 尝试在当前目录查找 config.json
-    config_path = os.path.join(os.getcwd(), CONFIG_FILE)
-    
-    # 如果当前目录不存在，尝试在 pages 目录 (兼容旧逻辑)
-    if not os.path.exists(config_path):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(current_dir, CONFIG_FILE)
-        
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                user_config = json.load(f)
-                config.update(user_config)
-        except Exception as e:
-            print(f"读取配置文件失败: {e}, 使用默认配置")
-    else:
-        # 如果都不存在，不需要强制创建，使用默认配置即可
-        # 或者在当前目录创建
-        pass
-            
-    return config
-
-# 加载配置
-APP_CONFIG = load_config()
-API_URL = APP_CONFIG["API_URL"]
+from .config_loader import config
 
 class OCRWorker(QThread):
     """OCR处理线程"""
@@ -62,10 +31,11 @@ class OCRWorker(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
     
-    def __init__(self, params, token=""):
+    def __init__(self, params, token="", api_url=None):
         super().__init__()
         self.params = params
         self.token = token
+        self.api_url = api_url or config["rrdsppg"]["api_url"]
     
     def run(self):
         try:
@@ -78,7 +48,7 @@ class OCRWorker(QThread):
             # 使用 multipart/form-data
             # 注意：requests 会自动设置 Content-Type 为 multipart/form-data; boundary=...
             files = {'file': ('', b'')} 
-            response = requests.post(API_URL, data=self.params, files=files, headers=headers, timeout=30)
+            response = requests.post(self.api_url, data=self.params, files=files, headers=headers, timeout=30)
             self.progress.emit(80)
             
             if response.status_code == 200:
@@ -308,8 +278,12 @@ class RrdsppgPage(QWidget):
         self.target_preview = ImagePreview("目标图片")
         
         # 设置默认URL
-        self.template_preview.url_edit.setText("http://192.168.0.190:12001/tr-citizen-brand-prod/images/2026/01/22/960fe4fbbb27499489f5dc9c489b04c3.png")
-        self.target_preview.url_edit.setText("https://referral.tuoren.com/dxcc/tr-citizen-brand-prod/images/2026/01/22/4875094a9d5e4c9dafe2abe9b603d02b.png")
+        template_url = config["rrdsppg"].get("template_url", "")
+        target_url = config["rrdsppg"].get("target_url", "")
+        if template_url:
+            self.template_preview.url_edit.setText(template_url)
+        if target_url:
+            self.target_preview.url_edit.setText(target_url)
         
         # 添加到布局
         template_layout = QVBoxLayout()
@@ -338,7 +312,7 @@ class RrdsppgPage(QWidget):
         task_layout = QHBoxLayout()
         task_label = QLabel("Task ID:")
         self.task_id_edit = QLineEdit()
-        self.task_id_edit.setText("1988090904354787346")
+        self.task_id_edit.setText(config["rrdsppg"].get("task_id", ""))
         id_validator = QRegularExpressionValidator(QRegularExpression("^[0-9]{1,25}$"))
         self.task_id_edit.setValidator(id_validator)
         
@@ -350,7 +324,7 @@ class RrdsppgPage(QWidget):
         user_layout = QHBoxLayout()
         user_label = QLabel("User ID:")
         self.user_id_edit = QLineEdit()
-        self.user_id_edit.setText("1988090904354787346")
+        self.user_id_edit.setText(config["rrdsppg"].get("user_id", ""))
         self.user_id_edit.setValidator(id_validator)
         
         user_layout.addWidget(user_label)
@@ -370,8 +344,8 @@ class RrdsppgPage(QWidget):
             QComboBox { font-size: 14px; padding: 5px; }
             QComboBox QAbstractItemView::item { min-height: 35px; }
         """)
-        self.type_combo.addItem("视频号", "1996827967950909442")
-        self.type_combo.addItem("公众号转发", "1997929948761825282")
+        self.type_combo.addItem("视频号", config["rrdsppg"].get("type_video", ""))
+        self.type_combo.addItem("公众号转发", config["rrdsppg"].get("type_public", ""))
         
         type_layout.addWidget(type_label)
         type_layout.addWidget(type_hint)
@@ -393,8 +367,8 @@ class RrdsppgPage(QWidget):
         api_layout = QHBoxLayout()
         api_label = QLabel("API地址:")
         self.api_edit = QLineEdit()
-        self.api_edit.setText(API_URL)
-        self.api_edit.setReadOnly(True)
+        self.api_edit.setText(config["rrdsppg"]["api_url"])
+        # self.api_edit.setReadOnly(True)
         api_layout.addWidget(api_label)
         api_layout.addWidget(self.api_edit)
         main_layout.addLayout(api_layout)
@@ -495,7 +469,8 @@ class RrdsppgPage(QWidget):
         self.progress_bar.setValue(0)
         self.run_button.setEnabled(False)
         
-        self.worker = OCRWorker(params, self.token)
+        current_api_url = self.api_edit.text().strip()
+        self.worker = OCRWorker(params, self.token, api_url=current_api_url)
         self.worker.finished.connect(self.on_ocr_finished)
         self.worker.error.connect(self.on_ocr_error)
         self.worker.progress.connect(self.update_progress)
