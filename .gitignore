@@ -101,17 +101,11 @@ backend/app/models/.lock/
 **/temp/
 
 # Large AI Models
-backend/app/models/Tongyi-MAI/
-backend/app/models/iic/
+backend/app/models/Wan-AI/
 backend/app/models/Qwen/
 backend/app/models/Robbyant/
-
-# Test Files
-test_audio.wav
-scripts/
-*.wav
-*.mp3
-*.m4a
-*.mp4
-
-scripts/
+backend/app/models/Tongyi-MAI/
+backend/app/models/iic/
+backend/app/models/*.pth
+backend/app/models/*.safetensors
+backend/app/models/*.bin

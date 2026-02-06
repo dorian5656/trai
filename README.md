@@ -63,6 +63,23 @@ python backend/client_app/client_main.py
 python backend/client_app/build.py
 ```
 
+## 📹 AI 视频生成 (Wan2.1)
+
+项目集成了 Wan2.1-T2V-1.3B 模型，支持文本生成视频。
+
+### 特性
+- **文本生成视频**: 支持中文/英文提示词
+- **自动封面提取**: 使用 OpenCV 自动提取视频第一帧作为封面
+- **飞书通知**: 任务状态变更及生成结果自动推送到飞书群 (支持交互式卡片)
+- **异步处理**: 后台异步生成，不阻塞 API 响应
+
+### 接口
+`POST /api_trai/v1/ai/video/generations`
+
+### 依赖
+- `opencv-python-headless`: 用于视频帧提取
+- GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
+
 ## 📚 接口文档 (API Docs)
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
