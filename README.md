@@ -149,6 +149,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_09_1351
+- **客户端**: 更新主窗体图标为 `tr_mascot_local.ico`.
+- **客户端**: 优化图片内容解析模块的图片上传逻辑，增加图片拖拽上传.
+- **客户端**: 新增系统监控模块, 包括四个功能：GPU环境检测、系统资源监控、获取所有模型状态、系统健康检查.
+
 ### 2026_02_09_1050
 - **后端**: 重构文档工具 (doc), 规范化文件命名 (doc_func/doc_router) 与路由路径 (/md2pdf).
 - **后端**: 优化通知逻辑, 统一使用 NotifyUtils 处理文件上传通知.
