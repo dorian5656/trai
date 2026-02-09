@@ -80,6 +80,19 @@ python backend/client_app/build.py
 - `opencv-python-headless`: 用于视频帧提取
 - GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
 
+## 🕷️ 网络爬虫 (Crawler)
+
+本项目集成了 Scrapy 爬虫框架，用于采集网络公开信息。
+
+### 快速开始
+
+```bash
+cd backend/app/crawler/xiaomi_crawler
+scrapy crawl xiaomi_news
+```
+
+爬取结果将保存至同目录下的 `xiaomi_news.csv` 文件。
+
 ## 📚 接口文档 (API Docs)
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
@@ -148,6 +161,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 2026_02_09_1700
+- **后端**: 新增 Scrapy 爬虫模块 (backend/app/crawler), 实现小米新闻/搜索结果的自动采集与 CSV 导出.
+- **后端**: 增加 scrapy 依赖, 更新 requirements.txt.
 
 ### 2026_02_09_1532
 - **后端**: 更新项目依赖包 (requirements.txt), 补充文档转换工具相关库 (pikepdf, xhtml2pdf, easyofd 等).
