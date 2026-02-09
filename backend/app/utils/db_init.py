@@ -908,6 +908,8 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+
+
     async def init_tables(self):
         """
         连接目标数据库，创建表结构。
@@ -1060,6 +1062,8 @@ class DBInitializer:
 
             # 6.5 初始化 Dify 应用表
             await self.init_dify_apps_table(conn)
+
+
             
             # 7. 初始化超级管理员
             await self.init_superuser(conn)

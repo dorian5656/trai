@@ -149,6 +149,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_09_1050
+- **后端**: 重构文档工具 (doc), 规范化文件命名 (doc_func/doc_router) 与路由路径 (/md2pdf).
+- **后端**: 优化通知逻辑, 统一使用 NotifyUtils 处理文件上传通知.
+- **后端**: 清理废弃的 sys_files 表初始化与临时测试代码.
+
 ### 2026_02_06_1734
 - **后端**: 修复 S3 上传逻辑 (upload_utils), 统一使用 trai Bucket 并修复配置读取错误.
 - **后端**: 增强 ModelScopeUtils 图像处理, 支持本地相对路径并拦截 blob URL 错误.
