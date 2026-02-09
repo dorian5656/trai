@@ -149,6 +149,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_09_1532
+- **后端**: 更新项目依赖包 (requirements.txt), 补充文档转换工具相关库 (pikepdf, xhtml2pdf, easyofd 等).
+
 ### 2026_02_09_1528
 - **后端**: 修复文档处理安全风险与逻辑缺陷.
   - 修复 `user_docs` 表 `updated_at` 字段不自动更新问题 (添加触发器).
