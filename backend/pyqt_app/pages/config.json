@@ -32,5 +32,11 @@
         "user_id": "1988090904354787346",
         "type_video": "1996827967950909442",
         "type_public": "1997929948761825282"
+    },
+    "system_monitor": {
+        "gpu_url": "http://192.168.100.119:5777/api_trai/v1/monitor/env/gpu",
+        "system_url": "http://192.168.100.119:5777/api_trai/v1/monitor/env/system",
+        "models_url": "http://192.168.100.119:5777/api_trai/v1/monitor/models",
+        "health_url": "http://192.168.100.119:5777/api_trai/v1/monitor/health"
     }
 }

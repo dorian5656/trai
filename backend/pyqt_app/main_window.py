@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
 
-from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage
+from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -21,7 +21,7 @@ class MainWindow(QMainWindow):
         self.user_token = ""
         
         # 设置窗口图标
-        icon_path = os.path.join(os.path.dirname(__file__), "icon", "icon.ico")
+        icon_path = os.path.join(os.path.dirname(__file__), "icon", "tr_mascot_local.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
             
@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
         self.add_sidebar_item("AI 文生图", "🎨")
         self.add_sidebar_item("图片内容解析", "👁️")
         self.add_sidebar_item("人人都是品牌官", "📝")
+        self.add_sidebar_item("系统监控", "📊")
         
         # 将组件加入侧边栏容器
         self.sidebar_layout.addWidget(self.top_header)
@@ -97,6 +98,7 @@ class MainWindow(QMainWindow):
         self.image_gen_page = ImageGenPage()
         self.image_parse_page = ImageParsePage()
         self.rrdsppg_page = RrdsppgPage()
+        self.system_monitor_page = SystemMonitorPage()
         
         # 添加页面到堆叠窗口
         self.stacked_widget.addWidget(self.login_page)
@@ -105,6 +107,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.image_gen_page)
         self.stacked_widget.addWidget(self.image_parse_page)
         self.stacked_widget.addWidget(self.rrdsppg_page)
+        self.stacked_widget.addWidget(self.system_monitor_page)
         
         # 添加到主布局
         main_layout.addWidget(self.sidebar_container)
