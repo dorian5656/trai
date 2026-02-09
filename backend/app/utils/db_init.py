@@ -323,6 +323,74 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+    async def init_user_docs_table(self, conn):
+        """
+        初始化用户文档表 (user_docs)
+        支持上传和转换生成的文档记录
+        """
+        table_name = "user_docs"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS user_docs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            s3_key VARCHAR(500),
+            url TEXT NOT NULL,
+            size BIGINT,
+            mime_type VARCHAR(100),
+            module VARCHAR(50) DEFAULT 'common',
+            source VARCHAR(20) DEFAULT 'upload', -- upload, generated, converted
+            prompt TEXT, -- 如果是 AI 生成的文档
+            meta_data JSONB, -- 扩展信息 (如转换耗时, 原文件ID等)
+            is_deleted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        
+        -- 创建更新触发器函数 (如果不存在)
+        CREATE OR REPLACE FUNCTION update_timestamp()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = (NOW() AT TIME ZONE 'Asia/Shanghai');
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        -- 创建触发器
+        DROP TRIGGER IF EXISTS update_user_docs_timestamp ON user_docs;
+        CREATE TRIGGER update_user_docs_timestamp
+        BEFORE UPDATE ON user_docs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_timestamp();
+
+        COMMENT ON TABLE user_docs IS '用户文档表，存储上传和转换生成的文档记录';
+        COMMENT ON COLUMN user_docs.id IS '主键ID';
+        COMMENT ON COLUMN user_docs.user_id IS '用户ID';
+        COMMENT ON COLUMN user_docs.filename IS '文件名';
+        COMMENT ON COLUMN user_docs.s3_key IS 'S3对象键';
+        COMMENT ON COLUMN user_docs.url IS '访问URL';
+        COMMENT ON COLUMN user_docs.size IS '文件大小(字节)';
+        COMMENT ON COLUMN user_docs.mime_type IS 'MIME类型';
+        COMMENT ON COLUMN user_docs.module IS '所属模块';
+        COMMENT ON COLUMN user_docs.source IS '来源 (upload:上传, generated:生成, converted:转换)';
+        COMMENT ON COLUMN user_docs.meta_data IS '元数据';
+        COMMENT ON COLUMN user_docs.is_deleted IS '是否删除';
+        COMMENT ON COLUMN user_docs.created_at IS '创建时间';
+        COMMENT ON COLUMN user_docs.updated_at IS '更新时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_docs_user_id ON user_docs(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_docs_created_at ON user_docs(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "用户文档表，存储上传和转换生成的文档记录")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
     async def init_rbac_tables(self, conn):
         """
         初始化 RBAC 相关表结构 (用户/角色/权限/部门)
@@ -908,6 +976,8 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+
+
     async def init_tables(self):
         """
         连接目标数据库，创建表结构。
@@ -1049,10 +1119,13 @@ class DBInitializer:
             # 6.1 初始化用户音频表
             await self.init_user_audios_table(conn)
 
-            # 6.2 初始化聊天消息表
+            # 6.2 初始化用户文档表
+            await self.init_user_docs_table(conn)
+
+            # 6.3 初始化聊天消息表
             await self.init_chat_messages_table(conn)
             
-            # 6.3 初始化客户留资表
+            # 6.4 初始化客户留资表
             await self.init_customer_leads_table(conn)
 
             # 6.4 初始化 AI 视频任务表
@@ -1060,6 +1133,8 @@ class DBInitializer:
 
             # 6.5 初始化 Dify 应用表
             await self.init_dify_apps_table(conn)
+
+
             
             # 7. 初始化超级管理员
             await self.init_superuser(conn)

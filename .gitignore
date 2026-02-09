@@ -109,3 +109,4 @@ backend/app/models/iic/
 backend/app/models/*.pth
 backend/app/models/*.safetensors
 backend/app/models/*.bin
+node_modules

@@ -104,6 +104,53 @@ class AIManager:
             logger.error(f"❌ 保存对话消息失败: {e}")
 
     @staticmethod
+    async def get_session_messages(session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        获取指定会话的历史消息列表 (按时间正序)
+        """
+        try:
+            engine = PGUtils.get_engine()
+            async with engine.begin() as conn:
+                # 查询最近的 N 条消息，然后按时间正序排列
+                # 注意: 我们需要先按时间倒序取 limit 条，再反转回来
+                result = await conn.execute(
+                    text("""
+                        SELECT role, content
+                        FROM (
+                            SELECT role, content, created_at
+                            FROM chat_messages
+                            WHERE session_id = :session_id AND is_deleted = FALSE
+                            ORDER BY created_at DESC
+                            LIMIT :limit
+                        ) sub
+                        ORDER BY created_at ASC
+                    """),
+                    {"session_id": session_id, "limit": limit}
+                )
+                
+                messages = []
+                for row in result:
+                    content = row.content
+                    # 尝试解析 JSON (兼容多模态存储)
+                    try:
+                        if content and content.strip().startswith("[") and content.strip().endswith("]"):
+                            parsed = json.loads(content)
+                            if isinstance(parsed, list):
+                                # 转换为 OpenAI/DeepSeek 兼容的格式
+                                # 如果是纯文本列表，转回字符串；如果是多模态结构，保持原样
+                                # 这里简化处理，直接使用解析后的对象，Pydantic 会处理序列化
+                                content = parsed
+                    except:
+                        pass
+                        
+                    messages.append({"role": row.role, "content": content})
+                
+                return messages
+        except Exception as e:
+            logger.error(f"获取会话历史失败: {e}")
+            return []
+
+    @staticmethod
     async def chat_completion(request: ChatRequest, user_id: str = "anonymous") -> ChatResponse:
         """
         统一对话入口 (支持 DeepSeek API 和 本地 ModelScope 模型)
@@ -111,8 +158,32 @@ class AIManager:
         session_id = request.session_id or str(uuid.uuid4())
         
         # 记录用户消息 (只记录最后一条 user 消息)
+        # 注意: 如果 request.messages 包含历史消息，我们只存最后一条新的
         if request.messages and request.messages[-1].role == 'user':
             await AIManager.save_message(session_id, user_id, 'user', request.messages[-1].content, request.model)
+
+        # === 上下文构建逻辑 ===
+        # 1. 提取 System Prompt (如果有)
+        system_message = None
+        if request.messages and request.messages[0].role == 'system':
+            system_message = request.messages[0].model_dump()
+            
+        # 2. 获取数据库中的历史消息 (包含刚才保存的最新一条 user 消息)
+        # 默认获取最近 20 条，避免 Token 超限
+        history_messages = await AIManager.get_session_messages(session_id, limit=20)
+        
+        # 3. 组装最终发送给模型的消息列表
+        # 优先级: System Prompt -> Database History
+        final_messages = []
+        if system_message:
+            final_messages.append(system_message)
+        
+        # 如果数据库有历史，使用数据库历史 (它已经包含了最新的 user 消息)
+        if history_messages:
+            final_messages.extend(history_messages)
+        else:
+            # 如果数据库没查到 (异常情况)，回退到使用请求中的 messages
+            final_messages.extend([msg.model_dump() for msg in request.messages if msg.role != 'system'])
 
         reply = ""
         usage = {}
@@ -121,11 +192,9 @@ class AIManager:
         if ModelScopeUtils.check_model_exists(request.model):
             try:
                 logger.info(f"路由到本地 ModelScope 模型: {request.model}")
-                # 转换消息格式
-                messages = [msg.model_dump() for msg in request.messages]
                 
                 reply = await ModelScopeUtils.chat_completion(
-                    messages=messages,
+                    messages=final_messages,
                     model_name=request.model,
                     max_new_tokens=request.max_tokens or 512
                 )
@@ -148,7 +217,7 @@ class AIManager:
             
             payload = {
                 "model": request.model,
-                "messages": [msg.model_dump() for msg in request.messages],
+                "messages": final_messages,
                 "temperature": request.temperature,
                 "stream": False
             }
@@ -159,7 +228,7 @@ class AIManager:
             try:
                 # 使用 trust_env=False 忽略系统代理设置，防止 500 错误
                 async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
-                    logger.info(f"发送 DeepSeek 请求: model={request.model}, msg_count={len(request.messages)}")
+                    logger.info(f"发送 DeepSeek 请求: model={request.model}, msg_count={len(final_messages)}")
                     response = await client.post(url, json=payload, headers=headers)
                     response.raise_for_status()
                     data = response.json()
@@ -377,42 +446,4 @@ class AIManager:
         except Exception as e:
             logger.error(f"删除消息失败: {e}")
             raise e
-    @staticmethod
-    async def get_session_messages(session_id: str, user_id: str) -> List[Dict[str, Any]]:
-        """
-        获取特定会话的所有消息
-        """
-        try:
-            engine = PGUtils.get_engine()
-            async with engine.begin() as conn:
-                result = await conn.execute(
-                    text("""
-                        SELECT id, role, content, model, created_at
-                        FROM chat_messages
-                        WHERE session_id = :session_id AND user_id = :user_id AND is_deleted = FALSE
-                        ORDER BY created_at ASC
-                    """),
-                    {"session_id": session_id, "user_id": user_id}
-                )
-                
-                messages = []
-                for row in result:
-                    content = row.content
-                    # 尝试解析 JSON 内容 (多模态)
-                    if content and content.startswith("[") and content.endswith("]"):
-                        try:
-                            content = json.loads(content)
-                        except:
-                            pass
-                            
-                    messages.append({
-                        "id": str(row.id),
-                        "role": row.role,
-                        "content": content,
-                        "model": row.model,
-                        "created_at": row.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    })
-                return messages
-        except Exception as e:
-            logger.error(f"获取会话消息失败: {e}")
-            return []
+
