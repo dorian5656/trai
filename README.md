@@ -149,7 +149,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
-### 2026_02_09_1630
+### 2026_02_09_1150
 - **后端**: 新增 Word 转 PDF 功能 (Pandoc+XeLaTeX), 支持中文及 S3/DB 记录.
 - **后端**: 新增 `/word2pdf` 路由, 完善文档转换测试 (test_doc_utils/test_doc_router).
 - **后端**: 迁移通知逻辑至 `feishu_utils.py` (FeishuBot), 移除冗余代码.
