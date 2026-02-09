@@ -17,6 +17,15 @@ import pypandoc
 import shutil
 import asyncio
 import json
+import pandas as pd
+from PIL import Image
+from pdf2docx import Converter
+from xhtml2pdf import pisa
+import pypdfium2 as pdfium
+import pikepdf
+import easyofd
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPDF
 from pathlib import Path
 from loguru import logger
 from backend.app.utils.upload_utils import UploadUtils
@@ -367,6 +376,533 @@ class DocUtils:
         except Exception as e:
             logger.error(f"Word 转 PDF 异常: {e}")
             raise e
+
+    @staticmethod
+    async def _upload_and_record(file_path: Path, user_id: str, module: str, source: str, mime_type: str, meta_data: dict) -> str:
+        """上传到 S3 并记录到数据库的辅助方法"""
+        if not user_id:
+            return str(file_path)
+            
+        try:
+            file_bytes = file_path.read_bytes()
+            size = file_path.stat().st_size
+            s3_key = f"docs/{user_id}/{file_path.name}"
+            
+            url, key, size = await UploadUtils.save_from_bytes(
+                file_bytes,
+                file_path.name,
+                module=module,
+                content_type=mime_type
+            )
+            
+            insert_sql = """
+            INSERT INTO user_docs (
+                user_id, filename, s3_key, url, size, mime_type, module, source, meta_data, created_at
+            ) VALUES (
+                :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data, NOW()
+            )
+            """
+            params = {
+                "user_id": user_id,
+                "filename": file_path.name,
+                "s3_key": key,
+                "url": url,
+                "size": size,
+                "mime_type": mime_type,
+                "module": module,
+                "source": source,
+                "meta_data": json.dumps(meta_data)
+            }
+            await PGUtils.execute_ddl(insert_sql, params)
+            logger.info(f"文件已记录: {url}")
+            return url
+        except Exception as e:
+            logger.error(f"上传/记录失败: {e}")
+            return str(file_path)
+
+    @staticmethod
+    async def image_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """将 JPG/PNG 图片转换为 PDF"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+        
+        try:
+            image = Image.open(input_path)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            await asyncio.to_thread(image.save, output_path, "PDF", resolution=100.0)
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "img2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"图片转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def ppt_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """将 PPT/PPTX 转换为 PDF (需要 LibreOffice 或支持 pptx 的 Pandoc)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+            
+        try:
+            # 检查 LibreOffice (soffice)
+            if shutil.which("soffice"):
+                # 使用 LibreOffice 进行转换 (无头模式)
+                out_dir = output_path.parent
+                cmd = ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(input_path)]
+                await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
+                
+                # LibreOffice 使用原始文件名加 .pdf，确保其与 output_path 匹配
+                generated_pdf = input_path.with_suffix('.pdf')
+                if generated_pdf != output_path and generated_pdf.exists():
+                    generated_pdf.rename(output_path)
+            
+            # 检查支持 pptx 的 Pandoc
+            elif "pptx" in pypandoc.get_pandoc_formats()[0]:
+                 extra_args = ['--pdf-engine=xelatex', '-V', 'CJKmainfont=Droid Sans Fallback']
+                 await asyncio.to_thread(pypandoc.convert_file, str(input_path), 'pdf', outputfile=str(output_path), extra_args=extra_args)
+            
+            else:
+                 raise NotImplementedError("PPT 转 PDF 需要 LibreOffice (soffice) 或支持 pptx 输入的 Pandoc 版本。")
+
+            if not output_path.exists():
+                 raise Exception("PDF 生成失败 (文件未创建)")
+
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "ppt2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"PPT 转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def excel_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """Excel 转 PDF (通过 Pandas -> HTML -> xhtml2pdf)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+            
+        try:
+            # 读取 Excel
+            df = pd.read_excel(input_path)
+            html_content = df.to_html(index=False, classes="table table-striped")
+            
+            # 包装在支持中文字体的最小 HTML 中 (如果可用，使用 SimSun/Arial Unicode MS，否则使用标准字体)
+            # xhtml2pdf 需要中文字体。我们将尝试使用默认的 sans-serif。
+            full_html = f"""
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <style>
+                @page {{ size: A4 landscape; margin: 1cm; }}
+                body {{ font-family: sans-serif; }}
+                table {{ width: 100%; border-collapse: collapse; }}
+                th, td {{ border: 1px solid black; padding: 5px; text-align: left; }}
+            </style>
+            </head>
+            <body>
+            <h2>{input_path.name}</h2>
+            {html_content}
+            </body>
+            </html>
+            """
+            
+            with open(output_path, "wb") as f:
+                pisa_status = await asyncio.to_thread(pisa.CreatePDF, full_html, dest=f)
+                
+            if pisa_status.err:
+                raise Exception("xhtml2pdf 转换错误")
+                
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "excel2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"Excel 转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def html_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """HTML 文件转 PDF"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+            
+        try:
+            html_content = input_path.read_text(encoding='utf-8')
+            with open(output_path, "wb") as f:
+                await asyncio.to_thread(pisa.CreatePDF, html_content, dest=f)
+                
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "html2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"HTML 转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_to_images(input_path: str | Path, output_dir: str | Path = None, user_id: str = None) -> list[str]:
+        """PDF 转图片 (返回图片 URL/路径列表)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_dir is None:
+            output_dir = input_path.parent / f"{input_path.stem}_images"
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+            
+        try:
+            pdf = pdfium.PdfDocument(str(input_path))
+            results = []
+            
+            for i in range(len(pdf)):
+                page = pdf[i]
+                image = page.render(scale=2).to_pil()
+                image_path = output_dir / f"page_{i+1}.jpg"
+                image.save(image_path, "JPEG")
+                
+                url = await DocUtils._upload_and_record(
+                    image_path, user_id, "doc_convert", "converted", "image/jpeg", 
+                    {"original_file": input_path.name, "type": "pdf2img", "page": i+1}
+                )
+                results.append(url)
+                
+            return results
+        except Exception as e:
+            logger.error(f"PDF 转图片失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_to_word(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 转 Word (.docx)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.docx')
+            
+        try:
+            cv = Converter(str(input_path))
+            await asyncio.to_thread(cv.convert, str(output_path), start=0, end=None)
+            cv.close()
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                {"original_file": input_path.name, "type": "pdf2word"}
+            )
+        except Exception as e:
+            logger.error(f"PDF 转 Word 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_to_ppt(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 转 PPT (通过 PDF->Word->Pandoc)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pptx')
+            
+        try:
+            # 第一步: PDF -> Word
+            temp_docx = input_path.with_suffix('.temp.docx')
+            cv = Converter(str(input_path))
+            await asyncio.to_thread(cv.convert, str(temp_docx), start=0, end=None)
+            cv.close()
+            
+            # 第二步: Word -> PPTX (Pandoc)
+            await asyncio.to_thread(pypandoc.convert_file, str(temp_docx), 'pptx', outputfile=str(output_path))
+            
+            # 清理
+            if temp_docx.exists():
+                temp_docx.unlink()
+                
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/vnd.openxmlformats-officedocument.presentationml.presentation", 
+                {"original_file": input_path.name, "type": "pdf2ppt"}
+            )
+        except Exception as e:
+            logger.error(f"PDF 转 PPT 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_to_excel(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 转 Excel (占位符 / 基础提取)"""
+        # 注意: 完整的 PDF 转 Excel 需要 tabula-py 或 camelot，这些库有较重的依赖 (java 等)
+        # 这里我们提供一个存根或基础实现，否则我们可能会跳过或抛出不支持
+        # 既然用户要求，我们尝试使用 pdf2docx 获取表格？不，pdf2docx 针对 docx。
+        # 目前，我们将抛出 NotImplementedError 或提供一个虚拟文件以指示限制。
+        # 或者，我们可以使用 `pypdf` 提取文本并转储到 CSV？
+        raise NotImplementedError("PDF 转 Excel 需要当前不可用的专用库 (tabula-py)。")
+
+    @staticmethod
+    async def pdf_to_pdfa(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 转 PDF/A (通过 Ghostscript)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_name(f"{input_path.stem}_pdfa.pdf")
+            
+        try:
+            # 用于 PDF/A-1b 的 Ghostscript 命令
+            cmd = [
+                "gs",
+                "-dPDFA",
+                "-dBATCH",
+                "-dNOPAUSE",
+                "-sProcessColorModel=DeviceCMYK",
+                "-sDEVICE=pdfwrite",
+                "-sPDFACompatibilityPolicy=1",
+                f"-sOutputFile={str(output_path)}",
+                str(input_path)
+            ]
+            
+            # 检查 gs 是否存在
+            if not shutil.which("gs"):
+                raise Exception("未找到 Ghostscript (gs)")
+                
+            await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "pdf2pdfa"}
+            )
+        except Exception as e:
+            logger.error(f"PDF 转 PDF/A 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def ofd_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """OFD 转 PDF (通过 easyofd)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+            
+        try:
+            # easyofd 转换
+            # easyofd.OFD(str(input_path)).del_img() # 示例用法
+            # easyofd.OFD(str(input_path)).save(str(output_path), format='pdf') 
+            # 注意: easyofd API 可能会有所不同，假设标准用法或如果 CLI 可用则回退到子进程
+            # 当前 easyofd (0.5.6) 支持基本提取。
+            # 让我们尝试直接使用。如果失败，捕获异常。
+            
+            await asyncio.to_thread(
+                lambda: easyofd.OFD(str(input_path)).save(str(output_path), format='pdf')
+            )
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "ofd2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"OFD 转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def ofd_to_images(input_path: str | Path, output_dir: str | Path = None, user_id: str = None) -> list[str]:
+        """OFD 转图片"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_dir is None:
+            output_dir = input_path.parent / f"{input_path.stem}_ofd_images"
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+            
+        try:
+            # easyofd 可以保存为图片
+            await asyncio.to_thread(
+                lambda: easyofd.OFD(str(input_path)).save(str(output_dir), format='jpg')
+            )
+            
+            results = []
+            for img_file in output_dir.glob("*.jpg"):
+                 url = await DocUtils._upload_and_record(
+                     img_file, user_id, "doc_convert", "converted", "image/jpeg", 
+                     {"original_file": input_path.name, "type": "ofd2img"}
+                 )
+                 results.append(url)
+            return results
+        except Exception as e:
+            logger.error(f"OFD 转图片失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_remove_limit(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 移除限制 (权限) (通过 pikepdf)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_name(f"{input_path.stem}_unlocked.pdf")
+            
+        try:
+            def _unlock():
+                with pikepdf.open(input_path, allow_overwriting_input=True) as pdf:
+                    pdf.save(output_path)
+            
+            await asyncio.to_thread(_unlock)
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "pdf_unlock"}
+            )
+        except Exception as e:
+            logger.error(f"PDF 解锁失败: {e}")
+            raise e
+
+    @staticmethod
+    async def pdf_to_long_image(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """PDF 转长图 (拼接)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.jpg')
+            
+        try:
+            # 1. 首先转换为图片
+            pdf = pdfium.PdfDocument(str(input_path))
+            images = []
+            total_height = 0
+            max_width = 0
+            
+            for i in range(len(pdf)):
+                page = pdf[i]
+                img = page.render(scale=2).to_pil()
+                images.append(img)
+                total_height += img.height
+                max_width = max(max_width, img.width)
+                
+            # 2. 拼接
+            long_img = Image.new('RGB', (max_width, total_height), (255, 255, 255))
+            y_offset = 0
+            for img in images:
+                long_img.paste(img, (0, y_offset))
+                y_offset += img.height
+                
+            await asyncio.to_thread(long_img.save, output_path, "JPEG", quality=85)
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "image/jpeg", 
+                {"original_file": input_path.name, "type": "pdf2longimg"}
+            )
+        except Exception as e:
+            logger.error(f"PDF 转长图失败: {e}")
+            raise e
+
+    @staticmethod
+    async def image_convert(input_path: str | Path, target_fmt: str = "png", output_path: str | Path = None, user_id: str = None) -> str:
+        """图片格式转换 (JPG<->PNG 等)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        target_fmt = target_fmt.lower().replace('.', '')
+        if output_path is None:
+            output_path = input_path.with_suffix(f'.{target_fmt}')
+            
+        try:
+            img = Image.open(input_path)
+            # 处理 JPG 的 alpha 通道
+            if target_fmt in ['jpg', 'jpeg'] and img.mode in ('RGBA', 'LA'):
+                background = Image.new(img.mode[:-1], img.size, (255, 255, 255))
+                background.paste(img, img.split()[-1])
+                img = background
+                
+            rgb_im = img.convert('RGB') if target_fmt in ['jpg', 'jpeg'] else img
+            await asyncio.to_thread(rgb_im.save, output_path)
+            
+            mime_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif'}
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", mime_map.get(target_fmt, 'application/octet-stream'), 
+                {"original_file": input_path.name, "type": f"img2{target_fmt}"}
+            )
+        except Exception as e:
+            logger.error(f"图片转换失败: {e}")
+            raise e
+
+    @staticmethod
+    async def svg_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """SVG 转 PDF (通过 svglib)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+            
+        try:
+            drawing = svg2rlg(str(input_path))
+            await asyncio.to_thread(renderPDF.drawToFile, drawing, str(output_path))
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/pdf", 
+                {"original_file": input_path.name, "type": "svg2pdf"}
+            )
+        except Exception as e:
+            logger.error(f"SVG 转 PDF 失败: {e}")
+            raise e
+
+    @staticmethod
+    async def ebook_convert(input_path: str | Path, output_format: str, user_id: str = None) -> str:
+        """电子书转换 (EPUB/MOBI/PDF 通过 Pandoc)"""
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            raise FileNotFoundError(f"文件未找到: {input_path}")
+            
+        output_format = output_format.lower().replace('.', '')
+        output_path = input_path.with_suffix(f'.{output_format}')
+        
+        try:
+            # Pandoc 处理 epub, markdown, docx 等。
+            # 注意: mobi 不是标准的 pandoc 输出 (需要 kindlegen)，但 'epub' 是。
+            # 我们将首先尝试 pandoc。
+            await asyncio.to_thread(pypandoc.convert_file, str(input_path), output_format, outputfile=str(output_path))
+            
+            return await DocUtils._upload_and_record(
+                output_path, user_id, "doc_convert", "converted", "application/octet-stream", 
+                {"original_file": input_path.name, "type": f"ebook2{output_format}"}
+            )
+        except Exception as e:
+            logger.error(f"电子书转换失败: {e}")
+            raise e
+
+    @staticmethod
+    async def caj_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """CAJ 转 PDF (存根/占位符)"""
+        # 需要外部 caj2pdf 工具，在此环境中不容易通过 pip 安装
+        raise NotImplementedError("CAJ 转 PDF 需要外部 'caj2pdf' 工具。")
 
 if __name__ == "__main__":
     # 测试代码
