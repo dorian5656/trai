@@ -153,6 +153,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 修复DeepSeek对话上下文记忆问题, 增加多模态(文生图)上下文支持.
 - **后端**: 优化GPU监控温度显示格式(增加°符号).
 
+### 2026_02_09_1351
+- **客户端**: 更新主窗体图标为 `tr_mascot_local.ico`.
+- **客户端**: 优化图片内容解析模块的图片上传逻辑，增加图片拖拽上传.
+- **客户端**: 新增系统监控模块, 包括四个功能：GPU环境检测、系统资源监控、获取所有模型状态、系统健康检查.
+
 ### 2026_02_09_1150
 - **后端**: 新增 Word 转 PDF 功能 (Pandoc+XeLaTeX), 支持中文及 S3/DB 记录.
 - **后端**: 新增 `/word2pdf` 路由, 完善文档转换测试 (test_doc_utils/test_doc_router).
@@ -173,6 +178,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 清理根目录冗余文件 (test_output, scripts) 与测试脚本.
 - **后端**: 验证 rrdsppg 接口 OCR 清洗逻辑 (保留标点过滤), 确认功能正常.
 - **文档**: 更新项目日志与 README.
+
+### 2026_02_06_1416
+- **客户端**: 统一 PyQt6 客户端配置管理, 将 `login`, `deepseek`, `image_gen`, `image_parse`, `rrdsppg` 等模块的接口与默认参数集中至 `backend/pyqt_app/pages/config.json`, 通过单例 `config_loader.py` 读取.
+- **客户端**: 修复登录页默认账号密码硬编码问题, 改为从配置文件读取.
+- **客户端**: `RrdsppgPage` 移除所有硬编码参数 (模板/目标图片 URL、task_id、user_id、类型枚举), 全部改为读取配置文件.
+- **客户端**: 优化上传目录初始化逻辑, 确保 `temp/web_upload` 目录在运行时自动创建, 避免文件保存失败.
 
 ### 2026_02_05_1724
 - **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
