@@ -141,6 +141,26 @@ class ImageParsePage(QWidget):
     def set_auth_token(self, token: str):
         self.auth_token = token or ""
 
+    def preview_drag_enter_event(self, event):
+        """处理拖拽进入事件"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                # 检查文件扩展名
+                file_path = urls[0].toLocalFile()
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp']:
+                    event.accept()
+                    return
+        event.ignore()
+
+    def preview_drop_event(self, event):
+        """处理拖拽释放事件"""
+        urls = event.mimeData().urls()
+        if urls and urls[0].isLocalFile():
+            file_path = urls[0].toLocalFile()
+            self.load_image_preview(file_path)
+
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -151,10 +171,10 @@ class ImageParsePage(QWidget):
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
         layout.addWidget(title)
 
-        # 2. 图片预览区
-        self.image_preview = QLabel("请上传或粘贴图片")
+        # 2. 图片预览区 (支持拖拽)
+        self.image_preview = QLabel("请上传或粘贴图片，或将图片拖拽至此")
         self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_preview.setFixedHeight(400)  # 只固定高度，宽度跟随布局自适应
+        self.image_preview.setFixedHeight(400)
         self.image_preview.setStyleSheet("""
             QLabel {
                 border: 2px dashed #ccc;
@@ -164,7 +184,13 @@ class ImageParsePage(QWidget):
                 font-size: 16px;
             }
         """)
-        layout.addWidget(self.image_preview)  # 移除 AlignCenter，使其水平拉伸
+        # 启用拖拽
+        self.image_preview.setAcceptDrops(True)
+        # 绑定事件处理
+        self.image_preview.dragEnterEvent = self.preview_drag_enter_event
+        self.image_preview.dropEvent = self.preview_drop_event
+        
+        layout.addWidget(self.image_preview)
 
         # 3. 操作区 (上传按钮 + 提示词输入)
         ops_layout = QHBoxLayout()

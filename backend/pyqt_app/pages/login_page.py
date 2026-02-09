@@ -8,7 +8,7 @@
 
 import requests
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QMessageBox, QFrame, QStackedWidget, QGraphicsDropShadowEffect)
+                             QLineEdit, QPushButton, QMessageBox, QFrame, QStackedWidget, QGraphicsDropShadowEffect, QStyle)
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from .config_loader import config
@@ -337,16 +337,54 @@ class LoginPage(QWidget):
         self.login_worker.finished_signal.connect(self.on_login_finished)
         self.login_worker.start()
 
+    def show_custom_message(self, title, message, is_success=True):
+        """显示自定义样式的消息弹窗，图标更大"""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        
+        # 获取标准图标并调整大小 (64x64)
+        icon_type = QStyle.StandardPixmap.SP_MessageBoxInformation if is_success else QStyle.StandardPixmap.SP_MessageBoxWarning
+        icon = self.style().standardIcon(icon_type)
+        msg_box.setIconPixmap(icon.pixmap(64, 64))
+        
+        # 设置按钮
+        ok_btn = msg_box.addButton("确定", QMessageBox.ButtonRole.AcceptRole)
+        msg_box.setDefaultButton(ok_btn)
+        
+        # 样式美化
+        msg_box.setStyleSheet("""
+            QMessageBox { min-width: 300px; }
+            QLabel { 
+                font-size: 15px; 
+                font-weight: bold; 
+                padding: 5px 20px; 
+                min-height: 30px;
+            }
+            QPushButton { 
+                background-color: #2196F3; 
+                color: white; 
+                border-radius: 4px; 
+                padding: 5px 15px;
+                min-width: 60px;
+                font-size: 13px;
+                margin: 10px;
+            }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        
+        msg_box.exec()
+
     def on_login_finished(self, success, message, data):
         self.login_btn.setEnabled(True)
         self.login_btn.setText("登录")
         
         if success:
             token = data.get("access_token", "") or data.get("data", {}).get("access_token", "")
-            QMessageBox.information(self, "成功", "登录成功！")
+            self.show_custom_message("成功", "登录成功！", is_success=True)
             self.login_success.emit({"access_token": token})
         else:
-            QMessageBox.warning(self, "失败", message)
+            self.show_custom_message("失败", message, is_success=False)
 
     def handle_register(self):
         username = self.reg_user_input.text().strip()
@@ -376,7 +414,7 @@ class LoginPage(QWidget):
         self.register_btn.setText("注册")
         
         if success:
-            QMessageBox.information(self, "成功", message)
+            self.show_custom_message("成功", message, is_success=True)
             self.show_login()
         else:
-            QMessageBox.warning(self, "失败", message)
+            self.show_custom_message("失败", message, is_success=False)

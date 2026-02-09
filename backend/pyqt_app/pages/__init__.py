@@ -12,3 +12,4 @@ from .deepseek_page import DeepSeekPage
 from .image_gen_page import ImageGenPage
 from .image_parse_page import ImageParsePage
 from .rrdsppg_page import RrdsppgPage
+from .system_monitor_page import SystemMonitorPage
