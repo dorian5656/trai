@@ -346,6 +346,23 @@ class DBInitializer:
             created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
             updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
         );
+        
+        -- 创建更新触发器函数 (如果不存在)
+        CREATE OR REPLACE FUNCTION update_timestamp()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = (NOW() AT TIME ZONE 'Asia/Shanghai');
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        -- 创建触发器
+        DROP TRIGGER IF EXISTS update_user_docs_timestamp ON user_docs;
+        CREATE TRIGGER update_user_docs_timestamp
+        BEFORE UPDATE ON user_docs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_timestamp();
+
         COMMENT ON TABLE user_docs IS '用户文档表，存储上传和转换生成的文档记录';
         COMMENT ON COLUMN user_docs.id IS '主键ID';
         COMMENT ON COLUMN user_docs.user_id IS '用户ID';

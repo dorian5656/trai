@@ -149,6 +149,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_09_1528
+- **后端**: 修复文档处理安全风险与逻辑缺陷.
+  - 修复 `user_docs` 表 `updated_at` 字段不自动更新问题 (添加触发器).
+  - 修复 `pikepdf` 覆盖源文件风险, 移除 `allow_overwriting_input`.
+  - 修复文档转换临时目录与 S3 Key 可能存在的命名冲突 (引入 UUID).
+
 ### 2026_02_09_1510
 - **后端**: 修复DeepSeek对话上下文记忆问题, 增加多模态(文生图)上下文支持.
 - **后端**: 优化GPU监控温度显示格式(增加°符号).

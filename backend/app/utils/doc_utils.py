@@ -386,7 +386,8 @@ class DocUtils:
         try:
             file_bytes = file_path.read_bytes()
             size = file_path.stat().st_size
-            s3_key = f"docs/{user_id}/{file_path.name}"
+            # 修复 S3 Key 冲突问题 (添加 UUID)
+            s3_key = f"docs/{user_id}/{uuid.uuid4()}_{file_path.name}"
             
             url, key, size = await UploadUtils.save_from_bytes(
                 file_bytes,
@@ -567,7 +568,7 @@ class DocUtils:
             raise FileNotFoundError(f"文件未找到: {input_path}")
             
         if output_dir is None:
-            output_dir = input_path.parent / f"{input_path.stem}_images"
+            output_dir = input_path.parent / f"{input_path.stem}_{uuid.uuid4()}_images"
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
             
@@ -763,11 +764,11 @@ class DocUtils:
             raise FileNotFoundError(f"文件未找到: {input_path}")
             
         if output_path is None:
-            output_path = input_path.with_name(f"{input_path.stem}_unlocked.pdf")
+            output_path = input_path.with_name(f"{input_path.stem}_{uuid.uuid4()}_unlocked.pdf")
             
         try:
             def _unlock():
-                with pikepdf.open(input_path, allow_overwriting_input=True) as pdf:
+                with pikepdf.open(input_path) as pdf:
                     pdf.save(output_path)
             
             await asyncio.to_thread(_unlock)
