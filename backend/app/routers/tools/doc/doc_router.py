@@ -25,3 +25,19 @@ async def convert_md_to_pdf(
     # 使用当前登录用户的 username 作为 user_id
     user_id = current_user.username if hasattr(current_user, 'username') else "system"
     return await DocFunc.convert_md_to_pdf(file, user_id=user_id)
+
+@router.post("/word2pdf", summary="Word 转 PDF", description="上传 Word 文件 (.docx/.doc)，转换为 PDF 并返回下载链接")
+async def convert_word_to_pdf(
+    file: UploadFile = File(..., description="Word 文件"),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Word 转 PDF 接口
+    - 支持 .docx/.doc
+    - 上传结果到 S3
+    - 记录到数据库
+    - 发送飞书通知
+    """
+    # 使用当前登录用户的 username 作为 user_id
+    user_id = current_user.username if hasattr(current_user, 'username') else "system"
+    return await DocFunc.convert_word_to_pdf(file, user_id=user_id)

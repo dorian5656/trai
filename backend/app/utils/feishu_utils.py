@@ -310,5 +310,136 @@ class FeishuBot:
             logger.error(f"飞书媒体消息发送异常: {e}")
             return False
 
+    def send_file_upload_card(self, filename: str, url: str, user: str, size: int, webhook_token: str = None):
+        """
+        发送文件上传通知卡片
+        :param filename: 文件名
+        :param url: 下载链接
+        :param user: 上传用户
+        :param size: 文件大小(bytes)
+        :param webhook_token: Webhook Token (可选)
+        """
+        try:
+            size_mb = size / 1024 / 1024
+            size_str = f"{size_mb:.2f} MB" if size_mb >= 1 else f"{size/1024:.2f} KB"
+            
+            card = {
+                "config": {
+                    "wide_screen_mode": True
+                },
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "📂 文件上传通知"
+                    },
+                    "template": "green"
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "fields": [
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**文件名**\n{filename}"
+                                }
+                            },
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**用户**\n{user}"
+                                }
+                            },
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**大小**\n{size_str}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "action",
+                        "actions": [
+                            {
+                                "tag": "button",
+                                "text": {
+                                    "tag": "plain_text",
+                                    "content": "下载/预览"
+                                },
+                                "type": "primary",
+                                "url": url
+                            }
+                        ]
+                    }
+                ]
+            }
+            self.send_webhook_card(card, webhook_token)
+        except Exception as e:
+            logger.warning(f"飞书通知发送失败: {e}")
+
+    def send_md_conversion_card(self, filename: str, url: str, duration: float, webhook_token: str = None):
+        """
+        发送 Markdown 转换完成卡片
+        :param filename: 原文件名
+        :param url: PDF下载链接
+        :param duration: 耗时(秒)
+        :param webhook_token: Webhook Token (可选)
+        """
+        try:
+            card = {
+                "config": {
+                    "wide_screen_mode": True
+                },
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "📄 文档转换完成"
+                    },
+                    "template": "blue"
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "fields": [
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**源文件**\n{filename}"
+                                }
+                            },
+                            {
+                                "is_short": True,
+                                "text": {
+                                    "tag": "lark_md",
+                                    "content": f"**耗时**\n{duration:.2f}s"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "action",
+                        "actions": [
+                            {
+                                "tag": "button",
+                                "text": {
+                                    "tag": "plain_text",
+                                    "content": "下载 PDF"
+                                },
+                                "url": url,
+                                "type": "primary"
+                            }
+                        ]
+                    }
+                ]
+            }
+            self.send_webhook_card(card, webhook_token)
+        except Exception as e:
+            logger.error(f"发送卡片通知失败: {e}")
+
 # 单例实例
 feishu_bot = FeishuBot()

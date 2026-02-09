@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from backend.app.utils.logger import logger
 from backend.app.utils.doc_utils import DocUtils
-from backend.app.utils.notify_utils import NotifyUtils
+from backend.app.utils.feishu_utils import feishu_bot
 from backend.app.utils.upload_utils import UploadUtils
 
 class DocFunc:
@@ -51,8 +51,8 @@ class DocFunc:
                 # 计算耗时
                 duration = time.time() - start_time
                 
-                # 发送飞书通知 (使用 NotifyUtils)
-                NotifyUtils.send_md_conversion_card(filename, pdf_url, duration)
+                # 发送飞书通知 (使用 feishu_bot)
+                feishu_bot.send_md_conversion_card(filename, pdf_url, duration)
                 
                 return {
                     "code": 200,
@@ -66,5 +66,56 @@ class DocFunc:
             except Exception as e:
                 logger.error(f"转换失败: {e}")
                 # 失败通知
-                NotifyUtils.send_text(f"❌ 文档转换失败: {filename}\n错误: {str(e)}")
+                feishu_bot.send_webhook_message(f"❌ 文档转换失败: {filename}\n错误: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")
+
+    @staticmethod
+    async def convert_word_to_pdf(file: UploadFile, user_id: str = "system") -> dict:
+        """
+        将上传的 Word 文件转换为 PDF
+        :param file: 上传的文件
+        :param user_id: 用户ID
+        :return: 转换结果信息
+        """
+        start_time = time.time()
+        filename = file.filename
+        if not filename.lower().endswith(('.docx', '.doc')):
+            raise HTTPException(status_code=400, detail="仅支持 .docx/.doc 文件")
+
+        # 创建临时目录处理文件
+        with tempfile.TemporaryDirectory() as temp_dir_str:
+            temp_dir = Path(temp_dir_str)
+            input_path = temp_dir / filename
+            
+            # 保存上传的文件
+            try:
+                content = await file.read()
+                input_path.write_bytes(content)
+            except Exception as e:
+                logger.error(f"保存上传文件失败: {e}")
+                raise HTTPException(status_code=500, detail="文件保存失败")
+
+            try:
+                # 执行转换
+                pdf_url = await DocUtils.word_to_pdf(input_path, user_id=user_id)
+                
+                # 计算耗时
+                duration = time.time() - start_time
+                
+                # 发送飞书通知 (复用卡片)
+                feishu_bot.send_md_conversion_card(filename, pdf_url, duration)
+                
+                return {
+                    "code": 200,
+                    "msg": "转换成功",
+                    "data": {
+                        "url": pdf_url,
+                        "filename": Path(pdf_url).name,
+                        "duration": f"{duration:.2f}s"
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Word转换失败: {e}")
+                # 失败通知
+                feishu_bot.send_webhook_message(f"❌ Word文档转换失败: {filename}\n错误: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")

@@ -16,6 +16,7 @@ import requests
 import pypandoc
 import shutil
 import asyncio
+import json
 from pathlib import Path
 from loguru import logger
 from backend.app.utils.upload_utils import UploadUtils
@@ -197,63 +198,175 @@ class DocUtils:
                     '--pdf-engine=xelatex',
                     '-V', 'CJKmainfont=Droid Sans Fallback',
                     '-V', 'CJKmonofont=Droid Sans Fallback', # 避免 mono 字体缺失警告
-                    '-V', 'geometry:margin=1cm',
-                    '-V', 'geometry:landscape',  # 横向布局以适应宽表格
-                    '--highlight-style=tango',   # 代码高亮风格
-                    # 资源查找路径：临时目录(含Mermaid图片) + 原文件目录(含原图片) + 当前目录
-                    f'--resource-path=.:{temp_dir}:{input_dir}' 
+                    '-V', 'geometry:margin=1in'
                 ]
                 
+                # 执行转换
                 pypandoc.convert_file(
-                    str(temp_md),
-                    'pdf',
-                    outputfile=str(output_path),
+                    str(temp_md), 
+                    'pdf', 
+                    outputfile=str(output_path), 
                     extra_args=extra_args
                 )
+                
+                if not output_path.exists():
+                    raise Exception("PDF 生成失败 (无报错但文件未生成)")
+                
+                # 5. 上传最终 PDF 到 S3
+                final_url = str(output_path) # 默认返回本地路径
+                
+                if user_id: # 只有关联用户时才上传
+                    try:
+                        file_bytes = output_path.read_bytes()
+                        file_size = output_path.stat().st_size
+                        
+                        s3_key = f"docs/{user_id}/{output_path.name}"
+                        url, key, size = await UploadUtils.save_from_bytes(
+                            file_bytes,
+                            output_path.name,
+                            module="doc_convert",
+                            content_type="application/pdf"
+                        )
+                        final_url = url
+                        logger.info(f"PDF已上传S3: {url}")
+                        
+                        # 6. 记录到 user_docs 表
+                        try:
+                            insert_sql = """
+                            INSERT INTO user_docs (
+                                user_id, filename, s3_key, url, size, mime_type, module, source, meta_data, created_at
+                            ) VALUES (
+                                :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data, NOW()
+                            )
+                            """
+                            params = {
+                                "user_id": user_id,
+                                "filename": output_path.name,
+                                "s3_key": key,
+                                "url": url,
+                                "size": size,
+                                "mime_type": "application/pdf",
+                                "module": "doc_convert",
+                                "source": "converted",
+                                "meta_data": json.dumps({"original_file": str(input_path.name), "type": "md2pdf"})
+                            }
+                            await PGUtils.execute_ddl(insert_sql, params)
+                            logger.info(f"PDF记录已保存到DB: {output_path.name}")
+                        except Exception as e:
+                            logger.error(f"PDF记录保存DB失败: {e}")
+                        
+                    except Exception as e:
+                        logger.error(f"PDF上传S3失败: {e}")
+                        # 上传失败降级返回本地路径 (但在容器/无状态环境中可能无法访问)
+                        
+                return final_url
+                
+        except Exception as e:
+            logger.error(f"Markdown 转 PDF 异常: {e}")
+            raise e
+
+    @staticmethod
+    async def word_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
+        """
+        将 Word (.docx) 文件转换为 PDF 文件 (使用 Pandoc + XeLaTeX)
+        
+        Args:
+            input_path: 输入 .docx 文件路径
+            output_path: 输出 PDF 文件路径（可选，默认同名.pdf）
+            user_id: 用户ID (用于归属记录)
             
-            logger.info(f"PDF 生成成功: {output_path}")
+        Returns:
+            str: 生成的 PDF 文件的 URL (如果启用S3) 或 本地绝对路径
+        """
+        input_path = Path(input_path).resolve()
+        if not input_path.exists():
+            error_msg = f"文件不存在: {input_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
             
-            # NEW: 上传 PDF 到 S3
-            try:
-                pdf_bytes = output_path.read_bytes()
+        if output_path is None:
+            output_path = input_path.with_suffix('.pdf')
+        else:
+            output_path = Path(output_path).resolve()
+            
+        logger.info(f"开始转换 Word 到 PDF: {input_path} -> {output_path}")
+        
+        try:
+            # 配置 Pandoc 参数
+            # 使用 xelatex 引擎以支持中文，需指定 CJK 字体
+            # 优先使用 Noto Sans CJK SC，如果系统中已确认存在
+            extra_args = [
+                    '--pdf-engine=xelatex',
+                    '-V', 'mainfont=DejaVu Sans',
+                    '-V', 'CJKmainfont=Droid Sans Fallback',
+                    '-V', 'CJKmonofont=Droid Sans Fallback',
+                    '-V', 'geometry:margin=1in',
+                    # 修复中文下划线导致的 soul package error
+                    '-V', 'header-includes=\\usepackage[normalem]{ulem}\\let\\ul\\uline'
+                ]
+            
+            # 由于 pypandoc.convert_file 是同步阻塞操作，
+            # 在 async 函数中直接调用会阻塞事件循环。
+            # 对于大文件，建议 run_in_executor。这里为简化直接调用。
+            await asyncio.to_thread(
+                pypandoc.convert_file,
+                str(input_path),
+                'pdf',
+                outputfile=str(output_path),
+                extra_args=extra_args
+            )
+            
+            if not output_path.exists():
+                raise Exception("PDF 生成失败 (无报错但文件未生成)")
                 
-                url, key, size = await UploadUtils.save_from_bytes(
-                    pdf_bytes, 
-                    output_path.name, 
-                    module="docs", 
-                    content_type="application/pdf"
-                )
-                
-                # 记录 DB
-                if user_id:
-                    sql = """
-                        INSERT INTO sys_files (user_id, filename, s3_key, url, size, mime_type, module)
-                        VALUES (:user_id, :filename, :s3_key, :url, :size, :mime_type, :module)
-                    """
-                    params = {
-                        "user_id": user_id,
-                        "filename": output_path.name,
-                        "s3_key": key,
-                        "url": url,
-                        "size": size,
-                        "mime_type": "application/pdf",
-                        "module": "docs"
-                    }
-                    await PGUtils.execute_update(sql, params)
-                
-                logger.info(f"PDF 已上传并归档: {url}")
-                
-                # 返回 URL
-                return url
-                
-            except Exception as e:
-                logger.error(f"PDF 上传/归档失败: {e}")
-                # 如果上传失败，返回本地路径
-                return str(output_path)
+            # 上传最终 PDF 到 S3
+            final_url = str(output_path)
+            
+            if user_id:
+                try:
+                    file_bytes = output_path.read_bytes()
+                    s3_key = f"docs/{user_id}/{output_path.name}"
+                    url, key, size = await UploadUtils.save_from_bytes(
+                        file_bytes,
+                        output_path.name,
+                        module="doc_convert",
+                        content_type="application/pdf"
+                    )
+                    final_url = url
+                    logger.info(f"PDF已上传S3: {url}")
+
+                    # 记录到 user_docs 表
+                    try:
+                        insert_sql = """
+                        INSERT INTO user_docs (
+                            user_id, filename, s3_key, url, size, mime_type, module, source, meta_data, created_at
+                        ) VALUES (
+                            :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data, NOW()
+                        )
+                        """
+                        params = {
+                            "user_id": user_id,
+                            "filename": output_path.name,
+                            "s3_key": key,
+                            "url": url,
+                            "size": size,
+                            "mime_type": "application/pdf",
+                            "module": "doc_convert",
+                            "source": "converted",
+                            "meta_data": json.dumps({"original_file": str(input_path.name), "type": "word2pdf"})
+                        }
+                        await PGUtils.execute_ddl(insert_sql, params)
+                        logger.info(f"PDF记录已保存到DB: {output_path.name}")
+                    except Exception as e:
+                        logger.error(f"PDF记录保存DB失败: {e}")
+                except Exception as e:
+                    logger.error(f"PDF上传S3失败: {e}")
+                    
+            return final_url
             
         except Exception as e:
-            logger.error(f"转换 PDF 失败: {e}")
-            raise
+            logger.error(f"Word 转 PDF 异常: {e}")
+            raise e
 
 if __name__ == "__main__":
     # 测试代码

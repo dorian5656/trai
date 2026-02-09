@@ -9,7 +9,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, Body, HTTPExcept
 from fastapi.responses import StreamingResponse
 from backend.app.routers.upload.upload_func import UploadResponse, ChunkInitResponse, ChunkMergeResponse
 from backend.app.utils.upload_utils import UploadUtils
-from backend.app.utils.notify_utils import NotifyUtils
+from backend.app.utils.feishu_utils import feishu_bot
 from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.logger import logger
 import uuid
@@ -140,7 +140,7 @@ async def merge_chunks(
         logger.info(f"分片合并文件已记录到数据库")
         
         # 发送飞书通知
-        NotifyUtils.send_file_upload_card(filename, url, current_user.username, size)
+        feishu_bot.send_file_upload_card(filename, url, current_user.username, size)
         
     except Exception as e:
         logger.error(f"保存分片记录失败: {e}")
@@ -229,7 +229,7 @@ async def upload_file(
             logger.info(f"文件记录已保存到数据库: {new_image.id}")
 
         # 发送飞书通知
-        NotifyUtils.send_file_upload_card(file.filename, url, current_user.username, size)
+        feishu_bot.send_file_upload_card(file.filename, url, current_user.username, size)
             
     except Exception as e:
         logger.error(f"保存文件记录失败: {e}")
