@@ -9,6 +9,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, Body, HTTPExcept
 from fastapi.responses import StreamingResponse
 from backend.app.routers.upload.upload_func import UploadResponse, ChunkInitResponse, ChunkMergeResponse
 from backend.app.utils.upload_utils import UploadUtils
+from backend.app.utils.notify_utils import NotifyUtils
 from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.logger import logger
 import uuid
@@ -138,6 +139,9 @@ async def merge_chunks(
             
         logger.info(f"分片合并文件已记录到数据库")
         
+        # 发送飞书通知
+        NotifyUtils.send_file_upload_card(filename, url, current_user.username, size)
+        
     except Exception as e:
         logger.error(f"保存分片记录失败: {e}")
         # 不阻断返回
@@ -223,6 +227,9 @@ async def upload_file(
             await db.commit()
             await db.refresh(new_image)
             logger.info(f"文件记录已保存到数据库: {new_image.id}")
+
+        # 发送飞书通知
+        NotifyUtils.send_file_upload_card(file.filename, url, current_user.username, size)
             
     except Exception as e:
         logger.error(f"保存文件记录失败: {e}")
@@ -276,34 +283,18 @@ class ImageInfo(BaseModel):
 
 @router.get("/list", response_model=List[ImageInfo], summary="获取我的图片列表")
 async def list_my_images(
-    page: int = 1,
-    size: int = 20,
     current_user = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取当前用户上传的图片列表
-
-    **Args:**
-
-    - `page` (int): 页码
-    - `size` (int): 每页数量
-    - `current_user` (User): 当前登录用户
-    - `db` (AsyncSession): 数据库会话
-
-    **Returns:**
-
-    - `List[ImageInfo]`: 图片信息列表
+    获取当前用户的图片上传历史 (最近50条)
     """
-    stmt = (
+    result = await db.execute(
         select(UserImage)
         .where(UserImage.user_id == current_user.username)
-        .where(UserImage.is_deleted == False)
         .order_by(desc(UserImage.created_at))
-        .offset((page - 1) * size)
-        .limit(size)
+        .limit(50)
     )
-    result = await db.execute(stmt)
     images = result.scalars().all()
     
     return [
@@ -312,43 +303,6 @@ async def list_my_images(
             filename=img.filename,
             url=img.url,
             created_at=img.created_at
-        ) for img in images
+        )
+        for img in images
     ]
-
-class DeleteImageRequest(BaseModel):
-    image_id: str
-
-@router.post("/delete", summary="删除图片")
-async def delete_image(
-    request: DeleteImageRequest,
-    current_user = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    删除图片 (软删除)
-
-    **Args:**
-
-    - `request` (DeleteImageRequest): 删除请求
-        - `image_id` (str): 图片ID
-    - `current_user` (User): 当前登录用户
-    - `db` (AsyncSession): 数据库会话
-
-    **Returns:**
-
-    - `dict`: 操作结果
-    """
-    stmt = select(UserImage).where(UserImage.id == request.image_id)
-    result = await db.execute(stmt)
-    image = result.scalar_one_or_none()
-    
-    if not image:
-        return {"code": 404, "msg": "图片不存在"}
-        
-    if image.user_id != current_user.username:
-        return {"code": 403, "msg": "无权删除此图片"}
-        
-    image.is_deleted = True
-    await db.commit()
-    
-    return {"code": 200, "msg": "删除成功"}
