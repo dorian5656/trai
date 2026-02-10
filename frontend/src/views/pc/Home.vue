@@ -12,7 +12,7 @@ import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import { ElMessage, ElImageViewer } from 'element-plus';
 import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
 import { SkillSelector, ChatInput, MessageList } from '@/modules/chat';
-import { fetchDifyConversations } from '@/api/dify';
+import { fetchDifyConversations, fetchConversationMessages, renameDifyConversation, deleteDifyConversation } from '@/api/dify';
 import type { DifyConversation } from '@/types/chat';
 import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
 import { ElMessageBox } from 'element-plus';
@@ -31,6 +31,7 @@ const { activeSkill, visibleSkills, moreSkills, moreSkillItem, handleSkillClick,
 const inputMessage = ref('');
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
+const isLoadingHistory = ref(false);
 
 // 自动滚动
 watch(
@@ -170,13 +171,27 @@ const handleNewChat = () => {
   chatStore.setDifySessionId(null);
 };
 
-const handleSwitchSession = (conversationId: string) => {
-  // 切换到 Dify 会话
-  // TODO: 后端目前没有获取历史消息详情的接口，所以这里暂时只能设置 ID，无法回显消息
-  // 临时方案：清空当前消息，提示用户已切换
+const handleSwitchSession = async (conversationId: string) => {
+  isLoadingHistory.value = true;
   chatStore.clearSession();
   chatStore.setDifySessionId(conversationId);
-  ElMessage.success('已切换会话上下文 (暂不支持回显历史消息)');
+  try {
+    const username = userStore.username || 'guest';
+    const res = await fetchConversationMessages(conversationId, username, 50, 'guanwang');
+    let history: any[] = [];
+    const conv = chatStore.difyConversations.find(c => c.id === conversationId);
+    if (Array.isArray(res)) {
+      history = res as any[];
+    } else if (res && (res as any).data) {
+      history = (res as any).data as any[];
+    }
+    chatStore.replaceMessagesFromDify(history, conv?.name || '会话', conversationId);
+  } catch (e) {
+    console.error('加载历史消息失败', e);
+    ElMessage.error('加载历史消息失败');
+  } finally {
+    isLoadingHistory.value = false;
+  }
 };
 
 const handleLogin = () => {
@@ -198,12 +213,13 @@ const handleRenameConversation = async (conv: DifyConversation) => {
     });
 
     if (value && value !== conv.name) {
-      // await renameDifyConversation(conv.id, value, userStore.username);
+      await renameDifyConversation(conv.id, value, 'guanwang', false);
       chatStore.renameDifyConversation(conv.id, value);
-      ElMessage.success('重命名成功 (仅前端演示)');
+      ElMessage.success('重命名成功');
     }
-  } catch {
-    // 用户点击取消，不做任何操作
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('重命名失败，请稍后重试');
   }
 };
 
@@ -219,20 +235,18 @@ const handleDeleteConversation = async (conv: DifyConversation) => {
       }
     );
     
-    // await deleteDifyConversation(conv.id, userStore.username);
+    await deleteDifyConversation(conv.id, 'guanwang');
     chatStore.removeDifyConversation(conv.id);
-    ElMessage.success('删除成功 (仅前端演示)');
-  } catch {
-    // 用户点击取消
+    ElMessage.success('删除成功');
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('删除失败，请稍后重试');
   }
 };
 
-const createConversationCommandHandler = (conv: DifyConversation) => (cmd: 'rename' | 'delete') => {
-  if (cmd === 'rename') {
-    handleRenameConversation(conv);
-  } else {
-    handleDeleteConversation(conv);
-  }
+const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation) => {
+  if (cmd === 'rename') handleRenameConversation(conv);
+  else handleDeleteConversation(conv);
 };
 </script>
 
@@ -279,7 +293,7 @@ const createConversationCommandHandler = (conv: DifyConversation) => (cmd: 'rena
           >
             <span class="chat-title">{{ conv.name || '未命名对话' }}</span>
             
-            <el-dropdown trigger="click" @command="createConversationCommandHandler(conv)" class="chat-actions">
+            <el-dropdown trigger="click" @command="(cmd) => onConversationCommand(cmd, conv)" class="chat-actions">
               <span class="el-dropdown-link" @click.stop>
                 <el-icon><MoreFilled /></el-icon>
               </span>
@@ -330,8 +344,8 @@ const createConversationCommandHandler = (conv: DifyConversation) => (cmd: 'rena
 
       <!-- 内容主体：flex占满剩余高度，作为flex第二项 -->
       <div class="content-body">
-        <!-- 聊天模式：有消息时显示 -->
-        <div class="chat-layout" v-if="chatStore.messages.length > 0">
+        <!-- 聊天模式：加载历史或有消息时显示，避免闪到欢迎页 -->
+        <div class="chat-layout" v-if="chatStore.messages.length > 0 || isLoadingHistory">
           <!-- 消息列表 -->
           <MessageList 
             :messages="chatStore.messages" 
