@@ -9,3 +9,4 @@
 5. **[04_PG](./04_backend_postgres_whf.md)**: DB/Vector
 6. **[05_Ops](./05_backend_ops_whf.md)**: 运维/测试
 7. **[06_Up](./06_backend_upload_storage_whf.md)**: 上传/存储
+8. **[07_Doc](./07_backend_doc_whf.md)**: 文档/日志
