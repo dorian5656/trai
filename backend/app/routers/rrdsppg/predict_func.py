@@ -24,6 +24,9 @@ from difflib import SequenceMatcher
 import re
 import string
 import os
+from backend.app.routers.rrdsppg.models import RrdsppgPrediction
+from backend.app.utils.pg_utils import PGUtils
+from backend.app.utils.upload_utils import UploadUtils
 
 # 临时文件存储路径
 TEMP_DIR = settings.BASE_DIR / "temp" / "rrdsppg"
@@ -60,7 +63,7 @@ class PredictManager:
         try:
             yolo_config = await ModelManager.get_model_config("heart_like.pt")
             if yolo_config and yolo_config.get("is_enabled"):
-                default_path = settings.BASE_DIR / "app" / "models" / "heart_like" / "heart_like.pt"
+                default_path = settings.MODEL_PATH_HEART_LIKE
                 yolo_path = Path(yolo_config.get("path") or default_path)
                 if yolo_path.exists():
                     use_gpu = yolo_config.get("use_gpu", True)
@@ -87,6 +90,74 @@ class PredictManager:
             logger.critical(f"PaddleOCR 启动自检失败: {e}")
             # 必须抛出异常以终止服务启动，避免带病运行
             raise e
+
+    @staticmethod
+    async def _upload_and_save_record(
+        task_id, user_id, type_val, itzx,
+        template_path, target_path,
+        template_local_path, target_local_path,
+        similarity_score, result_json
+    ):
+        """上传图片到 S3 并保存预测记录"""
+        try:
+            # 1. 上传图片到 S3
+            template_s3_url = ""
+            target_s3_url = ""
+            
+            # 上传模板图
+            if template_local_path and Path(template_local_path).exists():
+                try:
+                    with open(template_local_path, "rb") as f:
+                        data = f.read()
+                    # 使用 rrdsppg/images 模块
+                    url, _, _ = await UploadUtils.save_from_bytes(
+                        data, 
+                        filename=Path(template_local_path).name,
+                        module="rrdsppg/images",
+                        content_type="image/jpeg" # 假设是图片
+                    )
+                    template_s3_url = url
+                except Exception as e:
+                    logger.warning(f"模板图片上传S3失败: {e}")
+            
+            # 上传目标图
+            if target_local_path and Path(target_local_path).exists():
+                try:
+                    with open(target_local_path, "rb") as f:
+                        data = f.read()
+                    url, _, _ = await UploadUtils.save_from_bytes(
+                        data, 
+                        filename=Path(target_local_path).name,
+                        module="rrdsppg/images",
+                        content_type="image/jpeg"
+                    )
+                    target_s3_url = url
+                except Exception as e:
+                    logger.warning(f"目标图片上传S3失败: {e}")
+                
+            # 2. 保存数据库记录
+            session_factory = PGUtils.get_session_factory()
+            async with session_factory() as session:
+                async with session.begin():
+                    record = RrdsppgPrediction(
+                        task_id=task_id,
+                        user_id=user_id,
+                        type=type_val,
+                        itzx=itzx,
+                        template_path=str(template_path) if template_path else "",
+                        target_path=str(target_path) if target_path else "",
+                        template_s3_url=template_s3_url,
+                        target_s3_url=target_s3_url,
+                        similarity_score=similarity_score,
+                        result_json=result_json
+                    )
+                    session.add(record)
+                    
+            logger.info(f"预测记录已保存: task_id={task_id}, score={similarity_score}")
+            
+        except Exception as e:
+            logger.error(f"保存预测记录失败: {e}")
+            # 不抛出异常，以免影响主流程返回
 
     @staticmethod
     def check_gpu():
@@ -122,6 +193,48 @@ class PredictManager:
             logger.warning(f"未检测到 GPU: {info}")
             
         return info
+
+    @staticmethod
+    def _clean_text(text):
+        """
+        文本清洗辅助函数
+        """
+        if not text: return ""
+        
+        # 获取配置
+        remove_letters = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_LETTERS", "true")).lower() == "true"
+        remove_digits = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_DIGITS", "true")).lower() == "true"
+        remove_punct = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_PUNCTUATION", "true")).lower() == "true"
+        remove_before_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_BEFORE_KEYWORD", "")
+        remove_after_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_AFTER_KEYWORD", "")
+
+        # 1. 移除字符 (英文字母、数字、标点)
+        if remove_letters:
+            text = re.sub(r'[a-zA-Z]', '', text)
+        if remove_digits:
+            text = re.sub(r'[0-9]', '', text)
+        if remove_punct:
+            cn_punctuations = r"[！-～\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F\u2E80-\u2EFF·★√]"
+            text = re.sub(f'[{re.escape(string.punctuation)}]', '', text)
+            text = re.sub(cn_punctuations, '', text)
+            text = re.sub(r'\s+', '', text)
+        
+        # 2. 关键词截断
+        if remove_before_kw:
+            kws = [k.strip() for k in remove_before_kw.split(",") if k.strip()]
+            for kw in kws:
+                if kw in text:
+                    idx = text.find(kw)
+                    if idx != -1: text = text[idx + len(kw):]
+
+        if remove_after_kw:
+            kws = [k.strip() for k in remove_after_kw.split(",") if k.strip()]
+            for kw in kws:
+                if kw in text:
+                    idx = text.find(kw)
+                    if idx != -1: text = text[:idx]
+
+        return text
 
     @staticmethod
     async def predict_composite(request):
@@ -160,49 +273,11 @@ class PredictManager:
             ocr_results = await asyncio.gather(*ocr_tasks)
             
             # 计算 OCR 相似度
-            # 复用 predict_ocr_url 中的清洗逻辑? 
-            # 简单起见，这里先用未清洗的，或者如果需要清洗，需要提取 clean_text 函数
-            # 为了保持一致性，我们把 clean_text 逻辑提取出来比较好，但为了不破坏现有结构，暂时内联复制一份核心逻辑
-            
             text_template = "".join([item.get("text", "") for item in (ocr_results[0] or [])])
             text_target = "".join([item.get("text", "") for item in (ocr_results[1] or [])])
             
-            # 获取清洗配置
-            remove_letters = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_LETTERS", "true")).lower() == "true"
-            remove_digits = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_DIGITS", "true")).lower() == "true"
-            remove_punct = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_PUNCTUATION", "true")).lower() == "true"
-            remove_before_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_BEFORE_KEYWORD", "")
-            remove_after_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_AFTER_KEYWORD", "")
-            
-            def clean_text_helper(text):
-                if not text: return ""
-                
-                # 1. 移除字符 (英文字母、数字、标点) - 优先级调整：先移除干扰字符
-                if remove_letters: text = re.sub(r'[a-zA-Z]', '', text)
-                if remove_digits: text = re.sub(r'[0-9]', '', text)
-                if remove_punct:
-                    cn_punctuations = r"[！-～\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F\u2E80-\u2EFF]"
-                    text = re.sub(f'[{re.escape(string.punctuation)}]', '', text)
-                    text = re.sub(cn_punctuations, '', text)
-                    text = re.sub(r'\s+', '', text)
-                
-                # 2. 关键词截断 (后执行)
-                if remove_before_kw:
-                    kws = [k.strip() for k in remove_before_kw.split(",") if k.strip()]
-                    for kw in kws:
-                        if kw in text:
-                            idx = text.find(kw)
-                            if idx != -1: text = text[idx + len(kw):]
-                if remove_after_kw:
-                    kws = [k.strip() for k in remove_after_kw.split(",") if k.strip()]
-                    for kw in kws:
-                        if kw in text:
-                            idx = text.find(kw)
-                            if idx != -1: text = text[:idx]
-                return text
-
-            cleaned_template = clean_text_helper(text_template)
-            cleaned_target = clean_text_helper(text_target)
+            cleaned_template = PredictManager._clean_text(text_template)
+            cleaned_target = PredictManager._clean_text(text_target)
             
             ocr_similarity = SequenceMatcher(None, cleaned_template, cleaned_target).ratio()
             logger.info(f"组合预测 - OCR相似度: {ocr_similarity}")
@@ -261,9 +336,11 @@ class PredictManager:
             itzx = getattr(request, 'itzx', 0)
             if itzx is None: itzx = 0
             
+            result_data = {}
+            
             # itzx=2: 详细 debug 信息
             if itzx == 2:
-                return {
+                result_data = {
                     "similarity_score": final_similarity,
                     "ocr": {
                         "similarity": ocr_similarity,
@@ -278,7 +355,7 @@ class PredictManager:
             
             # itzx=1: 合并信息
             elif itzx == 1:
-                return {
+                result_data = {
                     "similarity_score": final_similarity,
                     "ocr_similarity": ocr_similarity,
                     "yolo_match": yolo_match,
@@ -288,9 +365,26 @@ class PredictManager:
                 
             # itzx=0: 仅相似度
             else:
-                return {
+                result_data = {
                     "similarity_score": final_similarity
                 }
+
+            # --- 保存记录 ---
+            # 注意：不阻塞返回，或者快速执行
+            await PredictManager._upload_and_save_record(
+                task_id=getattr(request, 'taskId', 0) or 0,
+                user_id=getattr(request, 'userId', 0) or 0,
+                type_val=getattr(request, 'type', 0) or 0,
+                itzx=itzx,
+                template_path=getattr(request, 'templatePath', ''),
+                target_path=getattr(request, 'targetPath', ''),
+                template_local_path=template_local_path,
+                target_local_path=target_local_path,
+                similarity_score=final_similarity,
+                result_json=result_data
+            )
+            
+            return result_data
 
         except Exception as e:
             logger.error(f"组合预测失败: {e}")
@@ -307,7 +401,7 @@ class PredictManager:
                 except: pass
 
     @staticmethod
-    async def predict_yolo(file: Optional[UploadFile], itzx: int = 0, targetPath: str = None, templatePath: str = None):
+    async def predict_yolo(file: Optional[UploadFile], itzx: int = 0, targetPath: str = None, templatePath: str = None, taskId: int = 0, userId: int = 0, type_val: int = 0):
         """
         YOLO 预测逻辑 (支持文件对象或 URL)
         """
@@ -409,8 +503,9 @@ class PredictManager:
             similarity_score = 1.0 if is_match else 0.0
 
             # itzx=2: 返回详细的对比结果 (模板 vs 目标)
+            result_data = {}
             if itzx == 2:
-                return {
+                result_data = {
                     "similarity_score": similarity_score,
                     "template": {
                         "classes": list(required_classes),
@@ -424,7 +519,7 @@ class PredictManager:
                 
             # itzx=1: 返回相似度 + 关键信息 (分类展示)
             elif itzx == 1:
-                response_data = {
+                result_data = {
                     "similarity_score": similarity_score,
                     "template_classes": list(required_classes),
                     "target_classes": list(target_classes)
@@ -437,13 +532,27 @@ class PredictManager:
                     # "比如这个就不用要 best_match"
                     pass
                 
-                return response_data
-           
             # itzx=0: 仅返回相似度
             else:
-                return {
+                result_data = {
                     "similarity_score": similarity_score
                 }
+            
+            # --- 保存记录 ---
+            await PredictManager._upload_and_save_record(
+                task_id=taskId,
+                user_id=userId,
+                type_val=type_val,
+                itzx=itzx,
+                template_path=templatePath,
+                target_path=targetPath if targetPath else ("file_upload" if file else ""),
+                template_local_path=temp_template_path,
+                target_local_path=temp_file_path,
+                similarity_score=similarity_score,
+                result_json=result_data
+            )
+            
+            return result_data
             
         except Exception as e:
             logger.error(f"YOLO预测失败: {e}")
@@ -530,74 +639,19 @@ class PredictManager:
             threshold_score = 1.0 if raw_similarity > 0.55 else 0.0
 
             # --- New Cleaning Logic (Applied globally for consistency if needed, but mainly for itzx=0 and 2) ---
-            # 获取配置
-            remove_letters = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_LETTERS", "true")).lower() == "true"
-            remove_digits = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_DIGITS", "true")).lower() == "true"
-            remove_punct = str(os.getenv("RRDSPPG_OCR_FILTER_REMOVE_PUNCTUATION", "true")).lower() == "true"
-            remove_before_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_BEFORE_KEYWORD", "")
-            remove_after_kw = os.getenv("RRDSPPG_OCR_FILTER_REMOVE_AFTER_KEYWORD", "")
-
-            def clean_text(text):
-                if not text: return ""
-                
-                # 1. 移除字符 (英文字母、数字、标点) - 优先级调整：先移除干扰字符
-                # 这样可以避免 "详1情" 这种中间夹杂字符导致关键词匹配失败的情况
-                
-                # 1.1 移除英文字母 (a-z, A-Z)
-                if remove_letters:
-                    text = re.sub(r'[a-zA-Z]', '', text)
-                # 1.2 移除数字 (0-9)
-                if remove_digits:
-                    text = re.sub(r'[0-9]', '', text)
-                # 1.3 移除标点符号 (英文标点 + 中文标点 + 特殊符号)
-                if remove_punct:
-                    # 英文标点
-                    text = re.sub(f'[{re.escape(string.punctuation)}]', '', text)
-                    # 中文标点及特殊符号 (扩充范围)
-                    # \u3000-\u303F: CJK 标点符号
-                    # \uFF00-\uFFEF: 全角ASCII、全角标点
-                    # \u2000-\u206F: 常用标点
-                    # 额外添加: “ ” ‘ ’ · ★ √
-                    cn_punctuations = r"[！-～\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F\u2E80-\u2EFF·★√]"
-                    text = re.sub(cn_punctuations, '', text)
-                    # 再次清理可能残留的空格
-                    text = re.sub(r'\s+', '', text)
-                
-                # 2. 关键词截断 (后执行)
-                # 此时文本已经比较纯净，匹配成功率更高
-                
-                # 2.1 移除 remove_before_kw 之前的内容 (包含关键词)
-                # 支持逗号分隔的多个关键词
-                if remove_before_kw:
-                    kws = [k.strip() for k in remove_before_kw.split(",") if k.strip()]
-                    for kw in kws:
-                        if kw in text:
-                            idx = text.find(kw)
-                            if idx != -1:
-                                text = text[idx + len(kw):]
-
-                # 2.2 移除 remove_after_kw 之后的内容 (包含关键词)
-                if remove_after_kw:
-                    kws = [k.strip() for k in remove_after_kw.split(",") if k.strip()]
-                    for kw in kws:
-                        if kw in text:
-                            idx = text.find(kw)
-                            if idx != -1:
-                                text = text[:idx]
-
-                return text
-
+            
             # 对文本进行清洗并计算清洗后的相似度
-            cleaned_template = clean_text(text_template)
-            cleaned_target = clean_text(text_target)
+            cleaned_template = PredictManager._clean_text(text_template)
+            cleaned_target = PredictManager._clean_text(text_target)
             cleaned_raw_similarity = SequenceMatcher(None, cleaned_template, cleaned_target).ratio()
             cleaned_threshold_score = 1.0 if cleaned_raw_similarity > 0.55 else 0.0
             # -------------------------------------------------------------------------------------------
 
             # 5. 根据 itzx 构建响应
+            result_data = {}
             if itzx_val == 1:
                 # itzx=1: 返回清洗后的文本 + 基于清洗文本的相似度
-                return {
+                result_data = {
                     "template_text": cleaned_template,
                     "target_text": cleaned_target,
                     "similarity_score": cleaned_threshold_score,
@@ -605,7 +659,7 @@ class PredictManager:
                 }
             elif itzx_val == 2:
                 # itzx=2: 返回原始文本 (未清洗)
-                return {
+                result_data = {
                     "template_text_raw": text_template,
                     "target_text_raw": text_target,
                     "similarity_score": threshold_score,
@@ -614,9 +668,25 @@ class PredictManager:
             else:
                 # 默认情况 (itzx=0 或其他未知值): 仅返回相似度分数
                 # 修改：使用清洗后的相似度
-                return {
+                result_data = {
                     "similarity_score": cleaned_threshold_score
                 }
+            
+            # --- 保存记录 ---
+            await PredictManager._upload_and_save_record(
+                task_id=getattr(request, 'taskId', 0) or 0,
+                user_id=getattr(request, 'userId', 0) or 0,
+                type_val=getattr(request, 'type', 0) or 0,
+                itzx=itzx_val,
+                template_path=getattr(request, 'templatePath', ''),
+                target_path=getattr(request, 'targetPath', ''),
+                template_local_path=template_local_path,
+                target_local_path=target_local_path,
+                similarity_score=result_data.get("similarity_score", 0.0),
+                result_json=result_data
+            )
+            
+            return result_data
             
         except Exception as e:
             logger.error(f"OCR预测失败 (URL模式): {e}")

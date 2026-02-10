@@ -11,10 +11,14 @@ from backend.app.routers.auth import auth_router
 from backend.app.routers.users import users_router
 from backend.app.routers.ai import chat_router as ai_chat
 from backend.app.routers.ai import image_router as ai_image
+from backend.app.routers.ai import video_router as ai_video
 from backend.app.routers.upload import upload_router
 from backend.app.routers import monitor
 from backend.app.routers import wecom
 from backend.app.routers import dify
+from backend.app.routers import speech
+from backend.app.routers.contact import contact_router
+from backend.app.routers.tools.doc import doc_router
 
 api_router = APIRouter()
 
@@ -27,6 +31,7 @@ api_router.include_router(upload_router.router, prefix="/upload", tags=["文件�
 # 注册 AI 路由
 api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI 智能对话"])
 api_router.include_router(ai_image.router, prefix="/ai/image", tags=["AI 图像服务"])
+api_router.include_router(ai_video.router, prefix="/ai/video", tags=["AI 视频服务"])
 # 注册 监控路由
 api_router.include_router(monitor.router, prefix="/monitor", tags=["系统监控"])
 # 注册 人人都是品牌官 业务路由
@@ -35,3 +40,9 @@ api_router.include_router(rrdsppg.router, prefix="/rrdsppg", tags=["人人都是
 api_router.include_router(wecom.router, prefix="/wecom", tags=["企业微信"])
 # 注册 Dify 路由
 api_router.include_router(dify.router, prefix="/dify", tags=["Dify AI"])
+# 注册 语音路由
+api_router.include_router(speech.router, prefix="/speech", tags=["语音服务"])
+# 注册 联系人路由
+api_router.include_router(contact_router.router, prefix="/contact", tags=["客户留资"])
+# 注册 工具路由
+api_router.include_router(doc_router.router, prefix="/tools/doc", tags=["文档工具"])

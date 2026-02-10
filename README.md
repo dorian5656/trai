@@ -6,12 +6,15 @@ TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO
 
 ### 后端 (Backend)
 
-#### 1. 激活环境1
+
+#### 1. 激活环境
+
 ```bash
-conda activate trai_31014_whf
+conda activate trai_31014_whf_pro_20260202
 ```
 
 #### 2. 启动服务
+
 ```bash
 # 在项目根目录下执行
 python backend/run.py
@@ -60,6 +63,23 @@ python backend/client_app/client_main.py
 python backend/client_app/build.py
 ```
 
+## 📹 AI 视频生成 (Wan2.1)
+
+项目集成了 Wan2.1-T2V-1.3B 模型，支持文本生成视频。
+
+### 特性
+- **文本生成视频**: 支持中文/英文提示词
+- **自动封面提取**: 使用 OpenCV 自动提取视频第一帧作为封面
+- **飞书通知**: 任务状态变更及生成结果自动推送到飞书群 (支持交互式卡片)
+- **异步处理**: 后台异步生成，不阻塞 API 响应
+
+### 接口
+`POST /api_trai/v1/ai/video/generations`
+
+### 依赖
+- `opencv-python-headless`: 用于视频帧提取
+- GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
+
 ## 📚 接口文档 (API Docs)
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
@@ -80,8 +100,8 @@ python backend/client_app/build.py
 - **Python**: 3.10.14
 
 #### 安装步骤
-0. conda create -n trai_31014_whf python=3.10.14
-    conda activate trai_31014_whf
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
 1. 安装 Python 3.10_14
 2. 安装 CUDA 11.8 或 12.1 (推荐)
 3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
@@ -127,7 +147,164 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 
-## 📝 更新日志
+## 📝 更新日志 (Changelog)
+
+
+### 2026_02_10_0812
+- **前端-内容**: 更新技能: 将 'AI 播客' 替换为 '发票识别'; 同步更换票据样式图标; 更新输入占位文案以提示抬头、金额、税率识别。
+
+
+### 2026_02_09_1532
+- **后端**: 更新项目依赖包 (requirements.txt), 补充文档转换工具相关库 (pikepdf, xhtml2pdf, easyofd 等).
+
+### 2026_02_09_1528
+- **后端**: 修复文档处理安全风险与逻辑缺陷.
+  - 修复 `user_docs` 表 `updated_at` 字段不自动更新问题 (添加触发器).
+  - 修复 `pikepdf` 覆盖源文件风险, 移除 `allow_overwriting_input`.
+  - 修复文档转换临时目录与 S3 Key 可能存在的命名冲突 (引入 UUID).
+
+### 2026_02_09_1510
+- **后端**: 修复DeepSeek对话上下文记忆问题, 增加多模态(文生图)上下文支持.
+- **后端**: 优化GPU监控温度显示格式(增加°符号).
+
+### 2026_02_09_1351
+- **客户端**: 更新主窗体图标为 `tr_mascot_local.ico`.
+- **客户端**: 优化图片内容解析模块的图片上传逻辑，增加图片拖拽上传.
+- **客户端**: 新增系统监控模块, 包括四个功能：GPU环境检测、系统资源监控、获取所有模型状态、系统健康检查.
+
+### 2026_02_09_1150
+- **后端**: 新增 Word 转 PDF 功能 (Pandoc+XeLaTeX), 支持中文及 S3/DB 记录.
+- **后端**: 新增 `/word2pdf` 路由, 完善文档转换测试 (test_doc_utils/test_doc_router).
+- **后端**: 迁移通知逻辑至 `feishu_utils.py` (FeishuBot), 移除冗余代码.
+- **数据库**: 新增 `user_docs` 表, 用于存储用户文档及转换记录.
+
+### 2026_02_09_1050
+- **后端**: 重构文档工具 (doc), 规范化文件命名 (doc_func/doc_router) 与路由路径 (/md2pdf).
+- **后端**: 优化通知逻辑, 统一使用 NotifyUtils 处理文件上传通知.
+- **后端**: 清理废弃的 sys_files 表初始化与临时测试代码.
+
+### 2026_02_06_1734
+- **后端**: 修复 S3 上传逻辑 (upload_utils), 统一使用 trai Bucket 并修复配置读取错误.
+- **后端**: 增强 ModelScopeUtils 图像处理, 支持本地相对路径并拦截 blob URL 错误.
+- **后端**: 修复 Qwen-VL 多模态对话接口中图片路径解析问题.
+
+### 2026_02_06_1616
+- **后端**: 清理根目录冗余文件 (test_output, scripts) 与测试脚本.
+- **后端**: 验证 rrdsppg 接口 OCR 清洗逻辑 (保留标点过滤), 确认功能正常.
+- **文档**: 更新项目日志与 README.
+
+### 2026_02_06_1416
+- **客户端**: 统一 PyQt6 客户端配置管理, 将 `login`, `deepseek`, `image_gen`, `image_parse`, `rrdsppg` 等模块的接口与默认参数集中至 `backend/pyqt_app/pages/config.json`, 通过单例 `config_loader.py` 读取.
+- **客户端**: 修复登录页默认账号密码硬编码问题, 改为从配置文件读取.
+- **客户端**: `RrdsppgPage` 移除所有硬编码参数 (模板/目标图片 URL、task_id、user_id、类型枚举), 全部改为读取配置文件.
+- **客户端**: 优化上传目录初始化逻辑, 确保 `temp/web_upload` 目录在运行时自动创建, 避免文件保存失败.
+
+### 2026_02_05_1724
+- **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
+- **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
+- **后端**: 清理冗余测试脚本与临时文件.
+
+### 2026_02_05_1704
+- **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
+
+### 2026_02_05_1701
+- **前端-内容**: 同步前端代码到 zcl 分支.
+
+### 2026_02_05_1142
+- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
+- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
+
+### 2026_02_04_1649
+- **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
+- **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
+- **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
+- **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
+
+### 2026_02_04_1648
+- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
+- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
+### 2026_02_04_1541
+- **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
+- **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
+- **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
+
+### 2026_02_04_1415
+- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
+- **后端**: 修正 YOLO 模型加载路径配置 (`config.py`).
+
+### 2026_02_04_1130
+- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
+- **构建**: 更新 Vite 配置与通用组件 (`SimilarityDialog`).
+
+### 2026_02_04_0936
+- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
+- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
+- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
+- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
+
+### 2026_02_03_1723
+- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
+- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
+- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
+
+### 2026_02_03_1108
+- **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
+- **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
+- **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
+
+
+### 2026_02_03_1015
+- **后端**: 修复留资模块 (`contact`) 文件头模板不符合规范的问题.
+- **后端**: 同步更新 `.env.example` 配置文件, 补充企业微信、飞书、纷享销客等配置项.
+- **文档**: 更新 README.md 中的 PaddleOCR 和 Torch 版本号.
+
+### 2026_02_03_1000
+- **后端**: 留资模块功能完善与修复.
+  - 留资通知支持多邮箱 (QQ/163) 和 飞书 Webhook 同步.
+  - 修复数据库插入事务提交问题 (`PGUtils.fetch_one_commit`), 解决数据未持久化 BUG.
+
+### 2026_02_03_0929
+- **后端**: 新增客户留资业务模块 (`contact`), 支持数据入库与邮件通知.
+- **后端**: 实现 `customer_leads` 表的自动初始化与元数据注册.
+- **后端**: 规范化 API 文档注释 (Args/Returns), 并修复配置项兼容性问题.
+- **后端**: 重构 `DBInitializer`, 统一管理所有业务表的创建与迁移.
+
+### 2026_02_02_1719
+- **后端**: 修复 PaddleOCR 环境兼容性问题 (降级至 `paddleocr==2.6.1.3`, `paddlepaddle-gpu==2.5.2`) 并锁定 `torch==2.10.0`, 优化 GPU 检测逻辑.
+- **后端**: 修复 API 文档 `/predict` 接口参数显示缺失问题 (手动定义 OpenAPI Schema).
+
+### 2026_02_02_1618
+- **后端**: 完善所有路由的 API 文档(参数与返回值).
+- **后端**: 优化 `upload` 模块删除接口为 POST 请求.
+- **后端**: 扩展 `ResponseCode` 状态码定义.
+- **后端**: 修复 PaddleOCR 初始化参数 (`gpu_id`, `use_gpu`, `show_log`) 兼容性问题.
+
+### 2026_02_02_1436
+- **后端**: 集成 Qwen3-VL-4B-Instruct 模型, 支持多模态(图文)输入, API 路径 `/api/v1/ai/chat/completions`.
+- **后端**: 修复 YOLO 模型路径配置 (`MODEL_PATH_HEART_LIKE`), 统一至 `models/yolo/yolo11/heart_like`.
+- **后端**: 优化项目结构, 清理临时测试脚本.
+
+### 2026_01_30_1645
+- **后端**: 修复 SpeechManager CPU 强制配置, 启用 GPU 加速 (通过 `ocr_utils.py` 自动选择空闲 GPU).
+- **后端**: 修复 S3 音频 URL 访问权限问题 (设为 public-read).
+- **后端**: 更新 `.gitignore` 忽略模型文件与日志, 优化项目体积.
+- **后端**: 统一测试音频文件路径至 `backend/temp`.
+- **后端**: 优化模型目录结构:
+  - 语音模型: `models/iic/speech_paraformer...` (支持默认目录创建与运行时下载).
+  - YOLO模型: 迁移至 `models/yolo11/heart_like`.
+  - 配置化: 提取 YOLO 模型路径至 `settings.MODEL_PATH_HEART_LIKE`.
+
+### 2026_01_30_1602
+- **后端**: 新增语音识别模块 (FunASR), 支持音频文件转写及 S3 存储与数据库记录.
+- **后端**: 优化模型管理, 统一模型目录至 `backend/app/models`, 并实现 FunASR/PaddleOCR/Z-Image-Turbo/Qwen3-VL 模型的自动下载与加载.
+- **后端**: 修复 PaddleOCR GPU 检测问题, 默认选择最空闲 GPU.
+- **后端**: 更新 `ocr_utils.py` 与 `speech_func.py`, 规范化临时文件路径 (`backend/temp`).
+- **后端**: 完善 S3 上传逻辑, 支持自动创建 Bucket 及 Content-Type 识别.
+
+### 2026_01_30_1451
+- **后端**: 优化目录结构, 启动时自动检测并修复模型路径与临时目录.
+- **后端**: 移除冗余文件 (879.txt, scripts, logs等), 规范化项目结构.
 ### 2026_01_29_1730
 - **后端**: 优化端口管理, 启动时自动检测并释放占用端口 (支持 Windows/Linux/MacOS).
 - **后端**: 完善网络工具类 `NetUtils`, 统一中文注释与跨平台支持.
@@ -151,6 +328,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 功能增强: 新增自动登录、系统托盘、退出/注销选项.
   - 图像识别: 修复 S3 上传路径错误, 增加拖拽上传与多模态对话功能.
   - 打包优化: `build.py` 支持自动包含图标 (`pppg.ico`).
+
+### 2026_02_05_0931
+- **后端**: 修复依赖版本冲突, 确保环境稳定性.
+  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
+  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
+  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
+  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
 
 ### 2026_01_29_1353
 - **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.
@@ -244,6 +428,8 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
   - 首页 (`PC` & `Mobile`) 集成登录/退出功能, 侧边栏同步显示用户信息.
   - 优化 `SimilarityDialog` 组件, 支持图片拖拽上传与预览, 并修复大整数精度问题.
   - 修正 Axios 拦截器以兼容非标准 OAuth2 响应格式 (`access_token`).
+
+
 
 ### 2026_01_27_1620
 - **后端**: 优化 `heart_like` 相关业务逻辑, 将 OCR 相似度触发阈值从 0.6 调整为 0.55, 提升准确率.
@@ -395,6 +581,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
 - **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
 - **前端**: 完成移动端抽屉式导航与自适应布局开发.
+
+### 2026_02_04_1012
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
 
 ### 2026_01_26_1644
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.
