@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     # 基础配置
     PROJECT_NAME: str = "TRAI Backend"
     VERSION: str = "0.1.0"
-    API_V1_STR: str = "/api/v1"
+    API_V1_STR: str = "/api_trai/v1"
     
     # 环境配置
     ENV: str = os.getenv("ENV", "dev")
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", 5689))
+    PORT: int = int(os.getenv("PORT", 5777))
     
     # PostgreSQL 数据库配置
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     
     # 路径配置
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
+
+    @property
+    def MODEL_PATH_HEART_LIKE(self) -> Path:
+        """YOLO Heart Like 模型路径"""
+        # Updated to match actual file structure: yolo/yolo11/heart_like/heart_like.pt
+        return self.BASE_DIR / "app" / "models" / "yolo" / "yolo11" / "heart_like" / "heart_like.pt"
 
     # 日志配置
     LOG_LEVEL: str = "INFO"
@@ -61,17 +67,20 @@ class Settings(BaseSettings):
     WECOM_TRAI_ROBOT_KEY: str = os.getenv("WECOM_TRAI_ROBOT_KEY", "")
     WECOM_CORP_ID: str = os.getenv("WECOM_CORP_ID", "")
     WECOM_CORP_SECRET: str = os.getenv("WECOM_CORP_SECRET", "")
+    WECOM_AGENT_ID: str = os.getenv("WECOM_AGENT_ID", "")
     WECOM_SYNC_ON_STARTUP: bool = os.getenv("WECOM_SYNC_ON_STARTUP", "false").lower() == "true"
     
     # 飞书配置
     FEISHU_TRAI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_TRAI_WEBHOOK_TOKEN", "")
+    FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN: str = os.getenv("FEISHU_GUANWANGLIUZI_WEBHOOK_TOKEN", "")
+    FEISHU_IMAGE_GEN_WEBHOOK_TOKEN: str = os.getenv("FEISHU_IMAGE_GEN_WEBHOOK_TOKEN", "") # 文生图通知
     FEISHU_APP_ID: str = os.getenv("FEISHU_APP_ID", "")
     FEISHU_APP_SECRET: str = os.getenv("FEISHU_APP_SECRET", "")
     
     # 安全配置 (JWT)
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 720))
     
     # DeepSeek API 配置
     DEEPSEEK_API_BASE: str = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
@@ -82,13 +91,19 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "")
     S3_ACCESS_KEY: str = os.getenv("S3_ACCESS_KEY", "")
     S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
-    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "trai-uploads")
-    S3_IMAGE_BUCKET_NAME: str = os.getenv("S3_IMAGE_BUCKET_NAME", "trai_images")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "trai")
     S3_REGION_NAME: str = os.getenv("S3_REGION_NAME", "us-east-1")
     S3_PUBLIC_DOMAIN: str = os.getenv("S3_PUBLIC_DOMAIN", "")
 
     # Dify AI 配置
-    DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.100.119:8098/v1")
+    DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.1.2:8098/v1")
+    
+    # Dify 数据库配置
+    DIFY_PG_HOST: str = os.getenv("DIFY_PG_HOST", "192.168.1.2")
+    DIFY_PG_PORT: int = int(os.getenv("DIFY_PG_PORT", 5433))
+    DIFY_PG_USER: str = os.getenv("DIFY_PG_USER", "postgres")
+    DIFY_PG_PASSWORD: str = os.getenv("DIFY_PG_PASSWORD", "")
+    DIFY_PG_DB: str = os.getenv("DIFY_PG_DB", "dify")
     
     # 兼容 DeepSeek 变量 (如果 .env 中使用的是 DEEPSEEK_API_BASE)
     @property
@@ -105,6 +120,28 @@ class Settings(BaseSettings):
     # 财务助手 Key (预留)
     DIFY_CAIWU_API_KEY: str = os.getenv("DIFY_CAIWU_API_KEY", "")
     
+    # 邮件推送配置 (SMTP)
+    EMAIL_HOST: str = os.getenv("EMAIL_HOST", "smtp.qq.com")
+    EMAIL_PORT: int = int(os.getenv("EMAIL_PORT", 465))
+    EMAIL_USER: str = os.getenv("EMAIL_USER", "")
+    EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
+    
+    # 邮件收件人配置
+    EMAIL_TO_DEFAULT_QQ: str = os.getenv("EMAIL_TO_DEFAULT_QQ", "")
+    EMAIL_TO_DEFAULT_163: str = os.getenv("EMAIL_TO_DEFAULT_163", "")
+
+    @property
+    def EMAIL_TO_DEFAULT(self) -> list[str]:
+        """
+        获取合并后的默认收件人列表 (QQ + 163)
+        """
+        emails = []
+        for src in [self.EMAIL_TO_DEFAULT_QQ, self.EMAIL_TO_DEFAULT_163]:
+            if src:
+                # 支持逗号分隔
+                emails.extend([e.strip() for e in src.split(",") if e.strip()])
+        return emails
+
     # 兼容旧配置 (如果需要)
     @property
     def DIFY_API_KEY(self) -> str:
@@ -128,7 +165,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        env_file = ".env"
+        env_file = str(Path(__file__).resolve().parent.parent / ".env")
         extra = "ignore" # 忽略多余的环境变量
 
 settings = Settings()

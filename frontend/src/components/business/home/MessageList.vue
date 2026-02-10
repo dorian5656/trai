@@ -5,14 +5,15 @@
 描述：消息列表组件
 -->
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, onMounted } from 'vue';
 import { renderMarkdown } from '@/utils/markdown';
 import { icons } from '@/assets/icons';
 import { ElMessage } from 'element-plus';
+import { ElImageViewer } from 'element-plus';
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
@@ -25,6 +26,9 @@ const emit = defineEmits<{
 }>();
 
 const chatContainerRef = ref<HTMLElement | null>(null);
+const showViewer = ref(false);
+const previewUrlList = ref<string[]>([]);
+const initialIndex = ref(0);
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -34,6 +38,56 @@ const scrollToBottom = () => {
   });
 };
 
+const extractImageUrls = (content: string): string[] => {
+  const urls: string[] = [];
+  const mdImgRegex = /!\[[^\]]*?\]\((.*?)\)/g;
+  let match;
+  while ((match = mdImgRegex.exec(content)) !== null) {
+    if (match[1]) urls.push(match[1]);
+  }
+  return urls;
+};
+
+const onMessageListClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (target && target.tagName === 'IMG') {
+    const container = target.closest('.markdown-body') as HTMLElement | null;
+    if (!container) return;
+    const imgs = Array.from(container.querySelectorAll('img'));
+    const urls = imgs.map((img) => (img as HTMLImageElement).src).filter(Boolean);
+    const idx = urls.indexOf((target as HTMLImageElement).src);
+    if (urls.length > 0) {
+      previewUrlList.value = urls;
+      initialIndex.value = Math.max(0, idx);
+      showViewer.value = true;
+    }
+  }
+};
+
+const downloadImagesFromContent = async (content: string) => {
+  const urls = extractImageUrls(content);
+  if (urls.length === 0) {
+    ElMessage.warning('没有可下载的图片');
+    return;
+  }
+  const url = urls[0] as string;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const objectUrl = URL.createObjectURL(blob);
+    a.href = objectUrl;
+    const filename = url.split('/').pop() || 'image';
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+    ElMessage.success('开始下载');
+  } catch {
+    ElMessage.error('下载失败');
+  }
+};
 // 复制功能
 const copyMessage = (content: string) => {
   if (navigator.clipboard) {
@@ -68,6 +122,10 @@ watch(() => props.messages[props.messages.length - 1]?.content, () => {
   scrollToBottom();
 });
 
+onMounted(() => {
+  scrollToBottom();
+});
+
 defineExpose({
   scrollToBottom
 });
@@ -75,7 +133,7 @@ defineExpose({
 
 <template>
   <div class="chat-wrapper">
-    <div class="message-list" ref="chatContainerRef">
+    <div class="message-list" ref="chatContainerRef" @click="onMessageListClick">
       <div 
         v-for="(msg, index) in messages" 
         :key="msg.id" 
@@ -93,7 +151,7 @@ defineExpose({
           
           <div class="content-bubble">
              <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
-             <div v-else>{{ msg.content }}</div>
+             <div v-else class="markdown-body user-content" v-html="renderMarkdown(msg.content)"></div>
           </div>
 
           <!-- AI 消息下方的操作栏 -->
@@ -109,17 +167,32 @@ defineExpose({
             >
               <span class="icon" v-html="icons.regenerate"></span>
             </button>
+            <button 
+              class="action-btn" 
+              title="下载图片" 
+              @click="downloadImagesFromContent(msg.content)"
+            >
+              <span class="icon" v-html="icons.download"></span>
+            </button>
           </div>
         </div>
       </div>
     </div>
+    <Teleport to="body">
+      <el-image-viewer
+        v-if="showViewer"
+        :url-list="previewUrlList"
+        :initial-index="initialIndex"
+        @close="showViewer = false"
+      />
+    </Teleport>
   </div>
 </template>
 
 <style scoped lang="scss">
 .chat-wrapper {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -132,6 +205,14 @@ defineExpose({
     padding-bottom: 12vh;
     overflow-y: auto; 
     height: 100%;
+    /* 隐藏滚动条 */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+    &::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
 
     @media (max-width: 768px) {
       max-width: 95vw;
@@ -184,6 +265,80 @@ defineExpose({
           pre { background: #f7f8fa; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; color: #333; border: 1px solid #e5e6eb; }
           code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
           pre code { color: inherit; background-color: transparent; padding: 0; }
+          
+          /* 通用图片样式 */
+          img {
+            max-width: 100%;
+            max-height: 50vh;
+            width: auto;
+            object-fit: contain;
+            border-radius: 0.375rem;
+            margin: 0.5rem 0;
+            display: block;
+          }
+        }
+
+        @media (max-width: 768px) {
+          :deep(.markdown-body) {
+            font-size: 0.875rem;
+            line-height: 1.7;
+            img {
+              max-height: 30vh !important;
+              max-width: 75vw !important;
+              width: auto !important;
+              object-fit: contain;
+              margin-left: auto;
+              margin-right: auto;
+            }
+            h1 { font-size: 1.125rem; }
+            h2 { font-size: 1.0625rem; }
+            h3 { font-size: 1rem; }
+            h4, h5, h6 { font-size: 0.9375rem; }
+            pre {
+              font-size: 0.8125rem;
+              max-width: 90vw;
+              max-height: 32vh;
+              overflow: auto;
+            }
+            code {
+              font-size: 0.8125rem;
+              word-break: break-word;
+            }
+            table {
+              display: block;
+              max-width: 90vw;
+              overflow-x: auto;
+              border-collapse: collapse;
+            }
+            th, td {
+              padding: 0.5rem;
+              border: 1px solid #e5e6eb;
+              text-align: left;
+            }
+            blockquote {
+              border-left: 0.25rem solid #e5e6eb;
+              padding-left: 0.75rem;
+              color: #4e5969;
+            }
+            ul, ol {
+              padding-left: 1rem;
+            }
+            a {
+              word-break: break-all;
+            }
+          }
+        }
+
+        /* 用户消息特定样式调整 */
+        .user-content {
+          :deep(a) {
+             color: #fff;
+             text-decoration: underline;
+          }
+          :deep(code) {
+             background-color: rgba(255, 255, 255, 0.2);
+             color: #fff;
+          }
         }
       }
 

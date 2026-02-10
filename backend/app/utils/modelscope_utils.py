@@ -9,12 +9,20 @@ from anyio import to_thread
 
 # 尝试导入 modelscope 相关库 (可选依赖)
 try:
-    from modelscope import Qwen3VLForConditionalGeneration, AutoProcessor
+    # 优先尝试从 transformers 导入模型类 (更通用)
+    from transformers import Qwen2_5_VLForConditionalGeneration, Qwen3VLForConditionalGeneration, AutoProcessor
     from qwen_vl_utils import process_vision_info
     _MODELSCOPE_AVAILABLE = True
 except ImportError:
-    _MODELSCOPE_AVAILABLE = False
-    logger.warning("⚠️ modelscope 或 qwen_vl_utils 未安装，ModelScopeUtils 功能受限")
+    try:
+        # Fallback if Qwen3 is not available
+        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from qwen_vl_utils import process_vision_info
+        Qwen3VLForConditionalGeneration = None
+        _MODELSCOPE_AVAILABLE = True
+    except ImportError:
+        _MODELSCOPE_AVAILABLE = False
+    logger.warning("⚠️ transformers 或 qwen_vl_utils 未安装，ModelScopeUtils 功能受限")
 
 class ModelScopeUtils:
     """
@@ -30,7 +38,10 @@ class ModelScopeUtils:
     # 默认模型路径映射 (可扩展)
     # 格式: "ShortName": "Relative/Path/To/Model"
     _MODEL_PATHS = {
-        "Qwen3-VL-4B-Instruct": "Qwen/Qwen/qwen3_vl_4b_instruct/Qwen/Qwen3-VL-4B-Instruct"
+        "Qwen3-VL-4B-Instruct": "Qwen/Qwen3-VL-4B-Instruct",
+        "Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct",
+        "Qwen/Qwen3-VL-4B-Instruct": "Qwen/Qwen3-VL-4B-Instruct",
+        "Qwen/Qwen3-VL-8B-Instruct": "Qwen/Qwen3-VL-8B-Instruct"
     }
 
     @classmethod
@@ -45,6 +56,14 @@ class ModelScopeUtils:
         
         # 2. 如果表中没有，尝试自动发现
         if not relative_path:
+            # 如果传入的是 namespace/model_name 格式，直接尝试拼接
+            if "/" in model_name:
+                parts = model_name.split("/")
+                if len(parts) >= 2:
+                    potential_path = base_path / parts[0] / parts[1]
+                    if potential_path.exists():
+                        return str(potential_path)
+
             logger.info(f"正在自动扫描查找模型: {model_name} ...")
             relative_path = cls._scan_and_find_model(model_name)
             if relative_path:
@@ -53,6 +72,9 @@ class ModelScopeUtils:
                 cls._MODEL_PATHS[model_name] = relative_path
         
         if not relative_path:
+            # 如果是 full id 且不存在，返回预期的路径以便后续下载
+            if "/" in model_name:
+                 return str(base_path / model_name)
             return ""
             
         return str(base_path / relative_path)
@@ -80,7 +102,7 @@ class ModelScopeUtils:
         return None
         
     @classmethod
-    def check_model_exists(cls, model_name: str = "Qwen3-VL-4B-Instruct") -> bool:
+    def check_model_exists(cls, model_name: str = "Qwen/Qwen3-VL-4B-Instruct") -> bool:
         """
         检查模型文件是否存在
         """
@@ -148,7 +170,19 @@ class ModelScopeUtils:
 
         model_path = cls.get_model_path(model_name)
         if not cls.check_model_exists(model_name):
-            raise FileNotFoundError(f"模型未找到: {model_name} ({model_path})")
+             # 自动下载
+             logger.info(f"📥 ModelScope 模型未找到，开始下载: {model_name} -> {cls.BASE_MODEL_DIR}")
+             try:
+                 from modelscope.hub.snapshot_download import snapshot_download
+                 # 下载到 backend/app/models
+                 snapshot_download(model_name, cache_dir=str(cls.BASE_MODEL_DIR))
+                 logger.success(f"✅ [{model_name}] 模型下载完成")
+                 
+                 # 重新获取路径 (以防万一)
+                 model_path = cls.get_model_path(model_name)
+             except Exception as e:
+                 logger.error(f"❌ [{model_name}] 模型下载失败: {e}")
+                 raise e
 
         try:
             # 策略：如果已加载其他模型，先卸载以释放显存 (单卡/资源受限场景)
@@ -166,13 +200,23 @@ class ModelScopeUtils:
 
             # 根据模型类型加载
             if "Qwen3-VL" in model_name:
-                model = Qwen3VLForConditionalGeneration.from_pretrained(
-                    model_path,
-                    torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
-                ).to(device)
-                processor = AutoProcessor.from_pretrained(model_path)
+                if Qwen3VLForConditionalGeneration is None:
+                     raise ImportError("当前 transformers 版本不支持 Qwen3-VL")
+                model_class = Qwen3VLForConditionalGeneration
+            elif "Qwen2.5-VL" in model_name or "Qwen2-VL" in model_name:
+                model_class = Qwen2_5_VLForConditionalGeneration
             else:
-                raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+                 # Default fallback or error
+                 raise NotImplementedError(f"尚未支持该模型类型的加载: {model_name}")
+
+            # 使用 AutoModel 自动适配 Qwen2/2.5/3 VL
+            model = model_class.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16 if "cuda" in device else torch.float32,
+                # trust_remote_code=True, # 允许加载自定义代码
+                ignore_mismatched_sizes=True,  # 允许忽略权重形状不匹配 (如微调头差异)
+            ).to(device)
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             
             cls._instances[model_name] = {
                 "model": model,
@@ -189,7 +233,7 @@ class ModelScopeUtils:
             raise RuntimeError(f"Failed to load model {model_name}: {e}")
 
     @classmethod
-    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int) -> str:
+    def _run_inference_sync(cls, model_name: str, messages: List[Dict[str, Any]], max_new_tokens: int, streamer=None) -> str:
         """
         同步执行推理逻辑 (将被运行在线程池中)
         """
@@ -200,6 +244,39 @@ class ModelScopeUtils:
         
         # Qwen-VL 特有处理逻辑
         if "Qwen" in model_name:
+            # 0. 预处理 messages 中的图片 (支持 base64/blob/url)
+            # qwen_vl_utils.process_vision_info 需要本地路径或可访问的 HTTP URL
+            # 如果是 blob: 开头的 URL，这是浏览器内部地址，后端无法直接访问
+            # 如果是 base64，qwen_vl_utils 通常支持
+            
+            for msg in messages:
+                if msg.get("role") == "user" and isinstance(msg.get("content"), list):
+                    for content_item in msg["content"]:
+                        if content_item.get("type") == "image":
+                            image_url = content_item.get("image", "")
+                            # 如果 image 是 dict 格式 ({"url": "..."})
+                            if isinstance(image_url, dict):
+                                image_url = image_url.get("url", "")
+                                
+                            # 处理 blob: 开头的 URL (无法直接访问)
+                            if image_url.startswith("blob:"):
+                                logger.warning(f"检测到 blob URL: {image_url}，后端无法直接访问。请确保前端上传图片并传递真实 URL 或 Base64。")
+                                raise ValueError(f"不支持 blob: 格式的图片 URL ({image_url})。请先上传图片到服务器，使用 http/https 链接或 base64 编码。")
+                            
+                            # 处理相对路径 /static/... (转为本地绝对路径)
+                            # 场景: 本地上传模式，且没有配置 S3
+                            if image_url.startswith("/static/"):
+                                # 假设项目根目录在 backend/..
+                                # base_dir = /home/code_dev/trai/backend
+                                base_dir = Path(__file__).resolve().parent.parent.parent
+                                # local_path = /home/code_dev/trai/backend/static/...
+                                local_path = base_dir / image_url.lstrip("/")
+                                if local_path.exists():
+                                    logger.info(f"将相对路径转换为本地绝对路径: {image_url} -> {local_path}")
+                                    content_item["image"] = str(local_path)
+                                else:
+                                    logger.warning(f"本地文件不存在: {local_path}")
+                                    
             # 1. 应用聊天模板
             text = processor.apply_chat_template(
                 messages, 
@@ -222,30 +299,90 @@ class ModelScopeUtils:
             # 移至设备
             inputs = inputs.to(device)
 
+            # Debug Log: Print Input Shapes
+            logger.info(f"[{model_name}] Input Keys: {list(inputs.keys())}")
+            if "pixel_values" in inputs:
+                logger.info(f"[{model_name}] pixel_values shape: {inputs['pixel_values'].shape}")
+            if "image_grid_thw" in inputs:
+                logger.info(f"[{model_name}] image_grid_thw: {inputs['image_grid_thw']}")
+            if "input_ids" in inputs:
+                logger.info(f"[{model_name}] input_ids shape: {inputs['input_ids'].shape}")
+
             # 4. 生成
             logger.info(f"[{model_name}] 开始推理...")
-            generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
-            
-            # 5. 解码
-            generated_ids_trimmed = [
-                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
-            
-            output_text = processor.batch_decode(
-                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )
-            
-            result = output_text[0]
-            logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
-            return result
+            if streamer:
+                # 使用 streamer 进行流式生成
+                model.generate(**inputs, max_new_tokens=max_new_tokens, streamer=streamer)
+                return "" # 流式模式下返回值由 streamer 处理，这里返回空或最后累积的文本
+            else:
+                generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+                
+                # 5. 解码
+                generated_ids_trimmed = [
+                    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                ]
+                
+                output_text = processor.batch_decode(
+                    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+                )
+                
+                result = output_text[0]
+                logger.info(f"[{model_name}] 推理完成: {result[:50]}...")
+                return result
             
         return "Unsupported model architecture"
+
+    @classmethod
+    async def chat_completion_stream(
+        cls, 
+        messages: List[Dict[str, Any]], 
+        model_name: str = "Qwen/Qwen3-VL-4B-Instruct",
+        max_new_tokens: int = 512
+    ):
+        """
+        执行对话推理 (异步流式)
+        """
+        from transformers import TextIteratorStreamer
+        import threading
+
+        # 加载模型 (获取 processor)
+        # 注意: 这里需要在主线程加载，因为 load_model 可能涉及下载和 GPU 操作
+        async with cls._inference_lock:
+            instance = cls._load_model(model_name)
+            processor = instance["processor"]
+            
+            # 创建 Streamer
+            streamer = TextIteratorStreamer(processor, skip_prompt=True, skip_special_tokens=True)
+            
+            # 在新线程中运行 generate
+            # 注意: generate 是阻塞的，必须在线程中运行，否则会阻塞 event loop 导致无法 yield
+            thread = threading.Thread(
+                target=cls._run_inference_sync, 
+                kwargs={
+                    "model_name": model_name,
+                    "messages": messages,
+                    "max_new_tokens": max_new_tokens,
+                    "streamer": streamer
+                }
+            )
+            thread.start()
+
+            # 在主线程中 yield streamer 的输出
+            # streamer 是一个迭代器，会阻塞等待新 token
+            try:
+                for new_text in streamer:
+                    yield new_text
+            except Exception as e:
+                logger.error(f"流式生成异常: {e}")
+                yield f"[ERROR: {str(e)}]"
+            finally:
+                thread.join()
 
     @classmethod
     async def chat_completion(
         cls, 
         messages: List[Dict[str, Any]], 
-        model_name: str = "Qwen3-VL-4B-Instruct",
+        model_name: str = "Qwen/Qwen3-VL-4B-Instruct",
         max_new_tokens: int = 512
     ) -> str:
         """
@@ -259,7 +396,8 @@ class ModelScopeUtils:
                     cls._run_inference_sync,
                     model_name,
                     messages,
-                    max_new_tokens
+                    max_new_tokens,
+                    None # No streamer
                 )
                 return result
                 

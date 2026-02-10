@@ -16,6 +16,14 @@ router = APIRouter()
 async def read_users_me(current_user = Depends(get_current_active_user)):
     """
     获取当前登录用户的详细信息
+
+    **Args:**
+
+    - `current_user` (User): 当前登录用户
+
+    **Returns:**
+
+    - `UserResponse`: 用户详细信息
     """
     return await UsersFunc.get_me(current_user)
 
@@ -27,6 +35,16 @@ async def read_users(
 ):
     """
     获取所有用户列表 (仅超级管理员)
+
+    **Args:**
+
+    - `skip` (int): 跳过数量
+    - `limit` (int): 限制数量
+    - `current_user` (User): 当前超级管理员
+
+    **Returns:**
+
+    - `List[UserResponse]`: 用户列表
     """
     return await UsersFunc.get_users(skip, limit)
 
@@ -37,8 +55,18 @@ async def audit_user(
 ):
     """
     审核用户注册申请 (仅超级管理员)
-    - **is_active=True**: 通过
-    - **is_active=False**: 拒绝/禁用
+
+    **Args:**
+
+    - `audit_data` (UserAudit): 审核数据
+        - `username` (str): 用户名
+        - `is_active` (bool): True=通过, False=拒绝/禁用
+        - `role` (str, optional): 分配角色
+    - `current_user` (User): 当前超级管理员
+
+    **Returns:**
+
+    - `User`: 更新后的用户信息
     """
     return await UsersFunc.audit_user(audit_data)
 
@@ -49,7 +77,17 @@ async def change_password(
 ):
     """
     修改当前用户密码
-    - 需要提供旧密码验证
-    - 需要填写修改理由
+
+    **Args:**
+
+    - `password_data` (PasswordChange): 密码修改数据
+        - `old_password` (str): 旧密码
+        - `new_password` (str): 新密码
+        - `reason` (str): 修改理由
+    - `current_user` (User): 当前登录用户
+
+    **Returns:**
+
+    - `dict`: 修改结果
     """
     return await UsersFunc.change_password(current_user, password_data)

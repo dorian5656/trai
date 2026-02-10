@@ -4,12 +4,12 @@
 // 描述：Axios 网络请求封装
 
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
-import { ElMessage } from 'element-plus';
-import 'element-plus/es/components/message/style/css';
+import { ErrorHandler } from './errorHandler';
+import { API_URL } from '@/config';
 
 // ✅ 创建 axios 实例
 const service: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_APP_MAIN_URL || '/api', // 环境变量
+  baseURL: API_URL,
   timeout: 100000,
   headers: { 'Content-Type': 'application/json;charset=utf-8' },
 });
@@ -26,7 +26,9 @@ service.interceptors.request.use(
   },
   (error) => {
     console.error('❌ 请求错误:', error);
-    return Promise.reject(error);
+    const appError = ErrorHandler.handleHttpError(error);
+    ErrorHandler.showError(appError);
+    return Promise.reject(new Error(appError.message));
   }
 );
 
@@ -56,16 +58,18 @@ service.interceptors.response.use(
          return response.data;
       }
 
-      const errorMessage = msg || '请求失败';
-      console.error(`❌ 接口异常: ${errorMessage}`);
-      ElMessage.error(errorMessage);
-      return Promise.reject(new Error(errorMessage));
+      // 处理业务错误
+      const appError = ErrorHandler.handleBusinessError(code, msg || '请求失败');
+      console.error(`❌ 接口异常 [${code}]: ${msg || '未知错误'}`);
+      ErrorHandler.showError(appError);
+      return Promise.reject(new Error(appError.message));
     }
   },
   (error) => {
     console.error('❌ 网络错误:', error);
-    ElMessage.error(error.message || '网络连接异常');
-    return Promise.reject(error);
+    const appError = ErrorHandler.handleHttpError(error);
+    ErrorHandler.showError(appError);
+    return Promise.reject(new Error(appError.message));
   }
 );
 

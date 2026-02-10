@@ -5,9 +5,55 @@
 # 日期：2026-01-26 16:15:00
 # 描述：后端服务启动脚本
 
+import ctypes
+import sys
+from pathlib import Path
+
+# -----------------------------------------------------------------------------
+# 【环境修复】解决 PyTorch/Paddle 依赖冲突导致的 undefined symbol: __nvJitLinkComplete_12_4
+# 必须在所有 import 之前预加载 libnvJitLink.so.12
+# -----------------------------------------------------------------------------
+try:
+    # 动态寻找 site-packages 目录
+    # 通常结构: .../envs/name/bin/python -> .../envs/name/lib/pythonX.Y/site-packages
+    bin_dir = Path(sys.executable).parent
+    env_root = bin_dir.parent
+    
+    # 构造可能的库文件路径 (兼容不同 Python 版本)
+    # 1. 尝试通过 glob 模式寻找 libnvJitLink.so.*
+    # 路径通常为: site-packages/nvidia/nvjitlink/lib/libnvJitLink.so.12
+    found_libs = list(env_root.glob("lib/python*/site-packages/nvidia/nvjitlink/lib/libnvJitLink.so*"))
+    
+    target_lib = None
+    if found_libs:
+        target_lib = found_libs[0] # 取第一个找到的
+    
+    # 2. 如果没找到，尝试在 site-packages 根目录搜索 (备用)
+    if not target_lib:
+        # 获取 site-packages 路径
+        import site
+        site_packages = site.getsitepackages()
+        for sp in site_packages:
+            p = Path(sp) / "nvidia" / "nvjitlink" / "lib" / "libnvJitLink.so.12"
+            if p.exists():
+                target_lib = p
+                break
+
+    # 3. 预加载库
+    if target_lib and target_lib.exists():
+        ctypes.CDLL(str(target_lib))
+        # print(f"[Info] Successfully preloaded: {target_lib}")
+    else:
+        # 仅在开发环境提示，避免生产环境干扰
+        pass 
+
+except Exception as e:
+    # 静默失败，避免影响非 GPU 环境启动
+    pass
+# -----------------------------------------------------------------------------
+
 import uvicorn
 import os
-import sys
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -63,11 +109,13 @@ def main():
         # 依次尝试读取环境变量
         port_str = os.getenv("ENV_DEV_PORT")
         if not port_str:
+            port_str = os.getenv("ENV_PRO_PORT")
+        if not port_str:
             port_str = os.getenv("ENV_PORT")
         if not port_str:
             port_str = os.getenv("PORT")
             
-        logger.info(f"Port resolution: ENV_DEV_PORT={os.getenv('ENV_DEV_PORT')}, ENV_PORT={os.getenv('ENV_PORT')}, PORT={os.getenv('PORT')}, Selected={port_str}")
+        logger.info(f"Port resolution: ENV_DEV_PORT={os.getenv('ENV_DEV_PORT')}, ENV_PRO_PORT={os.getenv('ENV_PRO_PORT')}, ENV_PORT={os.getenv('ENV_PORT')}, PORT={os.getenv('PORT')}, Selected={port_str}")
 
         # 如果找到了配置，转换为整数
         if port_str:
@@ -133,7 +181,8 @@ def main():
 
     # 启动服务
     uvicorn.run(
-        "backend.app:app",
+        "backend.app:create_app",
+        factory=True,
         host=host,
         port=port,
         reload=(env == "dev"),
