@@ -48,6 +48,43 @@ cd backend/pyqt_app
 python run.py
 ```
 
+## 📦 打包发布 (Packaging)
+
+项目提供一键打包脚本，可将 Python 源码打包为独立的 Windows 可执行文件 (.exe)。
+
+### 1. 安装 PyInstaller
+
+如果尚未安装打包工具，请运行：
+
+```bash
+pip install pyinstaller -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 2. 执行打包
+
+在 `backend/pyqt_app` 目录下运行 `build.py` 脚本：
+
+```bash
+cd backend/pyqt_app
+python build.py
+```
+
+### 3. 打包EXE
+
+打包完成后，可执行文件位于 `dist` 目录下，提供两种部署方式：
+
+#### 方式一：单文件 (OneFile)
+- **路径**: `dist/TraiClient.exe`
+- **特点**: 单个文件，方便分发，即点即用。
+- **配置**: 程序内置默认配置。如需修改，可在 `TraiClient.exe` 同级目录下创建 `config.json` 文件进行覆盖。
+
+#### 方式二：文件夹 (OneDir)
+- **路径**: `dist/TraiClient/TraiClient.exe`
+- **特点**: 启动速度快，易于排查问题。
+- **配置**: 直接修改目录下的 `config.json` 文件即可。
+
+> **注意**: 首次运行时，若需要连接远程服务器，请手动创建/修改 `config.json` 或确保本地后端服务已启动 (默认连接 localhost)。
+
 ## ⚙️ 配置说明 (Configuration)
 
 客户端配置文件位于 `pages/config.json`，用于管理后端 API 地址与默认参数。
