@@ -104,6 +104,19 @@ backend/app/models/.lock/
 backend/app/models/Wan-AI/
 backend/app/models/Qwen/
 backend/app/models/Robbyant/
+
+# Test Files
+test_audio.wav
+scripts/
+*.wav
+*.mp3
+*.m4a
+*.mp4
+
+scripts/
+frontend/nignx.txt
+frontend/src/auto-imports.d.ts
+frontend/src/components.d.ts
 backend/app/models/Tongyi-MAI/
 backend/app/models/iic/
 backend/app/models/*.pth
