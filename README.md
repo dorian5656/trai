@@ -168,6 +168,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ### 2026_02_10_0924
 - **后端**: 重构爬虫模块, 将 `xiaomi_crawler` 重命名为 `news_crawler`, 支持动态关键词抓取 (`keyword_news`).
 
+### 2026_02_10_0812
+- **前端-内容**: 更新技能: 将 'AI 播客' 替换为 '发票识别'; 同步更换票据样式图标; 更新输入占位文案以提示抬头、金额、税率识别。
+
 ### 2026_02_09_1700
 - **后端**: 新增 Scrapy 爬虫模块 (backend/app/crawler), 实现小米新闻/搜索结果的自动采集与 CSV 导出.
 - **后端**: 增加 scrapy 依赖, 更新 requirements.txt.
@@ -221,6 +224,16 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
 - **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
 - **后端**: 清理冗余测试脚本与临时文件.
+
+### 2026_02_05_1704
+- **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
+
+### 2026_02_05_1701
+- **前端-内容**: 同步前端代码到 zcl 分支.
+
+### 2026_02_05_1142
+- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
+- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
 
 ### 2026_02_04_1649
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.

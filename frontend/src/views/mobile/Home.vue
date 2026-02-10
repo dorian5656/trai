@@ -13,9 +13,11 @@ import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
 import { ChatInput, MessageList } from '@/modules/chat';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
-import { fetchDifyConversations, fetchConversationMessages } from '@/api/dify';
+import { fetchDifyConversations, fetchConversationMessages, renameDifyConversation, deleteDifyConversation } from '@/api/dify';
+import { ElMessageBox } from 'element-plus';
 import type { DifyConversation } from '@/types/chat';
 import { MOBILE_TEXT } from '@/constants/texts';
+import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -30,6 +32,7 @@ const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
 const showSimilarityDialog = ref(false);
 const showMeetingRecorder = ref(false);
+const isLoadingHistory = ref(false);
 
 // 自动滚动
 watch(
@@ -109,10 +112,66 @@ const loadConversations = async () => {
   }
 };
 
-const handleSwitchDify = (conv: DifyConversation) => {
+const handleSwitchDify = async (conv: DifyConversation) => {
+  isLoadingHistory.value = true;
   chatStore.clearSession();
   chatStore.setDifySessionId(conv.id);
-  ElMessage.success('已切换会话上下文');
+  try {
+    const username = userStore.username || 'guest';
+    const res = await fetchConversationMessages(conv.id, username, 50, 'guanwang');
+    let history: any[] = [];
+    if (Array.isArray(res)) {
+      history = res as any[];
+    } else if (res && (res as any).data) {
+      history = (res as any).data as any[];
+    }
+    chatStore.replaceMessagesFromDify(history, conv.name || '会话', conv.id);
+  } catch (e) {
+    console.error('加载历史消息失败', e);
+    ElMessage.error('加载历史消息失败');
+  } finally {
+    isLoadingHistory.value = false;
+  }
+};
+
+const handleRenameDify = async (conv: DifyConversation) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名会话', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputValue: conv.name,
+      inputPattern: /\S/,
+      inputErrorMessage: '名称不能为空',
+    });
+    if (value && value !== conv.name) {
+      await renameDifyConversation(conv.id, value, 'guanwang', false);
+      chatStore.renameDifyConversation(conv.id, value);
+      ElMessage.success('重命名成功');
+    }
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('重命名失败，请稍后重试');
+  }
+};
+
+const handleDeleteDify = async (conv: DifyConversation) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该会话吗？删除后无法恢复。',
+      '删除确认',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+    await deleteDifyConversation(conv.id, 'guanwang');
+    chatStore.removeDifyConversation(conv.id);
+    ElMessage.success('删除成功');
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('删除失败，请稍后重试');
+  }
 };
 
 const handleLogin = () => {
@@ -191,7 +250,39 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
           :key="`${item.type}-${item.id}`"
           class="chat-item"
           @click="handleRecentClick(item)"
-        >{{ item.title }}</div>
+        >
+          <span>{{ item.title }}</span>
+          <template v-if="item.type === 'dify'">
+            <el-popover
+              placement="left"
+              trigger="click"
+              :width="180"
+              popper-class="mobile-action-popover"
+            >
+              <div class="action-menu">
+                <button 
+                  class="menu-item" 
+                  @click.stop="handleRenameDify(chatStore.difyConversations.find(c=>c.id===item.id)!)"
+                >
+                  <el-icon><Edit /></el-icon>
+                  <span>重命名</span>
+                </button>
+                <button 
+                  class="menu-item danger" 
+                  @click.stop="handleDeleteDify(chatStore.difyConversations.find(c=>c.id===item.id)!)"
+                >
+                  <el-icon><Delete /></el-icon>
+                  <span>删除</span>
+                </button>
+              </div>
+              <template #reference>
+                <button class="mini-icon-btn" @click.stop>
+                  <el-icon><MoreFilled /></el-icon>
+                </button>
+              </template>
+            </el-popover>
+          </template>
+        </div>
       </div>
       
       <div class="sidebar-footer">
@@ -216,7 +307,7 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
     <!-- 主内容 -->
     <main class="mobile-content">
       <!-- 聊天模式：有消息时显示 -->
-      <div v-if="chatStore.messages.length > 0" class="chat-layout">
+      <div v-if="chatStore.messages.length > 0 || isLoadingHistory" class="chat-layout">
         <!-- 消息列表 -->
         <MessageList 
           :messages="chatStore.messages" 
@@ -425,6 +516,9 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
       padding: 0.5rem 0;
       font-size: 0.875rem;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
   }
 
@@ -440,6 +534,44 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
       align-items: center;
     }
   }
+}
+
+.mini-icon-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  color: #86909c;
+}
+.mini-icon-btn:active {
+  background-color: rgba(0,0,0,0.06);
+}
+
+.mobile-action-popover {
+  padding: 0.5rem;
+}
+.action-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e6eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #1d2129;
+}
+.menu-item:active {
+  background: #f2f3f5;
+}
+.menu-item.danger {
+  border-color: #ffccc7;
+  color: #f56c6c;
 }
 
 .mobile-header {

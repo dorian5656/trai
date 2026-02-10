@@ -5,7 +5,7 @@
 描述：消息列表组件
 -->
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, onMounted } from 'vue';
 import { renderMarkdown } from '@/utils/markdown';
 import { icons } from '@/assets/icons';
 import { ElMessage } from 'element-plus';
@@ -122,6 +122,10 @@ watch(() => props.messages[props.messages.length - 1]?.content, () => {
   scrollToBottom();
 });
 
+onMounted(() => {
+  scrollToBottom();
+});
+
 defineExpose({
   scrollToBottom
 });
@@ -188,7 +192,7 @@ defineExpose({
 <style scoped lang="scss">
 .chat-wrapper {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -201,6 +205,14 @@ defineExpose({
     padding-bottom: 12vh;
     overflow-y: auto; 
     height: 100%;
+    /* 隐藏滚动条 */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+    &::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
 
     @media (max-width: 768px) {
       max-width: 95vw;

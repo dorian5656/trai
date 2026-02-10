@@ -42,6 +42,20 @@ export const fetchConversationMessages = (conversation_id: string, user: string,
   });
 };
 
+export const renameDifyConversation = (conversation_id: string, name: string, app_name: string = 'guanwang', auto_generate: boolean = false) => {
+  return request.post<any, any>(`/dify/conversations/${conversation_id}/rename`, {
+    name,
+    auto_generate,
+    app_name
+  });
+};
+
+export const deleteDifyConversation = (conversation_id: string, app_name: string = 'guanwang') => {
+  return request.post<any, any>(`/dify/conversations/${conversation_id}/delete`, {
+    app_name
+  });
+};
+
 /**
  * 官网专用公开对话接口 (流式)
  * URL: /dify/chat/public
