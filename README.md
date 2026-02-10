@@ -87,11 +87,14 @@ python backend/client_app/build.py
 ### 快速开始
 
 ```bash
-cd backend/app/crawler/xiaomi_crawler
-scrapy crawl xiaomi_news
+cd backend/app/crawler/news_crawler
+# 默认抓取小米新闻
+scrapy crawl keyword_news
+# 自定义关键词抓取 (如华为)
+scrapy crawl keyword_news -a keyword=Huawei
 ```
 
-爬取结果将保存至同目录下的 `xiaomi_news.csv` 文件。
+爬取结果将保存至同目录下的 `news_data.csv` 文件。
 
 ## 📚 接口文档 (API Docs)
 
@@ -161,6 +164,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 2026_02_10_0924
+- **后端**: 重构爬虫模块, 将 `xiaomi_crawler` 重命名为 `news_crawler`, 支持动态关键词抓取 (`keyword_news`).
 
 ### 2026_02_09_1700
 - **后端**: 新增 Scrapy 爬虫模块 (backend/app/crawler), 实现小米新闻/搜索结果的自动采集与 CSV 导出.

@@ -9,7 +9,7 @@ from scrapy import signals
 from itemadapter import ItemAdapter
 
 
-class XiaomiCrawlerSpiderMiddleware:
+class NewsCrawlerSpiderMiddleware:
     # Not all methods need to be defined. If a method is not defined,
     # scrapy acts as if the spider middleware does not modify the
     # passed objects.
@@ -53,7 +53,7 @@ class XiaomiCrawlerSpiderMiddleware:
         spider.logger.info("Spider opened: %s" % spider.name)
 
 
-class XiaomiCrawlerDownloaderMiddleware:
+class NewsCrawlerDownloaderMiddleware:
     # Not all methods need to be defined. If a method is not defined,
     # scrapy acts as if the downloader middleware does not modify the
     # passed objects.

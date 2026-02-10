@@ -1,4 +1,4 @@
-# Scrapy settings for xiaomi_crawler project
+# Scrapy settings for news_crawler project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -7,10 +7,10 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-BOT_NAME = "xiaomi_crawler"
+BOT_NAME = "news_crawler"
 
-SPIDER_MODULES = ["xiaomi_crawler.spiders"]
-NEWSPIDER_MODULE = "xiaomi_crawler.spiders"
+SPIDER_MODULES = ["news_crawler.spiders"]
+NEWSPIDER_MODULE = "news_crawler.spiders"
 
 ADDONS = {}
 
@@ -26,7 +26,7 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 
 # Output
 FEEDS = {
-    'xiaomi_news.csv': {
+    'news_data.csv': {
         'format': 'csv',
         'encoding': 'utf8',
         'overwrite': True,
@@ -56,13 +56,13 @@ DOWNLOAD_DELAY = 1
 # Enable or disable spider middlewares
 # See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 #SPIDER_MIDDLEWARES = {
-#    "xiaomi_crawler.middlewares.XiaomiCrawlerSpiderMiddleware": 543,
+#    "news_crawler.middlewares.NewsCrawlerSpiderMiddleware": 543,
 #}
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #DOWNLOADER_MIDDLEWARES = {
-#    "xiaomi_crawler.middlewares.XiaomiCrawlerDownloaderMiddleware": 543,
+#    "news_crawler.middlewares.NewsCrawlerDownloaderMiddleware": 543,
 #}
 
 # Enable or disable extensions
@@ -74,7 +74,7 @@ DOWNLOAD_DELAY = 1
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 #ITEM_PIPELINES = {
-#    "xiaomi_crawler.pipelines.XiaomiCrawlerPipeline": 300,
+#    "news_crawler.pipelines.NewsCrawlerPipeline": 300,
 #}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
