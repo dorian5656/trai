@@ -16,6 +16,14 @@ router = APIRouter()
 async def get_models_status():
     """
     获取系统中所有 AI 模型的状态配置
+
+    Returns:
+        dict: 模型列表
+            - llm (list): 语言模型
+            - image (list): 图像模型
+            - speech (list): 语音模型
+            - ocr (list): OCR 模型
+            - yolo (list): 检测模型
     """
     try:
         models = await ModelManager.get_all_models()

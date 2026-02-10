@@ -7,83 +7,96 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAppStore } from '@/stores/app';
-import { useChatStore } from '@/stores/chat';
-import { useUserStore } from '@/stores/user';
+import { useAppStore, useChatStore, useUserStore } from '@/stores';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
-import { mockStreamChat } from '@/utils/stream';
-import { renderMarkdown } from '@/utils/markdown';
 import { ElMessage, ElImageViewer } from 'element-plus';
-import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
-import { useFileUpload } from '@/composables/useFileUpload';
-import { useSkills } from '@/composables/useSkills';
-import { useChatLogic } from '@/composables/useChatLogic';
-import SkillSelector from '@/components/business/home/SkillSelector.vue';
-import ChatInput from '@/components/business/home/ChatInput.vue';
-import MessageList from '@/components/business/home/MessageList.vue';
-import { fetchDifyConversations } from '@/api/dify';
+import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
+import { SkillSelector, ChatInput, MessageList } from '@/modules/chat';
+import { fetchDifyConversations, fetchConversationMessages, renameDifyConversation, deleteDifyConversation } from '@/api/dify';
+import type { DifyConversation } from '@/types/chat';
+import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
+import { ElMessageBox } from 'element-plus';
+import { PC_TEXT, MOBILE_TEXT } from '@/constants/texts';
+import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
 
 const router = useRouter();
 const appStore = useAppStore();
 const chatStore = useChatStore();
 const userStore = useUserStore();
 const showSimilarityDialog = ref(false);
+const showMeetingRecorder = ref(false);
+const showDocumentDialog = ref(false);
 const { isListening, result, toggleListening } = useSpeechRecognition();
 const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles } = useFileUpload();
 const { activeSkill, visibleSkills, moreSkills, moreSkillItem, handleSkillClick, removeSkill } = useSkills();
 
 const inputMessage = ref('');
-const isSending = ref(false);
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
+const isLoadingHistory = ref(false);
 
-const { handleSend, handleStop } = useChatLogic(
-  chatStore,
-  inputMessage,
-  activeSkill,
-  uploadedFiles,
-  isSending,
-  () => messageListRef.value?.scrollToBottom(),
-  clearFiles,
+// 自动滚动
+watch(
+  () => chatStore.messages,
   () => {
-      // 当新会话创建时，刷新会话列表
-      // 延迟一点时间，确保后端已经可以查到
-      setTimeout(() => {
-          loadConversations();
-      }, 1000);
-  }
+    messageListRef.value?.scrollToBottom();
+  },
+  { deep: true }
 );
 
+const handleSend = async () => {
+  const content = inputMessage.value.trim();
+  if ((!content && uploadedFiles.value.length === 0) || chatStore.isSending) return;
+
+  // 1. 捕获当前状态
+  const currentFiles = [...uploadedFiles.value];
+  const currentSkill = activeSkill.value;
+  
+  // 2. 立即清空 UI 输入状态 (让用户感觉响应快)
+  inputMessage.value = '';
+  clearFiles();
+  activeSkill.value = null;
+
+  // 3. 调用 Store Action
+  await chatStore.sendMessage(
+    content,
+    currentFiles,
+    currentSkill,
+    () => {
+      // 当新会话创建时，刷新会话列表
+      setTimeout(() => {
+        loadConversations();
+      }, 1000);
+    }
+  );
+};
+
+const handleStop = () => {
+  chatStore.stopGenerating();
+};
+
 const handleRegenerate = () => {
-  if (isSending.value) return;
+  if (chatStore.isSending) return;
   // 找到最后一条 user 消息
   const messages = chatStore.messages;
   let lastUserMsgContent = '';
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user') {
-      // 提取纯文本内容（去除可能的 [文件: ...] 前缀，如果需要重新上传文件逻辑会更复杂，这里简化为重发文本）
-      // 现在的 fullContent 是 "[文件: xxx] 文本"，这里简单起见直接重发整条内容
-      lastUserMsgContent = messages[i].content;
+    const msg = messages[i];
+    if (msg && msg.role === 'user') {
+      lastUserMsgContent = msg.content;
       break;
     }
   }
 
   if (lastUserMsgContent) {
-    // 移除最后一条 assistant 消息 (如果是失败的消息) 或者准备生成新的
     // 简单起见，我们模拟用户重新输入了这条消息
     inputMessage.value = lastUserMsgContent;
-    // 这里的 content 可能包含 "[文件: ...]"，在 handleSend 中会再次拼接，导致重复
-    // 需要清洗 content，或者调整 handleSend 逻辑
-    // 更好的做法是：让 useChatLogic 暴露一个 directSend 方法，或者我们在 handleSend 中判断
     
-    // 临时方案：如果内容以 [文件: 开头，尝试提取真实文本
-    // 这里的逻辑稍微有点 hack，但为了不改动太大
+    // 尝试提取纯文本 (移除 [文件: ...] 前缀)
     const fileRegex = /^(\[文件: .*?\]\s*)+/;
     const match = lastUserMsgContent.match(fileRegex);
     if (match) {
         inputMessage.value = lastUserMsgContent.replace(fileRegex, '').trim();
-        // 注意：这里丢失了文件信息，如果重新生成需要带文件，需要重新 select 文件
-        // 由于文件上传是临时的，发送后 clearFiles 了，所以很难完全还原
         ElMessage.warning('重新生成仅包含文本内容，文件需重新上传');
     } else {
         inputMessage.value = lastUserMsgContent;
@@ -106,16 +119,29 @@ watch(result, (newVal) => {
 
 // 加载历史会话
 const loadConversations = async () => {
-  if (!userStore.username) return;
+  const username = userStore.username;
+  if (!username || username === '未登录') return;
   try {
-    const res = await fetchDifyConversations(userStore.username);
+    const res = await fetchDifyConversations(username);
     if (res && res.data) {
-      chatStore.difyConversations = res.data;
+      chatStore.difyConversations = (res.data as unknown) as DifyConversation[];
     }
   } catch (e) {
     console.error('加载历史会话失败', e);
   }
 };
+
+// 监听登录状态变化，自动刷新会话列表
+watch(
+  () => userStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      loadConversations();
+    } else {
+      chatStore.clearAllConversations();
+    }
+  }
+);
 
 // 初始化用户信息
 onMounted(async () => {
@@ -126,6 +152,18 @@ onMounted(async () => {
 });
 
 const handleSkillSelect = (skill: any) => {
+  if (!userStore.isLoggedIn) {
+    appStore.openLoginModal();
+    return;
+  }
+  if (skill.label === '会议记录') {
+    showMeetingRecorder.value = true;
+    return;
+  }
+  if (skill.label === '文档工具') {
+    showDocumentDialog.value = true;
+    return;
+  }
   handleSkillClick(skill, () => {
     showSimilarityDialog.value = true;
   });
@@ -143,21 +181,82 @@ const handleNewChat = () => {
   chatStore.setDifySessionId(null);
 };
 
-const handleSwitchSession = (conversationId: string) => {
-  // 切换到 Dify 会话
-  // TODO: 后端目前没有获取历史消息详情的接口，所以这里暂时只能设置 ID，无法回显消息
-  // 临时方案：清空当前消息，提示用户已切换
+const handleSwitchSession = async (conversationId: string) => {
+  isLoadingHistory.value = true;
   chatStore.clearSession();
   chatStore.setDifySessionId(conversationId);
-  ElMessage.success('已切换会话上下文 (暂不支持回显历史消息)');
+  try {
+    const username = userStore.username || 'guest';
+    const res = await fetchConversationMessages(conversationId, username, 50, 'guanwang');
+    let history: any[] = [];
+    const conv = chatStore.difyConversations.find(c => c.id === conversationId);
+    if (Array.isArray(res)) {
+      history = res as any[];
+    } else if (res && (res as any).data) {
+      history = (res as any).data as any[];
+    }
+    chatStore.replaceMessagesFromDify(history, conv?.name || '会话', conversationId);
+  } catch (e) {
+    console.error('加载历史消息失败', e);
+    ElMessage.error('加载历史消息失败');
+  } finally {
+    isLoadingHistory.value = false;
+  }
 };
 
 const handleLogin = () => {
-  router.push('/login');
+  appStore.openLoginModal();
 };
 
 const handleLogout = () => {
   userStore.logout();
+};
+
+const handleRenameConversation = async (conv: DifyConversation) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名会话', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputValue: conv.name,
+      inputPattern: /\S/,
+      inputErrorMessage: '名称不能为空',
+    });
+
+    if (value && value !== conv.name) {
+      await renameDifyConversation(conv.id, value, 'guanwang', false);
+      chatStore.renameDifyConversation(conv.id, value);
+      ElMessage.success('重命名成功');
+    }
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('重命名失败，请稍后重试');
+  }
+};
+
+const handleDeleteConversation = async (conv: DifyConversation) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该会话吗？删除后无法恢复。',
+      '删除确认',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+    
+    await deleteDifyConversation(conv.id, 'guanwang');
+    chatStore.removeDifyConversation(conv.id);
+    ElMessage.success('删除成功');
+  } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error('删除失败，请稍后重试');
+  }
+};
+
+const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation) => {
+  if (cmd === 'rename') handleRenameConversation(conv);
+  else handleDeleteConversation(conv);
 };
 </script>
 
@@ -202,7 +301,19 @@ const handleLogout = () => {
             :class="{ active: conv.id === chatStore.difySessionId }"
             @click="handleSwitchSession(conv.id)"
           >
-            {{ conv.name || '未命名对话' }}
+            <span class="chat-title">{{ conv.name || '未命名对话' }}</span>
+            
+            <el-dropdown trigger="click" @command="(cmd) => onConversationCommand(cmd, conv)" class="chat-actions">
+              <span class="el-dropdown-link" @click.stop>
+                <el-icon><MoreFilled /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename" :icon="Edit">重命名</el-dropdown-item>
+                  <el-dropdown-item command="delete" :icon="Delete" style="color: var(--el-color-danger)">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </template>
         
@@ -221,7 +332,7 @@ const handleLogout = () => {
       </div>
       
       <div class="sidebar-footer" v-show="appStore.isSidebarOpen">
-        <div class="footer-item">关于驼人GPT</div>
+        <div class="footer-item">{{ PC_TEXT.sidebarFooter }}</div>
       </div>
     </aside>
 
@@ -234,17 +345,17 @@ const handleLogout = () => {
         </button>
         <div class="right-actions">
           <div v-if="userStore.isLoggedIn" class="user-actions">
-            <span class="welcome-text">欢迎, {{ userStore.username }}</span>
-            <button class="logout-btn" @click="handleLogout">退出</button>
+            <span class="welcome-text">{{ PC_TEXT.topBar.welcomePrefix }}{{ userStore.username }}</span>
+            <button class="logout-btn" @click="handleLogout">{{ PC_TEXT.topBar.logout }}</button>
           </div>
-          <button v-else class="login-btn" @click="handleLogin">登录</button>
+          <button v-else class="login-btn" @click="handleLogin">{{ PC_TEXT.topBar.login }}</button>
         </div>
       </header>
 
       <!-- 内容主体：flex占满剩余高度，作为flex第二项 -->
       <div class="content-body">
-        <!-- 聊天模式：有消息时显示 -->
-        <div class="chat-layout" v-if="chatStore.messages.length > 0">
+        <!-- 聊天模式：加载历史或有消息时显示，避免闪到欢迎页 -->
+        <div class="chat-layout" v-if="chatStore.messages.length > 0 || isLoadingHistory">
           <!-- 消息列表 -->
           <MessageList 
             :messages="chatStore.messages" 
@@ -256,7 +367,7 @@ const handleLogout = () => {
             <div class="footer-input-wrapper">
               <ChatInput 
                 v-model="inputMessage"
-                :is-sending="isSending"
+                :is-sending="chatStore.isSending"
                 :is-deep-thinking="isDeepThinking"
                 :active-skill="activeSkill"
                 :uploaded-files="uploadedFiles"
@@ -283,11 +394,11 @@ const handleLogout = () => {
         <!-- 欢迎页：无消息时显示 -->
         <div class="welcome-area" v-else>
           <div class="welcome-card">
-            <h1 class="greeting">你好，我是驼人GPT</h1>
+            <h1 class="greeting">{{ MOBILE_TEXT.welcomeTitle }}</h1>
             <div class="input-area-wrapper">
               <ChatInput 
                 v-model="inputMessage"
-                :is-sending="isSending"
+                :is-sending="chatStore.isSending"
                 :is-deep-thinking="isDeepThinking"
                 :active-skill="activeSkill"
                 :uploaded-files="uploadedFiles"
@@ -313,16 +424,32 @@ const handleLogout = () => {
       </div>
 
       <!-- 弹窗组件 -->
-      <SimilarityDialog v-model:visible="showSimilarityDialog" />
+      <SimilarityDialog
+        v-if="showSimilarityDialog"
+        :visible="showSimilarityDialog"
+        @update:visible="(val) => showSimilarityDialog = val"
+      />
+      <DocumentToolDialog
+        v-if="showDocumentDialog"
+        :visible="showDocumentDialog"
+        @update:visible="(val) => showDocumentDialog = val"
+      />
     </main>
 
-    <!-- 图片预览组件 -->
-    <el-image-viewer
-      v-if="showViewer"
-      :url-list="previewUrlList"
-      :initial-index="initialIndex"
-      @close="closeViewer"
+    <MeetingRecorder 
+      v-if="showMeetingRecorder" 
+      @close="showMeetingRecorder = false" 
     />
+
+    <!-- 图片预览组件 (挂载到 body 以确保全屏覆盖) -->
+    <Teleport to="body">
+      <el-image-viewer
+        v-if="showViewer"
+        :url-list="previewUrlList"
+        :initial-index="initialIndex"
+        @close="closeViewer"
+      />
+    </Teleport>
   </div>
 </template>
 
@@ -454,8 +581,48 @@ const handleLogout = () => {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      &:hover { background-color: #e5e6eb; }
-      &.active { background-color: #e8f3ff; color: #165dff; }
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      .chat-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+      }
+      
+      .chat-actions {
+        opacity: 0;
+        transition: opacity 0.2s;
+        margin-left: 0.5rem;
+        flex-shrink: 0;
+        
+        .el-icon {
+          font-size: 1rem;
+          color: #86909c;
+          padding: 0.125rem;
+          border-radius: 0.125rem;
+          &:hover {
+             background-color: rgba(0,0,0,0.05);
+             color: #1d2129;
+          }
+        }
+      }
+
+      &:hover { 
+        background-color: #e5e6eb; 
+        .chat-actions {
+           opacity: 1;
+        }
+      }
+      
+      &.active { 
+        background-color: #e8f3ff; 
+        color: #165dff; 
+        .chat-actions {
+           opacity: 1; /* 选中时常显 */
+        }
+      }
     }
   }
 

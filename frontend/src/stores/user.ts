@@ -5,9 +5,10 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { login as loginApi, type LoginParams } from '@/api/auth';
+import { login as loginApi, wecomLogin as wecomLoginApi, type LoginParams } from '@/api/auth';
 import { getUserInfo, type UserInfo } from '@/api/user';
 import { ElMessage } from 'element-plus';
+import { useAppStore } from './app';
 
 export const useUserStore = defineStore('user', () => {
   // State
@@ -26,11 +27,19 @@ export const useUserStore = defineStore('user', () => {
   const login = async (loginForm: LoginParams) => {
     try {
       const res = await loginApi(loginForm);
+      if (!res || !res.access_token) {
+        throw new Error('登录响应格式错误: 缺少 access_token');
+      }
       token.value = res.access_token;
       localStorage.setItem('token', res.access_token);
       
       // 登录成功后立即获取用户信息
       await fetchUserInfo();
+      
+      // 关闭登录模态框
+      const appStore = useAppStore();
+      appStore.closeLoginModal();
+      
       return true;
     } catch (error) {
       console.error('登录失败:', error);
@@ -39,43 +48,64 @@ export const useUserStore = defineStore('user', () => {
   };
 
   /**
+   * 企业微信登录
+   */
+  const loginByWecom = async (code: string) => {
+    try {
+      const res = await wecomLoginApi(code);
+      if (!res || !res.access_token) {
+        throw new Error('登录响应格式错误: 缺少 access_token');
+      }
+      token.value = res.access_token;
+      localStorage.setItem('token', res.access_token);
+      
+      // 登录成功后立即获取用户信息
+      await fetchUserInfo();
+      
+      // 关闭登录模态框
+      const appStore = useAppStore();
+      appStore.closeLoginModal();
+      
+      return true;
+    } catch (error) {
+      console.error('企业微信登录失败:', error);
+      throw error;
+    }
+  };
+
+  /**
    * 获取用户信息
-   * 暂时直接从 Token 解析，不调用后端接口
    */
   const fetchUserInfo = async () => {
     if (!token.value) return;
     
-    // 直接尝试从 Token 解析
     try {
-      const parts = token.value.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]));
-        if (payload && payload.sub) {
-          userInfo.value = {
-            id: 'local',
-            username: payload.sub,
-            full_name: payload.sub,
-            is_active: true,
-            is_superuser: false,
-            created_at: new Date().toISOString()
-          } as UserInfo;
-          // console.log('已从 Token 本地解析用户信息');
-          return;
-        }
-      }
-    } catch (e) {
-      console.error('Token 解析失败:', e);
-    }
-
-    // 如果 Token 解析失败，尝试调用接口作为备选 (或直接忽略)
-    /*
-    try {
+      // 优先从后端接口获取完整信息
       const info = await getUserInfo();
       userInfo.value = info;
     } catch (error) {
-      console.error('获取用户信息失败:', error);
+      console.error('获取用户信息失败, 尝试本地解析:', error);
+      
+      // 接口调用失败时，尝试从 Token 解析 (降级方案)
+      try {
+        const parts = token.value.split('.');
+        if (parts.length === 3 && parts[1]) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload && payload.sub) {
+            userInfo.value = {
+              id: 'local',
+              username: payload.sub,
+              full_name: payload.sub,
+              is_active: true,
+              is_superuser: false,
+              created_at: new Date().toISOString()
+            } as UserInfo;
+          }
+        }
+      } catch (e) {
+        console.error('Token 本地解析也失败:', e);
+      }
     }
-    */
   };
 
   /**
@@ -85,6 +115,7 @@ export const useUserStore = defineStore('user', () => {
     token.value = '';
     userInfo.value = null;
     localStorage.removeItem('token');
+    
     ElMessage.success('已退出登录');
   };
 
@@ -104,6 +135,7 @@ export const useUserStore = defineStore('user', () => {
     username,
     avatar,
     login,
+    loginByWecom,
     logout,
     fetchUserInfo,
     init,
