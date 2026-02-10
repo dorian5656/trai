@@ -13,6 +13,7 @@ import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
 import { ChatInput, MessageList } from '@/modules/chat';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
+import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
 import { fetchDifyConversations, fetchConversationMessages, renameDifyConversation, deleteDifyConversation } from '@/api/dify';
 import { ElMessageBox } from 'element-plus';
 import type { DifyConversation } from '@/types/chat';
@@ -32,6 +33,7 @@ const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 const isDeepThinking = ref(false);
 const showSimilarityDialog = ref(false);
 const showMeetingRecorder = ref(false);
+const showDocumentDialog = ref(false);
 const isLoadingHistory = ref(false);
 
 // 自动滚动
@@ -183,8 +185,16 @@ const handleLogout = () => {
 };
 
 const handleMobileSkillClick = (skill: any) => {
+  if (!userStore.isLoggedIn) {
+    appStore.openLoginModal();
+    return;
+  }
   if (skill.label === '会议记录') {
     showMeetingRecorder.value = true;
+    return;
+  }
+  if (skill.label === '文档工具') {
+    showDocumentDialog.value = true;
     return;
   }
   if (skill.label === '相似度识别') {
@@ -394,6 +404,11 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
     <MeetingRecorder 
       v-if="showMeetingRecorder" 
       @close="showMeetingRecorder = false" 
+    />
+    <DocumentToolDialog
+      v-if="showDocumentDialog"
+      :visible="showDocumentDialog"
+      @update:visible="(val) => showDocumentDialog = val"
     />
   </div>
 </template>

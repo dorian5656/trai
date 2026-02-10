@@ -17,6 +17,7 @@ import type { DifyConversation } from '@/types/chat';
 import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
 import { ElMessageBox } from 'element-plus';
 import { PC_TEXT, MOBILE_TEXT } from '@/constants/texts';
+import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -24,6 +25,7 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const showSimilarityDialog = ref(false);
 const showMeetingRecorder = ref(false);
+const showDocumentDialog = ref(false);
 const { isListening, result, toggleListening } = useSpeechRecognition();
 const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles } = useFileUpload();
 const { activeSkill, visibleSkills, moreSkills, moreSkillItem, handleSkillClick, removeSkill } = useSkills();
@@ -150,8 +152,16 @@ onMounted(async () => {
 });
 
 const handleSkillSelect = (skill: any) => {
+  if (!userStore.isLoggedIn) {
+    appStore.openLoginModal();
+    return;
+  }
   if (skill.label === '会议记录') {
     showMeetingRecorder.value = true;
+    return;
+  }
+  if (skill.label === '文档工具') {
+    showDocumentDialog.value = true;
     return;
   }
   handleSkillClick(skill, () => {
@@ -418,6 +428,11 @@ const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation)
         v-if="showSimilarityDialog"
         :visible="showSimilarityDialog"
         @update:visible="(val) => showSimilarityDialog = val"
+      />
+      <DocumentToolDialog
+        v-if="showDocumentDialog"
+        :visible="showDocumentDialog"
+        @update:visible="(val) => showDocumentDialog = val"
       />
     </main>
 

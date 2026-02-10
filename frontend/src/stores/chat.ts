@@ -8,6 +8,7 @@ import { ref, computed } from 'vue';
 import type { Message, ChatSession, DifyConversation } from '@/types/chat';
 import { v4 as uuidv4 } from 'uuid';
 import { generateImage, chatWithImage } from '@/api/image';
+import { convertByExt } from '@/api/doc';
 import { streamDifyChat, streamImageChat } from '@/utils/stream';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { ElMessage } from 'element-plus';
@@ -317,7 +318,37 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
-    // 4. 处理普通对话 (Dify)
+    // 4. 文档工具技能：根据上传文件类型进行格式转换
+    if (skill && skill.label === '文档工具') {
+      addMessage('assistant', '正在转换文档...');
+      try {
+        const first = files[0];
+        if (!first || !first.raw) {
+          ElMessage.warning('请先上传需要转换的文档文件');
+          isSending.value = false;
+          return;
+        }
+        const result = await convertByExt(first.raw);
+        if ((result as any).urls && Array.isArray((result as any).urls)) {
+          const urls: string[] = (result as any).urls;
+          const text = urls.map((u) => `结果：${u}`).join('\n');
+          updateLastMessage(text);
+        } else if ((result as any).url) {
+          const url: string = (result as any).url;
+          updateLastMessage(`结果：${url}`);
+        } else {
+          updateLastMessage('转换完成，但未返回结果链接');
+        }
+      } catch (e: any) {
+        const appError = ErrorHandler.handleHttpError(e);
+        updateLastMessage(`❌ 文档转换失败：${appError.message}`);
+      } finally {
+        isSending.value = false;
+      }
+      return;
+    }
+
+    // 5. 处理普通对话 (Dify)
     addMessage('assistant', ''); // 占位
 
     const userStore = useUserStore();

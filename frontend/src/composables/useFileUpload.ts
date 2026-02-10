@@ -16,6 +16,7 @@ export interface UploadFile {
   progress: number;
   status: 'uploading' | 'parsing' | 'done' | 'error';
   url?: string;
+  raw?: File;
 }
 
 export function useFileUpload() {
@@ -47,6 +48,7 @@ export function useFileUpload() {
         type: file.type,
         progress: 0,
         status: 'uploading',
+        raw: file,
       };
 
       if (file.type.startsWith('image/')) {
