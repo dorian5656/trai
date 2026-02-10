@@ -1,36 +1,116 @@
-# TRAI 项目 (TRAI Project)
+# TRAI 后端服务 (TRAI Backend)
 
-TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户端 (PyQt5)。
+TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO/Dify/DeepSeek) 构建。
 
 ## 🚀 快速启动 (Quick Start)
 
-### 后端 (Backend)
-详细文档请参考 [backend/README.md](backend/README.md)
+### 1. 激活环境
 
-### 前端 (Frontend)
-详细文档请参考 [frontend/README.md](frontend/README.md)
+```bash
+conda activate trai_31014_whf_pro_20260202
+```
 
-### 桌面客户端 (Client App)
-详细文档请参考 [backend/client_app/README.md](backend/client_app/README.md)
+### 2. 启动服务
+
+```bash
+# 在项目根目录下执行
+python backend/run.py
+```
+
+> **注意**: 启动脚本会自动检查端口占用情况 (读取 .env 配置)。若端口被占用，脚本会自动尝试结束占用进程 (支持 Windows/Linux/MacOS)。
 
 ## 📹 AI 视频生成 (Wan2.1)
-请参考 [backend/README.md](backend/README.md#ai-视频生成-wan21)
+
+项目集成了 Wan2.1-T2V-1.3B 模型，支持文本生成视频。
+
+### 特性
+- **文本生成视频**: 支持中文/英文提示词
+- **自动封面提取**: 使用 OpenCV 自动提取视频第一帧作为封面
+- **飞书通知**: 任务状态变更及生成结果自动推送到飞书群 (支持交互式卡片)
+- **异步处理**: 后台异步生成，不阻塞 API 响应
+
+### 接口
+`POST /api_trai/v1/ai/video/generations`
+
+### 依赖
+- `opencv-python-headless`: 用于视频帧提取
+- GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
 
 ## 🕷️ 网络爬虫 (Crawler)
-请参考 [backend/README.md](backend/README.md#网络爬虫-crawler)
+
+本项目集成了 Scrapy 爬虫框架，用于采集网络公开信息。
+
+### 快速开始
+
+```bash
+cd backend/app/crawler/news_crawler
+# 默认抓取小米新闻
+scrapy crawl keyword_news
+# 自定义关键词抓取 (如华为)
+scrapy crawl keyword_news -a keyword=Huawei
+```
+
+爬取结果将保存至同目录下的 `news_data.csv` 文件。
 
 ## 📚 接口文档 (API Docs)
-请参考 [backend/README.md](backend/README.md#接口文档-api-docs)
+
+服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
+
+- **本地文档**: [http://localhost:5689/api/v1/docs](http://localhost:5689/api/v1/docs)
+- **OpenAPI JSON**: [http://localhost:5689/api/v1/openapi.json](http://localhost:5689/api/v1/openapi.json)
 
 ## 🔧 环境依赖 (GPU 版)
-请参考 [backend/README.md](backend/README.md#环境依赖-gpu-版)
 
+本项目深度依赖 GPU 加速 (CUDA)，请根据您的操作系统选择合适的依赖安装方式。
 
-## 📚 开发规范
-请务必阅读 `.trae/rules/backend_whf.md` 获取完整的开发规范索引。
+### 💻 Windows 环境 (NVIDIA GeForce RTX 3060)
 
-- [后端规范索引](.trae/rules/backend_whf.md)
-- [前端规范索引](.trae/rules/frontend_zcl.md)
+当前开发环境配置参考：
+- **GPU**: NVIDIA GeForce RTX 3060 (12GB)
+- **Driver**: 591.74
+- **CUDA Toolkit**: 11.8 ~ 12.1 Compatible
+- **Python**: 3.10.14
+
+#### 安装步骤
+0. conda create -n trai_31014_whf_pro_20260202 python=3.10.14
+    conda activate trai_31014_whf_pro_20260202
+1. 安装 Python 3.10_14
+2. 安装 CUDA 11.8 或 12.1 (推荐)
+3. 使用 pip 安装依赖 (已包含 Windows 特定补丁):
+
+```bash
+cd backend
+pip install -r requirements_windows_gpu.txt
+```
+
+> **注意**: Windows 下 `paddlepaddle-gpu` 和 `paddleocr` 存在已知的 DLL 依赖问题 (缺失 `cudnn64_8.dll`)。
+> `requirements_windows_gpu.txt` 中包含了一个特定版本的 `nvidia-cudnn-cu11`，且项目代码 (`ocr_utils.py`) 包含自动注入环境变量的补丁。
+> 如果遇到 `cudnn64_8.dll not found` 错误，请确保按照此文件安装。
+
+### 🐧 Linux 环境 (CentOS - NVIDIA L20)
+
+当前生产/测试环境配置参考：
+- **OS**: CentOS Stream 10
+- **GPU**: NVIDIA L20 (48GB)
+- **Driver**: 590.44.01
+- **CUDA Version**: 13.1
+- **Python**: 3.10.14
+
+#### 安装步骤
+
+1. 安装基础依赖:
+```bash
+yum install -y libGL  # CentOS 必需，否则 OpenCV 报错
+```
+
+2. 安装 Python 依赖:
+```bash
+cd backend
+pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+> **注意**: CentOS 下若 `cv2` 报错 `ImportError: libGL.so.1`，请务必执行 `yum install -y libGL` 或 `yum install mesa-libGL`。
+
 
 ## 📝 更新日志 (Changelog)
 
@@ -38,15 +118,8 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - **文档**: 重构项目文档结构, 拆分后端、前端及客户端文档至各模块目录, 根目录仅保留索引.
 - **后端**: 新增图片处理工具 (`ImageUtils`) 及路由模块 (`routers/tools/image`), 支持格式转换、压缩及缩放功能.
 
-### 2026_02_10_1016 _客户端
-- **新增**: 文档工具箱模块 (`DocToolsPage`)，包含 17 种文档转换功能入口。
-- **优化**: 完善项目文档 README.md。
-
 ### 2026_02_10_0924 _后端
 - **后端**: 重构爬虫模块, 将 `xiaomi_crawler` 重命名为 `news_crawler`, 支持动态关键词抓取 (`keyword_news`).
-
-### 2026_02_10_0812 _前端
-- **前端-内容**: 更新技能: 将 'AI 播客' 替换为 '发票识别'; 同步更换票据样式图标; 更新输入占位文案以提示抬头、金额、税率识别。
 
 ### 2026_02_09_1700 _后端
 - **后端**: 新增 Scrapy 爬虫模块 (backend/app/crawler), 实现小米新闻/搜索结果的自动采集与 CSV 导出.
@@ -54,10 +127,6 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 
 ### 2026_02_09_1532 _后端
 - **后端**: 更新项目依赖包 (requirements.txt), 补充文档转换工具相关库 (pikepdf, xhtml2pdf, easyofd 等).
-
-### 2026_02_09_1530 _客户端
-- **新增**: 系统监控模块，支持 GPU/系统资源实时检测。
-- **优化**: DeepSeek 对话支持图片粘贴上传。
 
 ### 2026_02_09_1528 _后端
 - **后端**: 修复文档处理安全风险与逻辑缺陷.
@@ -95,63 +164,22 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
 - **后端**: 清理冗余测试脚本与临时文件.
 
-### 2026_02_05_1704 _前端
-- **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
-
-### 2026_02_05_1701 _前端
-- **前端-内容**: 同步前端代码到 zcl 分支.
-
-### 2026_02_05_1142 _前端
-- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
-- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
-
-### 2026_02_05_0931 _后端
-- **后端**: 修复依赖版本冲突, 确保环境稳定性.
-  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
-  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
-  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
-  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
-
 ### 2026_02_04_1649 _后端
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
 - **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
 - **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
 - **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
 
-### 2026_02_04_1648 _前端
-- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
-- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
-
 ### 2026_02_04_1541 _后端
 - **后端**: 修复 Qwen3-VL 推理兼容性问题 (增加 `trust_remote_code=True`, 适配 `transformers` 5.0).
 - **后端**: 完善 Dify 集成, 支持数据库直连同步应用列表, 移除硬编码配置.
 - **后端**: 更新 `requirements.txt` 依赖 (`transformers==5.0.0`).
 
-### 2026_02_04_1415 _前端
-- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
-
-### 2026_02_04_1130 _前端
-- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
-- **构建**: 更新 Vite 配置与通用组件 (`SimilarityDialog`).
-
-### 2026_02_04_1012 _后端
-- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
-
-### 2026_02_04_0936 _前端
-- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
-- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
-- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
-- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
-
-### 2026_02_03_1723 _前端
-- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
-- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
-- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
-
 ### 2026_02_03_1108 _后端
 - **后端**: 修复 `/api/v1/auth/login/json` 接口 500 错误 (移除 `passlib` 依赖, 改用原生 `bcrypt`).
 - **后端**: 修复文生图功能 (Dify 接口 404), 启用本地 `Z-Image-Turbo` 模型支持.
 - **后端**: 新增文生图依赖 (`diffusers`, `transformers`, `accelerate`), 优化模型路由策略.
+
 
 ### 2026_02_03_1015 _后端
 - **后端**: 修复留资模块 (`contact`) 文件头模板不符合规范的问题.
@@ -204,7 +232,6 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 ### 2026_01_30_1451 _后端
 - **后端**: 优化目录结构, 启动时自动检测并修复模型路径与临时目录.
 - **后端**: 移除冗余文件 (879.txt, scripts, logs等), 规范化项目结构.
-
 ### 2026_01_29_1730 _后端
 - **后端**: 优化端口管理, 启动时自动检测并释放占用端口 (支持 Windows/Linux/MacOS).
 - **后端**: 完善网络工具类 `NetUtils`, 统一中文注释与跨平台支持.
@@ -229,8 +256,12 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
   - 图像识别: 修复 S3 上传路径错误, 增加拖拽上传与多模态对话功能.
   - 打包优化: `build.py` 支持自动包含图标 (`pppg.ico`).
 
-### 2026_01_29_1353 _前端
-- **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.
+### 2026_02_05_0931 _后端
+- **后端**: 修复依赖版本冲突, 确保环境稳定性.
+  - 降级 `numpy` 到 `1.26.4` (修复 `opencv-python` 兼容性问题).
+  - 降级 `paddleocr` 到 `2.6.1.3` (匹配 `paddlepaddle-gpu==2.5.2`).
+  - 降级 `opencv-python-headless` 到 `4.6.0.66`.
+  - 修复 `ocr_utils.py` 初始化逻辑, 适配旧版 PaddleOCR 参数.
 
 ### 2026_01_29_1120 _后端
 - **文档**: 修复前端规范文档链接 (`frontend_zcl.md`).
@@ -267,18 +298,6 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - **脚本**: 增强 `run_yibao_merge_fxcrm.sh` 跨平台兼容性.
   - 新增 Windows PowerShell 原生运行支持.
   - 优化 WSL/Git Bash 环境下的 Conda 解释器路径检测与自动切换.
-
-### 2026_01_28_1618 _前端
-- **前端**: 重构代码架构, 提取业务逻辑至 `Composables` (如 `useChatLogic`, `useSkills`), 提升代码复用性.
-- **前端**: 重构聊天输入框组件 (`ChatInput`), 抽离 SVG 图标至独立资源文件.
-- **前端**: 新增 `SmartAssistant` 智能助手页面及 `ContactForm` 组件.
-- **前端**: 更新 API 模块及请求工具类, 优化类型定义与错误处理.
-
-### 2026_01_28_1529 _前端
-- **前端**: 修复 PC 端聊天界面输入框被遮挡的问题, 优化布局结构.
-- **前端**: 全面规范化 CSS 单位, 强制使用相对单位 (rem/vw/vh) 替换 px.
-- **文档**: 更新前端基础规范 (`11_frontend_base_zcl.md`), 明确样式单位强制要求.
-
 ### 2026_01_28_1022 _后端
 - **后端**: 新增 AI 本地模型扫描功能.
   - 启动时自动扫描 `backend/app/models` 目录下的模型.
@@ -310,14 +329,6 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - **后端**: 生成 Linux GPU 环境依赖文件 (`backend/requirements_linux_gpu.txt`), 明确指定 PyTorch, PaddlePaddle, YOLO 等核心库版本.
 - **后端**: 验证 `rrdsppg` 智能预测接口, 确认 OCR 与 YOLO 组合逻辑在 Linux 环境下的可用性.
 
-### 2026_01_27_1732 _前端
-- **前端**: 完成登录功能闭环与 UI 优化.
-  - 新增登录页面 (`Login.vue`) 与路由配置, 支持 OAuth2 登录接口对接.
-  - 新增用户状态管理 (`stores/user.ts`), 实现自动获取用户信息与状态持久化.
-  - 首页 (`PC` & `Mobile`) 集成登录/退出功能, 侧边栏同步显示用户信息.
-  - 优化 `SimilarityDialog` 组件, 支持图片拖拽上传与预览, 并修复大整数精度问题.
-  - 修正 Axios 拦截器以兼容非标准 OAuth2 响应格式 (`access_token`).
-
 ### 2026_01_27_1620 _后端
 - **后端**: 优化 `heart_like` 相关业务逻辑, 将 OCR 相似度触发阈值从 0.6 调整为 0.55, 提升准确率.
 
@@ -338,21 +349,11 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
   - 更新 `UploadUtils` 支持本地/S3 双模式切换。
   - 新增 S3 相关配置 (`S3_ENABLED`, `S3_ACCESS_KEY` 等)。
 
-### 2026_01_27_1049 _前端
-- **前端**: 新增相似度识别功能入口及弹窗组件.
-  - 首页技能列表增加 `相似度识别` 选项.
-  - 新增 `SimilarityDialog` 业务组件, 支持公众号/服务号类型选择及双图上传.
-  - 封装 `/rrdsppg/predict` 接口调用逻辑.
-
 ### 2026_01_27_1036 _后端
 - **后端**: 完善 DeepSeek API 集成，全面支持流式 (SSE) 与非流式对话。
 - **后端**: 优化 `RequestLogMiddleware`，支持流式响应内容的自动合并与完整入库 (JSON 格式)。
 - **后端**: 代码规范化重构，将 `ai_toolkit.py` 重命名为 `ai_utils.py` 并统一引用。
 - **后端**: 更新 `.env.example`，补充 JWT、企业微信、飞书及 DeepSeek 等关键配置项。
-
-### 2026_01_27_0957 _前端
-- **前端**: 所有源代码文件统一添加标准文件头注释 (文件名, 作者, 日期, 描述).
-- **文档**: 更新前端基础规范 (`11_frontend_base_zcl.md`), 强制要求添加文件头.
 
 ### 2026_01_27_0947 _后端
 - **后端**: 重构 AI 模块，将 `routers/chat` 迁移至 `routers/ai`。
@@ -384,9 +385,6 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 ### 2026_01_27_0809 _后端
 - **后端**: 修复配置文件 (`config.py`) 中缺失的 RRDSPPG 环境变量定义, 解决启动时的 Pydantic 校验错误.
 
-### 2026_01_27_0804 _前端
-- **前端**: 提交 frontend 整个文件夹代码.
-
 ### 2026_01_27_0015 _后端
 - **后端**: 优化启动日志的可读性, 将数据库检查、元数据更新、模型加载及同步等关键步骤的日志级别调整为 `SUCCESS`, 并补充详细的状态信息 (如加载的模型名、扫描数量).
 
@@ -400,13 +398,13 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 ### 2026_01_27_0002 _后端
 - **文档**: 更新后端工作流规范 (`00_backend_workflow_whf.md`), 补充文档关键步骤小标题 (如 `**安装步骤**:`) 的格式规范.
 
-### 2026_01_26_2355 _后端
-- **后端**: 增强 OCR 工具类 (`ocr_utils.py`) 鲁棒性, 优化对 PaddleOCR 返回空结果的处理逻辑.
-- **后端**: 统一 API 响应格式 (`response.py`), 标准化时间戳字段 `ts` 为 `YYYY-MM-DD HH:MM:SS`.
-
 ### 2026_01_26_2353 _后端
 - **文档**: 更新后端工作流规范 (`00_backend_workflow_whf.md`), 明确禁止手动预估提交时间, 强制要求使用系统时间; 增加 README 标点符号规范.
 - **文档**: 更新数据库规范 (`04_backend_postgres_whf.md`), 明确时间字段必须使用 `TIMESTAMP(0)` 以统一格式.
+
+### 2026_01_26_2355 _后端
+- **后端**: 增强 OCR 工具类 (`ocr_utils.py`) 鲁棒性, 优化对 PaddleOCR 返回空结果的处理逻辑.
+- **后端**: 统一 API 响应格式 (`response.py`), 标准化时间戳字段 `ts` 为 `YYYY-MM-DD HH:MM:SS`.
 
 ### 2026_01_26_2345 _后端
 - **后端**: 完善 OCR 文本清洗规则, 增加多关键词支持、后缀截断及标点符号过滤, 提升相似度比对准确率.
@@ -462,12 +460,8 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - **构建**: 添加依赖配置与忽略文件.
 - **文档**: 更新后端工作流与规范体系, 重命名工作流文件.
 
-### 2026_01_26_1732 _前端
-- **文档**: 拆分并优化前端工程化规范, 建立模块化规则体系.
-- **前端**: 初始化 Vue3+TS+Vite 项目架构, 配置路径别名与基础样式.
-- **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
-- **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
-- **前端**: 完成移动端抽屉式导航与自适应布局开发.
+### 2026_02_04_1012 _后端
+- **后端**: 修复用户管理接口 UUID/日期序列化问题; 更新文生图默认模型为 Z-Image-Turbo.
 
 ### 2026_01_26_1644 _后端
 - **后端**: 初始化后端项目结构, 创建 `.env`、`run.py` 及 FastAPI 入口 `main.py`.
@@ -484,3 +478,4 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 ### 2026_01_26_1558 _后端
 - **后端**: 重构后端规范体系 (`00`~`06`), 明确提交/API核心规则; 精简文档内容.
 - **数据库**: 强制PG+Vector+注释; 明确通用字段标准注释要求.
+
