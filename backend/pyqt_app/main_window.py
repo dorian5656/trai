@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
 
-from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage
+from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage, DocToolsPage
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         # 添加侧边栏选项
         self.add_sidebar_item("登录/注册", "👤")
         self.add_sidebar_item("ModelScope 工具", "🛠️")
+        self.add_sidebar_item("文档工具箱", "📚")
         self.add_sidebar_item("DeepSeek 对话", "💬")
         self.add_sidebar_item("AI 文生图", "🎨")
         self.add_sidebar_item("图片内容解析", "👁️")
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow):
         self.login_page = LoginPage()
         self.login_page.login_success.connect(self.on_login_success) # 连接登录成功信号
         self.modelscope_page = ModelScopePage()
+        self.doc_tools_page = DocToolsPage()
         self.deepseek_page = DeepSeekPage()
         self.image_gen_page = ImageGenPage()
         self.image_parse_page = ImageParsePage()
@@ -103,6 +105,7 @@ class MainWindow(QMainWindow):
         # 添加页面到堆叠窗口
         self.stacked_widget.addWidget(self.login_page)
         self.stacked_widget.addWidget(self.modelscope_page)
+        self.stacked_widget.addWidget(self.doc_tools_page)
         self.stacked_widget.addWidget(self.deepseek_page)
         self.stacked_widget.addWidget(self.image_gen_page)
         self.stacked_widget.addWidget(self.image_parse_page)

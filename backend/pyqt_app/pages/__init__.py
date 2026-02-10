@@ -13,3 +13,4 @@ from .image_gen_page import ImageGenPage
 from .image_parse_page import ImageParsePage
 from .rrdsppg_page import RrdsppgPage
 from .system_monitor_page import SystemMonitorPage
+from .doc_tools_page import DocToolsPage
