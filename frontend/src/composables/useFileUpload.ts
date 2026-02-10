@@ -5,7 +5,7 @@
 
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { uploadFile } from '@/api/common';
+import { chunkedUpload } from '@/api/common';
 import { ErrorHandler } from '@/utils/errorHandler';
 
 export interface UploadFile {
@@ -60,7 +60,7 @@ export function useFileUpload() {
       const activeFile = uploadedFiles.value.find(f => f.id === newFile.id)!;
 
       try {
-        const res = await uploadFile(file, 'chat', (percent) => {
+        const res = await chunkedUpload(file, 'chat', (percent) => {
           activeFile.progress = percent;
         });
         
