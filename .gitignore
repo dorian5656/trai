@@ -30,6 +30,9 @@ MANIFEST
 *.manifest
 *.spec
 
+# exe文件
+*.exe
+
 # 安装程序日志
 pip-log.txt
 pip-delete-this-directory.txt
@@ -98,8 +101,7 @@ backend/app/models/.lock/
 **/temp/
 
 # Large AI Models
-backend/app/models/Tongyi-MAI/
-backend/app/models/iic/
+backend/app/models/Wan-AI/
 backend/app/models/Qwen/
 backend/app/models/Robbyant/
 
@@ -115,3 +117,9 @@ scripts/
 frontend/nignx.txt
 frontend/src/auto-imports.d.ts
 frontend/src/components.d.ts
+backend/app/models/Tongyi-MAI/
+backend/app/models/iic/
+backend/app/models/*.pth
+backend/app/models/*.safetensors
+backend/app/models/*.bin
+node_modules

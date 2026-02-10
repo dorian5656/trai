@@ -247,3 +247,9 @@ wrapt==1.17.3
 xxhash==3.6.0
 yarl==1.22.0
 zstandard==0.25.0
+pypandoc
+easyofd==0.5.6
+pikepdf==9.0.0
+reportlab==4.2.0
+svglib==1.5.1
+xhtml2pdf==0.2.16

@@ -31,9 +31,11 @@ async def chat_with_image_stream(
     Returns:
         StreamingResponse: SSE 流式响应
     """
+    user_id = getattr(current_user, "username", None) or current_user["username"]
+    
     async def event_generator():
         try:
-            async for chunk in ImageManager.chat_with_image_stream(request):
+            async for chunk in ImageManager.chat_with_image_stream(request, user_id=str(user_id)):
                 # SSE 格式
                 yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
@@ -60,8 +62,9 @@ async def chat_with_image(
     Returns:
         ResponseModel: 统一响应结构 (data=ImageChatResponse)
     """
+    user_id = getattr(current_user, "username", None) or current_user["username"]
     try:
-        result = await ImageManager.chat_with_image(request)
+        result = await ImageManager.chat_with_image(request, user_id=str(user_id))
         return ResponseHelper.success(result)
     except Exception as e:
         return ResponseHelper.error(msg=str(e))

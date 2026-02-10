@@ -21,6 +21,7 @@ from backend.app.utils.upload_utils import UploadUtils
 from backend.app.routers.upload.upload_func import UserImage
 from backend.app.utils.pg_utils import PGUtils
 from sqlalchemy import text
+from backend.app.routers.ai.chat_func import AIManager
 
 # 全局缓存模型 pipeline
 _z_image_pipeline = None
@@ -75,6 +76,7 @@ class ImageChatRequest(BaseModel):
     model: str = Field("Qwen/Qwen3-VL-4B-Instruct", description="模型名称", examples=["Qwen/Qwen3-VL-4B-Instruct"])
     temperature: float = Field(0.7, description="温度系数", examples=[0.7])
     max_tokens: int = Field(512, description="最大生成 Token 数", examples=[512])
+    session_id: Optional[str] = Field(None, description="会话ID (若不传则自动生成)", examples=["uuid-v4-string"])
 
     model_config = {
         "json_schema_extra": {
@@ -221,17 +223,16 @@ class ImageManager:
             raise e
 
     @staticmethod
-    async def chat_with_image_stream(request: ImageChatRequest):
+    async def chat_with_image_stream(request: ImageChatRequest, user_id: str = "anonymous"):
         """
         多模态对话 (Qwen-VL) - 流式响应
         """
+        session_id = request.session_id or str(uuid.uuid4())
+        full_reply = ""
+        
         try:
-            # 转换消息格式
-            # 注意: Pydantic 的 model_dump() 默认会包含所有字段，包括 None 值的字段
-            # Qwen-VL utils 的 process_vision_info 对 None 值敏感，特别是 'image' 字段
-            # 如果 type='text'，image 字段应该是缺失的，而不是 None
-            
-            messages = []
+            # 1. 转换当前消息格式 (Pydantic -> Dict)
+            current_messages = []
             for msg in request.messages:
                 content_list = []
                 for item in msg.content:
@@ -242,10 +243,25 @@ class ImageManager:
                         content_item["image"] = item.image
                     content_list.append(content_item)
                 
-                messages.append({
+                current_messages.append({
                     "role": msg.role,
                     "content": content_list
                 })
+
+            # 2. 记录用户消息 (只记录最后一条 user 消息)
+            if current_messages and current_messages[-1]['role'] == 'user':
+                await AIManager.save_message(session_id, user_id, 'user', current_messages[-1]['content'], request.model)
+
+            # 3. 获取历史上下文 (从数据库加载，以支持多轮对话)
+            # 注意: 这里假设 save_message 已经完成写入
+            history_messages = await AIManager.get_session_messages(session_id, limit=10)
+            
+            final_messages = []
+            if history_messages:
+                 final_messages = history_messages
+            else:
+                 # 如果数据库读取为空(异常)，使用当前请求消息兜底
+                 final_messages = current_messages
             
             # 处理模型名称
             model_name = request.model
@@ -254,26 +270,33 @@ class ImageManager:
             elif model_name == "Qwen3-VL-8B-Instruct":
                 model_name = "Qwen/Qwen3-VL-8B-Instruct"
 
-            # 这里的 chat_completion_stream 是一个 async generator
+            # 4. 流式推理
             async for chunk in ModelScopeUtils.chat_completion_stream(
-                messages=messages,
+                messages=final_messages,
                 model_name=model_name,
                 max_new_tokens=request.max_tokens
             ):
+                full_reply += chunk
                 yield chunk
+            
+            # 5. 记录 AI 回复
+            if full_reply:
+                await AIManager.save_message(session_id, user_id, 'assistant', full_reply, request.model)
             
         except Exception as e:
             logger.error(f"多模态流式对话失败: {e}")
             yield f"[ERROR: {str(e)}]"
 
     @staticmethod
-    async def chat_with_image(request: ImageChatRequest) -> ImageChatResponse:
+    async def chat_with_image(request: ImageChatRequest, user_id: str = "anonymous") -> ImageChatResponse:
         """
         多模态对话 (Qwen-VL) - 本地推理
         """
+        session_id = request.session_id or str(uuid.uuid4())
+        
         try:
-            # 转换消息格式 (如果需要适配前端格式到 Qwen 格式)
-            messages = []
+            # 1. 转换当前消息格式
+            current_messages = []
             for msg in request.messages:
                 content_list = []
                 for item in msg.content:
@@ -284,10 +307,18 @@ class ImageManager:
                         content_item["image"] = item.image
                     content_list.append(content_item)
                 
-                messages.append({
+                current_messages.append({
                     "role": msg.role,
                     "content": content_list
                 })
+            
+            # 2. 记录用户消息
+            if current_messages and current_messages[-1]['role'] == 'user':
+                await AIManager.save_message(session_id, user_id, 'user', current_messages[-1]['content'], request.model)
+
+            # 3. 获取历史上下文
+            history_messages = await AIManager.get_session_messages(session_id, limit=10)
+            final_messages = history_messages if history_messages else current_messages
             
             # 处理模型名称
             model_name = request.model
@@ -296,11 +327,15 @@ class ImageManager:
             elif model_name == "Qwen3-VL-8B-Instruct":
                 model_name = "Qwen/Qwen3-VL-8B-Instruct"
 
+            # 4. 推理
             reply = await ModelScopeUtils.chat_completion(
-                messages=messages,
+                messages=final_messages,
                 model_name=model_name,
                 max_new_tokens=request.max_tokens
             )
+            
+            # 5. 记录回复
+            await AIManager.save_message(session_id, user_id, 'assistant', reply, request.model)
             
             return ImageChatResponse(
                 reply=reply,
@@ -525,6 +560,34 @@ class ImageManager:
                  # 用户要求 "记得返回有 S3 地址"，意味着如果配置了 S3，必须是 S3 地址。
                  # UploadUtils.save_from_bytes 已经做到了这一点。
                  pass
+
+            # Feishu Push Logic (Triggered by keyword in prompt)
+            try:
+                if "A6666" in request.prompt or "飞书" in request.prompt:
+                    from backend.app.yibaocode.feishu import feishu_service
+                    import tempfile
+                    
+                    logger.info("Triggering Feishu push...")
+                    # Create temp file for Feishu upload
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        tmp.write(img_bytes)
+                        tmp.flush()
+                        tmp_path = tmp.name
+                    
+                    try:
+                        # Upload to Feishu (sync call, might block briefly)
+                        image_key = feishu_service.upload_image(tmp_path)
+                        
+                        # Send Image
+                        feishu_service.send_image_to_webhook(image_key)
+                        
+                        # Send Text
+                        feishu_service.send_group_message(f"【文生图完成】\nPrompt: {request.prompt}\nUser: {user_id}\nURL: {final_url}")
+                        logger.info("Feishu push successful")
+                    finally:
+                        os.unlink(tmp_path)
+            except Exception as e:
+                logger.error(f"Feishu push failed: {e}")
 
             images_data.append({"url": final_url})
             logger.info(f"Generated image: {object_key} (URL: {final_url})")

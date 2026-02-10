@@ -1,0 +1,42 @@
+{
+    "login": {
+        "api_url": "http://192.168.100.119:5777/api_trai/v1/auth/login/json",
+        "register_url": "http://192.168.100.119:5777/api_trai/v1/auth/register",
+        "default_username": "A6666",
+        "default_password": "123456"
+    },
+    "modelscope": {
+        "api_url": "",
+        "api_key": "ms-a04e0d45-5264-451d-942c-7638c05a5c93",
+        "default_model_id": "TRAI/heart_like",
+        "default_upload_dir": "D:\\AI\\TRAI\\heart_like",
+        "default_download_dir": "D:\\AI"
+    },
+    "deepseek": {
+        "upload_url": "http://192.168.100.119:5777/api_trai/v1/upload/common",
+        "chat_url": "http://192.168.100.119:5777/api_trai/v1/ai/chat/completions"
+    },
+    "image_gen": {
+        "api_url": "http://192.168.100.119:5777/api_trai/v1/ai/image/generations"
+    },
+    "image_parse": {
+        "api_url": "http://192.168.100.119:5777/api_trai/v1/ai/image/chat/image/stream",
+        "upload_url": "http://192.168.100.119:5777/api_trai/v1/upload/common"
+    },
+    "rrdsppg": {
+        "api_url": "http://192.168.100.119:5777/api_trai/v1/rrdsppg/predict",
+        "update_check_url": "http://192.168.100.119:5777/static/update/version.json",
+        "template_url": "http://192.168.0.190:12001/tr-citizen-brand-prod/images/2026/01/22/960fe4fbbb27499489f5dc9c489b04c3.png",
+        "target_url": "https://referral.tuoren.com/dxcc/tr-citizen-brand-prod/images/2026/01/22/4875094a9d5e4c9dafe2abe9b603d02b.png",
+        "task_id": "1988090904354787346",
+        "user_id": "1988090904354787346",
+        "type_video": "1996827967950909442",
+        "type_public": "1997929948761825282"
+    },
+    "system_monitor": {
+        "gpu_url": "http://192.168.100.119:5777/api_trai/v1/monitor/env/gpu",
+        "system_url": "http://192.168.100.119:5777/api_trai/v1/monitor/env/system",
+        "models_url": "http://192.168.100.119:5777/api_trai/v1/monitor/models",
+        "health_url": "http://192.168.100.119:5777/api_trai/v1/monitor/health"
+    }
+}

@@ -1,0 +1,68 @@
+/* 
+ * 文件名：style.qss
+ * 作者：liuhd
+ * 日期：2026-02-04 10:00:00
+ * 描述：全局样式表
+ */
+
+/* 全局样式 */
+QWidget {
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+
+/* 侧边栏容器 */
+QWidget#sidebarContainer {
+    background-color: #2c3e50;
+}
+
+/* 侧边栏顶部 Header */
+QWidget#topHeader {
+    background-color: #2c3e50;
+    border-bottom: 1px solid #34495e;
+}
+
+/* 切换按钮样式 */
+QPushButton#toggleBtn {
+    background-color: #2c3e50;
+    color: #bdc3c7;
+    border: none;
+    font-size: 20px;
+}
+QPushButton#toggleBtn:hover {
+    background-color: #3e5871;
+    color: white;
+}
+
+/* 侧边栏样式 */
+QListWidget#sidebar {
+    background-color: #2c3e50;
+    color: #bdc3c7;
+    outline: 0px; /* 去除选中时的虚线框 */
+    border: none;
+}
+
+QListWidget#sidebar::item {
+    border-bottom: 1px solid #34495e;
+    padding: 10px;
+}
+
+QListWidget#sidebar::item:selected {
+    background-color: #34495e;
+    border-left: 4px solid #3498db;
+    color: white;
+}
+
+QListWidget#sidebar::item:hover {
+    background-color: #3e5871;
+}
+
+/* 内容区域样式 */
+QStackedWidget#contentArea {
+    background-color: #ecf0f1;
+}
+
+/* 页面通用样式 */
+QLabel {
+    color: #2c3e50;
+}

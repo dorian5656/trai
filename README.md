@@ -63,6 +63,23 @@ python backend/client_app/client_main.py
 python backend/client_app/build.py
 ```
 
+## 📹 AI 视频生成 (Wan2.1)
+
+项目集成了 Wan2.1-T2V-1.3B 模型，支持文本生成视频。
+
+### 特性
+- **文本生成视频**: 支持中文/英文提示词
+- **自动封面提取**: 使用 OpenCV 自动提取视频第一帧作为封面
+- **飞书通知**: 任务状态变更及生成结果自动推送到飞书群 (支持交互式卡片)
+- **异步处理**: 后台异步生成，不阻塞 API 响应
+
+### 接口
+`POST /api_trai/v1/ai/video/generations`
+
+### 依赖
+- `opencv-python-headless`: 用于视频帧提取
+- GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
+
 ## 📚 接口文档 (API Docs)
 
 服务启动后，可访问以下地址查看 Swagger UI 交互式文档：
@@ -131,12 +148,61 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
-- **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
-- **前端-内容**: 修复 `chatStore.clearAllConversations()` 未导出导致的调用错误; 修正删除 Dify 会话时错误地直接修改只读 `messages` 的问题，改为调用 `clearSession`。
 
 
 ### 2026_02_10_0812
 - **前端-内容**: 更新技能: 将 'AI 播客' 替换为 '发票识别'; 同步更换票据样式图标; 更新输入占位文案以提示抬头、金额、税率识别。
+
+
+### 2026_02_09_1532
+- **后端**: 更新项目依赖包 (requirements.txt), 补充文档转换工具相关库 (pikepdf, xhtml2pdf, easyofd 等).
+
+### 2026_02_09_1528
+- **后端**: 修复文档处理安全风险与逻辑缺陷.
+  - 修复 `user_docs` 表 `updated_at` 字段不自动更新问题 (添加触发器).
+  - 修复 `pikepdf` 覆盖源文件风险, 移除 `allow_overwriting_input`.
+  - 修复文档转换临时目录与 S3 Key 可能存在的命名冲突 (引入 UUID).
+
+### 2026_02_09_1510
+- **后端**: 修复DeepSeek对话上下文记忆问题, 增加多模态(文生图)上下文支持.
+- **后端**: 优化GPU监控温度显示格式(增加°符号).
+
+### 2026_02_09_1351
+- **客户端**: 更新主窗体图标为 `tr_mascot_local.ico`.
+- **客户端**: 优化图片内容解析模块的图片上传逻辑，增加图片拖拽上传.
+- **客户端**: 新增系统监控模块, 包括四个功能：GPU环境检测、系统资源监控、获取所有模型状态、系统健康检查.
+
+### 2026_02_09_1150
+- **后端**: 新增 Word 转 PDF 功能 (Pandoc+XeLaTeX), 支持中文及 S3/DB 记录.
+- **后端**: 新增 `/word2pdf` 路由, 完善文档转换测试 (test_doc_utils/test_doc_router).
+- **后端**: 迁移通知逻辑至 `feishu_utils.py` (FeishuBot), 移除冗余代码.
+- **数据库**: 新增 `user_docs` 表, 用于存储用户文档及转换记录.
+
+### 2026_02_09_1050
+- **后端**: 重构文档工具 (doc), 规范化文件命名 (doc_func/doc_router) 与路由路径 (/md2pdf).
+- **后端**: 优化通知逻辑, 统一使用 NotifyUtils 处理文件上传通知.
+- **后端**: 清理废弃的 sys_files 表初始化与临时测试代码.
+
+### 2026_02_06_1734
+- **后端**: 修复 S3 上传逻辑 (upload_utils), 统一使用 trai Bucket 并修复配置读取错误.
+- **后端**: 增强 ModelScopeUtils 图像处理, 支持本地相对路径并拦截 blob URL 错误.
+- **后端**: 修复 Qwen-VL 多模态对话接口中图片路径解析问题.
+
+### 2026_02_06_1616
+- **后端**: 清理根目录冗余文件 (test_output, scripts) 与测试脚本.
+- **后端**: 验证 rrdsppg 接口 OCR 清洗逻辑 (保留标点过滤), 确认功能正常.
+- **文档**: 更新项目日志与 README.
+
+### 2026_02_06_1416
+- **客户端**: 统一 PyQt6 客户端配置管理, 将 `login`, `deepseek`, `image_gen`, `image_parse`, `rrdsppg` 等模块的接口与默认参数集中至 `backend/pyqt_app/pages/config.json`, 通过单例 `config_loader.py` 读取.
+- **客户端**: 修复登录页默认账号密码硬编码问题, 改为从配置文件读取.
+- **客户端**: `RrdsppgPage` 移除所有硬编码参数 (模板/目标图片 URL、task_id、user_id、类型枚举), 全部改为读取配置文件.
+- **客户端**: 优化上传目录初始化逻辑, 确保 `temp/web_upload` 目录在运行时自动创建, 避免文件保存失败.
+
+### 2026_02_05_1724
+- **后端**: 集成 Wan2.1 (LingBot) 视频生成引擎核心代码 (支持 I2V/T2V).
+- **后端**: 优化 LingBot 分布式推理脚本 (FSDP + Ulysses) 及显存管理.
+- **后端**: 清理冗余测试脚本与临时文件.
 
 ### 2026_02_05_1704
 - **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
@@ -148,27 +214,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 - **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
 - **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
 
-### 2026_02_05_1136
-- **前端-内容**: 抽离技能占位文案映射至 `frontend/src/constants/texts.ts`; 改造 `ChatInput` 按技能动态占位.
-- **前端-内容**: 抽离图像生成参数选项至 `frontend/src/constants/imagegen.ts`; `ChatInput` 统一从常量读取.
-- **前端-内容**: 抽离技能列表至 `frontend/src/constants/skills.ts`; 重构 `useSkills` 引用常量.
-- **前端-内容**: 移动端与 PC 欢迎标题、侧边栏与按钮文案改为常量驱动 (`views/mobile/Home.vue`, `views/pc/Home.vue`).
-
-### 2026_02_05_1129
-- **文档**: 更新开发规范 (`00_backend_workflow_whf.md`), 明确 README 日志必须按时间倒序排列.
-- **文档**: 修正 README.md 中历史日志的排序问题.
-
-### 2026_02_05_1125
-- **后端**: 新增文件分片上传与断点续传功能 (`/upload/chunk`), 支持大文件高效传输.
-- **后端**: 优化飞书通知机制, 解决高频调用限流问题 (code 11232) 并支持图文富文本推送.
-- **后端**: 更新文生图接口, 支持本地模型 `Z-Image-Turbo` 推理并自动推送生成结果至飞书.
-- **后端**: 修复 API 文档与环境配置说明, 统一 Conda 环境名称为 `trai_31014_whf_pro_20260202`.
-
 ### 2026_02_04_1649
 - **后端**: 优化 Qwen3-VL 多模态对话接口 (`/api/v1/ai/image/chat/image/stream`), 支持 SSE 流式输出.
 - **后端**: 完善 Dify 集成, 补全会话管理接口 (列表/历史/重命名/删除), 并支持数据库直连同步应用.
 - **后端**: 优化 API 文档 (Swagger UI), 为所有核心 Pydantic 模型添加详细的 Schema 示例 (`examples`).
 - **后端**: 修复 Qwen3-VL 推理兼容性问题, 解决 `process_vision_info` 空指针错误.
+
 ### 2026_02_04_1648
 - **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
 - **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
