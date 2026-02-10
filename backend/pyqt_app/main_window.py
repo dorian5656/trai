@@ -178,6 +178,14 @@ class MainWindow(QMainWindow):
         else:
             self.user_token = ""
         try:
+            self.modelscope_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.doc_tools_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
             self.deepseek_page.set_auth_token(self.user_token)
         except Exception:
             pass
