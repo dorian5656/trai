@@ -33,6 +33,9 @@ MANIFEST
 # exe文件
 *.exe
 
+# 配置文件
+backend/pyqt_app/pages/config.json
+
 # 安装程序日志
 pip-log.txt
 pip-delete-this-directory.txt
