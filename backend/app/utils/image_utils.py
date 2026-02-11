@@ -15,6 +15,7 @@ from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import PGUtils
 from backend.app.utils.feishu_utils import feishu_bot
 import asyncio
+import io
 import json
 
 from backend.app.config import settings
@@ -126,6 +127,7 @@ class ImageUtils:
             
         try:
             # 1. 转换并保存 ICO
+            preview_bytes = None
             with Image.open(input_path) as img:
                 logger.info(f"正在转换图片为 ICO: {input_path} -> {output_path}")
                 
@@ -140,6 +142,17 @@ class ImageUtils:
                     
                 img.save(output_path, format='ICO', sizes=sizes)
                 logger.info(f"ICO 已保存至: {output_path}")
+                
+                # 生成预览图 (PNG)
+                try:
+                    preview_buffer = io.BytesIO()
+                    preview_img = img.copy()
+                    # 限制预览图大小，避免过大
+                    preview_img.thumbnail((300, 300))
+                    preview_img.save(preview_buffer, format='PNG')
+                    preview_bytes = preview_buffer.getvalue()
+                except Exception as e:
+                    logger.warning(f"生成预览图失败: {e}")
             
             # 2. 上传 S3 并记录数据库
             final_url = str(output_path)
@@ -198,6 +211,14 @@ class ImageUtils:
                 # 发送飞书通知 (仅在有 user_id 时，避免匿名请求骚扰)
                 if user_id:
                     try:
+                        # 上传预览图获取 img_key (使用 asyncio.to_thread 避免阻塞)
+                        img_key = None
+                        if preview_bytes:
+                            try:
+                                img_key = await asyncio.to_thread(feishu_bot.upload_image, preview_bytes)
+                            except Exception as e:
+                                logger.warning(f"上传预览图到飞书失败: {e}")
+
                         card_content = {
                             "config": {"wide_screen_mode": True},
                             "header": {
@@ -222,9 +243,22 @@ class ImageUtils:
                                 }
                             ]
                         }
+                        
+                        # 如果有 img_key，添加图片元素
+                        if img_key:
+                            card_content["elements"].insert(0, {
+                                "tag": "img",
+                                "img_key": img_key,
+                                "alt": {
+                                    "tag": "plain_text",
+                                    "content": "ICO 预览"
+                                }
+                            })
+
                         # 使用配置的文生图 Webhook Token 发送通知
                         webhook_token = settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
-                        await feishu_bot.send_webhook_card(card_content, webhook_token=webhook_token)
+                        # 使用 asyncio.to_thread 修复同步函数 await 错误
+                        await asyncio.to_thread(feishu_bot.send_webhook_card, card_content, webhook_token=webhook_token)
                         logger.info(f"飞书通知发送成功 (Token: {webhook_token[:5]}***)")
                     except Exception as e:
                         logger.warning(f"飞书通知发送失败: {e}")
