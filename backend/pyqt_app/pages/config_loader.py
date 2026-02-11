@@ -40,8 +40,15 @@ class ConfigLoader:
         
         # 如果当前目录不存在，尝试在 pages 目录 (即本文件所在目录)
         if not os.path.exists(config_path):
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(current_dir, CONFIG_FILE)
+            if getattr(sys, 'frozen', False):
+                # 打包环境下，优先从 _MEIPASS/pages 读取内置配置
+                # 注意：PyInstaller 将 data files 放在 sys._MEIPASS 下
+                base_path = sys._MEIPASS
+                config_path = os.path.join(base_path, 'pages', CONFIG_FILE)
+            else:
+                # 开发环境
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                config_path = os.path.join(current_dir, CONFIG_FILE)
             
         if os.path.exists(config_path):
             try:

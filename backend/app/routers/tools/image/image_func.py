@@ -9,23 +9,65 @@
 import os
 import uuid
 import shutil
+import asyncio
 from pathlib import Path
+from PIL import Image
 from fastapi import UploadFile, HTTPException
 from backend.app.utils.logger import logger
 from backend.app.utils.image_utils import ImageUtils
 
 # 临时文件存储路径
-TEMP_DIR = Path("backend/temp/images")
+TEMP_DIR = Path(os.getenv("IMAGE_TEMP_DIR", "backend/temp/images"))
 
 class ImageFunc:
     """图像处理业务逻辑类"""
     
     @staticmethod
+    def _validate_file(file: UploadFile) -> str:
+        """
+        校验上传文件的安全性和类型
+        
+        Args:
+            file (UploadFile): 上传的文件
+            
+        Returns:
+            str: 安全的文件扩展名
+        """
+        # 1. 校验文件名安全性 (防止路径穿越)
+        filename = os.path.basename(file.filename)
+        if not filename or "/" in filename or "\\" in filename or ".." in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+            
+        # 2. 校验文件扩展名
+        ext = Path(filename).suffix.lower()
+        if not ext:
+            ext = ".png" # 默认扩展名
+            
+        # 3. 校验 MIME 类型 (初步)
+        if file.content_type not in ["image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/tiff"]:
+             # 如果 content_type 不准确，尝试通过 Pillow 验证 (稍后在读取流时验证)
+             pass
+             
+        return ext
+
+    @staticmethod
+    def _verify_image_format(file_path: Path):
+        """使用 Pillow 严格校验图片格式"""
+        try:
+            with Image.open(file_path) as img:
+                if img.format not in ["JPEG", "PNG", "WEBP", "GIF", "BMP", "TIFF"]:
+                    raise HTTPException(status_code=400, detail=f"Unsupported image format: {img.format}")
+        except Exception:
+             if file_path.exists():
+                 os.remove(file_path)
+             raise HTTPException(status_code=400, detail="Invalid image file content")
+
+    @staticmethod
     async def convert_image(file: UploadFile, format: str = "JPEG", quality: int = 85) -> dict:
         """
         处理图片格式转换/压缩请求
         
-    Args:
+        Args:
             format (str): 目标格式 (JPEG, PNG, WEBP)
             quality (int): 图片质量 (1-100)
             
@@ -36,10 +78,8 @@ class ImageFunc:
         if not TEMP_DIR.exists():
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-        # 生成唯一文件名
-        input_ext = Path(file.filename).suffix
-        if not input_ext:
-            input_ext = ".png"
+        # 安全校验
+        input_ext = ImageFunc._validate_file(file)
             
         # 根据目标格式确定输出后缀
         format_map = {
@@ -62,10 +102,19 @@ class ImageFunc:
             with open(input_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
+            # 严格校验图片内容
+            ImageFunc._verify_image_format(input_path)
+
             logger.info(f"File uploaded to: {input_path}")
             
-            # 调用工具类进行转换
-            success = ImageUtils.convert_format(str(input_path), str(output_path), format, quality)
+            # 异步调用工具类进行转换
+            success = await asyncio.to_thread(
+                ImageUtils.convert_format, 
+                str(input_path), 
+                str(output_path), 
+                format, 
+                quality
+            )
             
             if not success:
                 raise HTTPException(status_code=500, detail="Image conversion failed")
@@ -85,6 +134,8 @@ class ImageFunc:
                 "format": info.get("format")
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error in convert_image: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -107,9 +158,7 @@ class ImageFunc:
         if not TEMP_DIR.exists():
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-        input_ext = Path(file.filename).suffix
-        if not input_ext:
-            input_ext = ".png"
+        input_ext = ImageFunc._validate_file(file)
             
         # 压缩通常输出为 JPG 以获得更好效果
         output_ext = ".jpg"
@@ -125,9 +174,16 @@ class ImageFunc:
             with open(input_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
+            ImageFunc._verify_image_format(input_path)
+
             logger.info(f"File uploaded to: {input_path}")
             
-            success = ImageUtils.compress_to_target_size(str(input_path), str(output_path), target_mb)
+            success = await asyncio.to_thread(
+                ImageUtils.compress_to_target_size,
+                str(input_path),
+                str(output_path),
+                target_mb
+            )
             
             if not success:
                 raise HTTPException(status_code=500, detail="Image compression failed (cannot reach target size)")
@@ -145,6 +201,8 @@ class ImageFunc:
                 "format": info.get("format")
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error in compress_image: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -172,10 +230,8 @@ class ImageFunc:
         if not TEMP_DIR.exists():
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-        # 生成唯一文件名
-        ext = Path(file.filename).suffix
-        if not ext:
-            ext = ".png" # 默认扩展名
+        # 安全校验
+        ext = ImageFunc._validate_file(file)
             
         unique_id = str(uuid.uuid4())
         input_filename = f"{unique_id}_in{ext}"
@@ -189,10 +245,19 @@ class ImageFunc:
             with open(input_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
+            # 严格校验图片内容
+            ImageFunc._verify_image_format(input_path)
+
             logger.info(f"File uploaded to: {input_path}")
             
-            # 调用工具类进行缩放
-            success = ImageUtils.resize_image(str(input_path), str(output_path), width, height)
+            # 异步调用工具类进行缩放
+            success = await asyncio.to_thread(
+                ImageUtils.resize_image,
+                str(input_path),
+                str(output_path),
+                width,
+                height
+            )
             
             if not success:
                 raise HTTPException(status_code=500, detail="Image resizing failed")
@@ -200,9 +265,7 @@ class ImageFunc:
             # 获取输出文件信息
             info = ImageUtils.get_image_info(str(output_path))
             
-            # 返回相对路径供前端访问 (假设有静态文件服务挂载了 backend/temp)
-            # 或者返回临时下载链接
-            # 这里返回相对路径，配合 file_proxy 或 static mount 使用
+            # 返回相对路径供前端访问
             relative_path = f"images/{output_filename}"
             
             return {
@@ -214,10 +277,12 @@ class ImageFunc:
                 "size": info.get("size")
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error in resize_image: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
-            # 清理输入文件，保留输出文件供下载 (可配合定时任务清理)
+            # 清理输入文件，保留输出文件供下载
             if input_path.exists():
                 os.remove(input_path)
