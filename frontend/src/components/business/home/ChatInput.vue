@@ -87,11 +87,11 @@ const placeholderText = computed(() => {
           <!-- 其他文件图标 -->
           <div v-else class="file-icon">
             <!-- Excel 图标 -->
-            <div v-if="file.name.endsWith('.xlsx') || file.name.endsWith('.xls')" style="width: 24px; height: 24px" v-html="icons.excel"></div>
+            <div v-if="file.name.endsWith('.xlsx') || file.name.endsWith('.xls')" style="width: 1.5rem; height: 1.5rem" v-html="icons.excel"></div>
             <!-- Audio 图标 -->
-            <div v-else-if="file.name.endsWith('.mp3') || file.name.endsWith('.wav') || file.name.endsWith('.m4a') || file.type.startsWith('audio/')" style="width: 24px; height: 24px" v-html="icons.audio"></div>
+            <div v-else-if="file.name.endsWith('.mp3') || file.name.endsWith('.wav') || file.name.endsWith('.m4a') || file.type.startsWith('audio/')" style="width: 1.5rem; height: 1.5rem" v-html="icons.audio"></div>
             <!-- 默认文件图标 -->
-            <div v-else style="width: 24px; height: 24px" v-html="icons.fileDefault"></div>
+            <div v-else style="width: 1.5rem; height: 1.5rem" v-html="icons.fileDefault"></div>
           </div>
           
           <!-- 上传/解析 遮罩 -->
@@ -117,7 +117,7 @@ const placeholderText = computed(() => {
         </div>
 
         <button class="remove-file-btn" @click="emit('removeFile', file.id)">
-          <span style="width: 12px; height: 12px; display: block" v-html="icons.closeSmall"></span>
+          <span style="width: 0.75rem; height: 0.75rem; display: block" v-html="icons.closeSmall"></span>
         </button>
       </div>
     </div>
@@ -128,7 +128,7 @@ const placeholderText = computed(() => {
           <span class="skill-tag-icon" v-html="activeSkill.icon"></span>
           <span class="skill-tag-text">{{ activeSkill.label }}</span>
           <span class="skill-tag-close" @click.stop="emit('removeSkill')">
-            <span style="width: 12px; height: 12px; display: block" v-html="icons.closeTiny"></span>
+            <span style="width: 0.75rem; height: 0.75rem; display: block" v-html="icons.closeTiny"></span>
           </span>
           <div class="skill-tooltip">点击退出技能 ESC</div>
         </div>
@@ -146,7 +146,7 @@ const placeholderText = computed(() => {
     <div v-show="!(activeSkill && activeSkill.label === '图像生成')" class="input-actions">
       <!-- 上传按钮 -->
       <button class="icon-btn" @click="triggerFileInput">
-        <span style="width: 20px; height: 20px; display: block" v-html="icons.attachment"></span>
+        <span style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.attachment"></span>
       </button>
       <!-- 深度思考按钮 -->
       <button 
@@ -155,16 +155,16 @@ const placeholderText = computed(() => {
         @click="emit('toggleDeepThink')"
         title="深度思考"
       >
-        <span style="width: 20px; height: 20px; display: block" v-html="icons.deepThink"></span>
+        <span style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.deepThink"></span>
       </button>
       <div class="spacer"></div>
       <button class="icon-btn" :class="{ 'is-listening': isListening }" @click="emit('toggleListening')" title="语音输入">
-        <span v-if="isListening" style="width: 20px; height: 20px; display: block" v-html="icons.micListening"></span>
-        <span v-else style="width: 20px; height: 20px; display: block" v-html="icons.micNormal"></span>
+        <span v-if="isListening" style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.micListening"></span>
+        <span v-else style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.micNormal"></span>
       </button>
       <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
-        <span v-if="isSending" style="width: 14px; height: 14px; display: block" v-html="icons.sendSending"></span>
-        <span v-else style="width: 16px; height: 16px; display: block" v-html="icons.sendNormal"></span>
+        <span v-if="isSending" style="width: 0.875rem; height: 0.875rem; display: block" v-html="icons.sendSending"></span>
+        <span v-else style="width: 1rem; height: 1rem; display: block" v-html="icons.sendNormal"></span>
       </button>
     </div>
     <div v-show="activeSkill && activeSkill.label === '图像生成'" class="param-bar">
@@ -239,8 +239,8 @@ const placeholderText = computed(() => {
       
       <div class="spacer"></div>
       <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
-        <span v-if="isSending" style="width: 14px; height: 14px; display: block" v-html="icons.sendSending"></span>
-        <span v-else style="width: 16px; height: 16px; display: block" v-html="icons.sendNormal"></span>
+        <span v-if="isSending" style="width: 0.875rem; height: 0.875rem; display: block" v-html="icons.sendSending"></span>
+        <span v-else style="width: 1rem; height: 1rem; display: block" v-html="icons.sendNormal"></span>
       </button>
     </div>
   </div>
@@ -596,8 +596,8 @@ const placeholderText = computed(() => {
       }
       
       .chip-icon {
-        width: 16px;
-        height: 16px;
+        width: 1rem;
+        height: 1rem;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -607,8 +607,8 @@ const placeholderText = computed(() => {
         white-space: nowrap;
       }
       .chip-chevron {
-        width: 12px;
-        height: 12px;
+        width: 0.75rem;
+        height: 0.75rem;
         display: flex;
         align-items: center;
         justify-content: center;

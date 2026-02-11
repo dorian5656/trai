@@ -139,39 +139,39 @@ const handleCopy = () => {
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(0.25rem);
 }
 
 .recorder-card {
-  width: 800px;
+  width: 50rem;
   max-width: 90vw;
-  height: 600px;
+  height: 37.5rem;
   max-height: 90vh;
   background: white;
-  border-radius: 16px;
+  border-radius: 1rem;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.2);
   overflow: hidden;
 
   .card-header {
-    padding: 16px 24px;
+    padding: 1rem 1.5rem;
     border-bottom: 1px solid #f2f3f5;
     display: flex;
     justify-content: space-between;
     align-items: center;
 
     .title {
-      font-size: 18px;
+      font-size: 1.125rem;
       font-weight: 600;
       color: #1d2129;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.5rem;
       
       .icon {
-        width: 20px;
-        height: 20px;
+        width: 1.25rem;
+        height: 1.25rem;
         color: #F53F3F;
       }
     }
@@ -180,8 +180,8 @@ const handleCopy = () => {
       background: none;
       border: none;
       cursor: pointer;
-      padding: 4px;
-      border-radius: 4px;
+      padding: 0.25rem;
+      border-radius: 0.25rem;
       color: #86909c;
       transition: all 0.2s;
 
@@ -191,24 +191,24 @@ const handleCopy = () => {
       }
       
       :deep(svg) {
-          width: 20px;
-          height: 20px;
+          width: 1.25rem;
+          height: 1.25rem;
       }
     }
   }
 
   .card-body {
     flex: 1;
-    padding: 24px;
+    padding: 1.5rem;
     overflow-y: auto;
     background: #f7f8fa;
 
     .result-area {
       background: white;
-      border-radius: 8px;
-      padding: 24px;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
       min-height: 100%;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+      box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.02);
       
       .placeholder {
         height: 100%;
@@ -218,17 +218,17 @@ const handleCopy = () => {
         justify-content: center;
         color: #86909c;
         text-align: center;
-        padding-top: 100px;
+        padding-top: 6.25rem;
         
         .sub-text {
-            font-size: 12px;
-            margin-top: 8px;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
             color: #c9cdd4;
         }
       }
 
       .text-content {
-        font-size: 16px;
+        font-size: 1rem;
         line-height: 1.8;
         color: #1d2129;
         white-space: pre-wrap;
@@ -243,19 +243,19 @@ const handleCopy = () => {
         
         .cursor {
             display: inline-block;
-            width: 2px;
+            width: 0.125rem;
             height: 1em;
             background-color: #165DFF;
             animation: blink 1s step-end infinite;
             vertical-align: text-bottom;
-            margin-left: 2px;
+            margin-left: 0.125rem;
         }
       }
     }
   }
 
   .card-footer {
-    padding: 20px 24px;
+    padding: 1.25rem 1.5rem;
     border-top: 1px solid #f2f3f5;
     background: white;
     display: flex;
@@ -264,20 +264,20 @@ const handleCopy = () => {
 
     .actions {
       display: flex;
-      gap: 16px;
+      gap: 1rem;
     }
     
     .action-btn {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
-        border-radius: 30px;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 1.875rem;
         border: 1px solid #e5e6eb;
         background: white;
         cursor: pointer;
         transition: all 0.2s;
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
         
         &:hover:not(.disabled) {
@@ -308,8 +308,8 @@ const handleCopy = () => {
         }
         
         .mic-icon, .upload-icon {
-            width: 18px;
-            height: 18px;
+            width: 1.125rem;
+            height: 1.125rem;
             display: block;
         }
     }
@@ -319,9 +319,9 @@ const handleCopy = () => {
         border: none;
         color: #4e5969;
         cursor: pointer;
-        font-size: 14px;
-        padding: 8px 16px;
-        border-radius: 4px;
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
         
         &:hover {
             background: #f2f3f5;
@@ -332,9 +332,9 @@ const handleCopy = () => {
 }
 
 .loading-spinner {
-    width: 18px;
-    height: 18px;
-    border: 2px solid #165DFF;
+    width: 1.125rem;
+    height: 1.125rem;
+    border: 0.125rem solid #165DFF;
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -350,37 +350,37 @@ const handleCopy = () => {
     50% { opacity: 0; }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
   .recorder-card {
     width: 95vw;
     height: 80vh;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     .card-header {
-      padding: 12px 16px;
+      padding: 0.75rem 1rem;
       .title {
-        font-size: 16px;
-        .icon { width: 18px; height: 18px; }
+        font-size: 1rem;
+        .icon { width: 1.125rem; height: 1.125rem; }
       }
-      :deep(svg) { width: 18px; height: 18px; }
+      :deep(svg) { width: 1.125rem; height: 1.125rem; }
     }
     .card-body {
-      padding: 16px;
+      padding: 1rem;
       .result-area {
-        padding: 16px;
-        .placeholder { padding-top: 40px; }
-        .text-content { font-size: 14px; }
+        padding: 1rem;
+        .placeholder { padding-top: 2.5rem; }
+        .text-content { font-size: 0.875rem; }
       }
     }
     .card-footer {
-      padding: 12px 16px;
-      .actions { gap: 10px; }
+      padding: 0.75rem 1rem;
+      .actions { gap: 0.625rem; }
       .action-btn {
-        padding: 8px 12px;
-        border-radius: 20px;
-        font-size: 13px;
-        .mic-icon, .upload-icon { width: 16px; height: 16px; }
+        padding: 0.5rem 0.75rem;
+        border-radius: 1.25rem;
+        font-size: 0.8125rem;
+        .mic-icon, .upload-icon { width: 1rem; height: 1rem; }
       }
-      .text-btn { font-size: 13px; padding: 6px 10px; }
+      .text-btn { font-size: 0.8125rem; padding: 0.375rem 0.625rem; }
     }
   }
 }
@@ -388,7 +388,7 @@ const handleCopy = () => {
 
 @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(245, 63, 63, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(245, 63, 63, 0); }
+    70% { box-shadow: 0 0 0 0.625rem rgba(245, 63, 63, 0); }
     100% { box-shadow: 0 0 0 0 rgba(245, 63, 63, 0); }
 }
 </style>

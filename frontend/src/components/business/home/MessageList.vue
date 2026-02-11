@@ -214,7 +214,7 @@ defineExpose({
       display: none;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 48rem) {
       max-width: 95vw;
     }
   }
@@ -263,7 +263,7 @@ defineExpose({
           p { margin-bottom: 0.625rem; }
           p:last-child { margin-bottom: 0; }
           pre { background: #f7f8fa; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; color: #333; border: 1px solid #e5e6eb; }
-          code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+          code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 0.125rem 0.25rem; border-radius: 0.25rem; }
           pre code { color: inherit; background-color: transparent; padding: 0; }
           
           /* 通用图片样式 */
@@ -278,7 +278,7 @@ defineExpose({
           }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 48rem) {
           :deep(.markdown-body) {
             font-size: 0.875rem;
             line-height: 1.7;

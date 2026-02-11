@@ -225,16 +225,16 @@ const submitContactForm = async () => {
 
 .contact-form-container {
   background: white;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   width: 90%;
-  max-width: 400px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 25rem;
+  padding: 1.25rem;
+  box-shadow: 0 0.25rem 1.25rem rgba(0, 0, 0, 0.15);
   animation: slideUp 0.3s ease;
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
+  from { transform: translateY(1.25rem); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 
@@ -242,39 +242,39 @@ const submitContactForm = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 0.9375rem;
   border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
+  padding-bottom: 0.625rem;
 }
 
 .form-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: #333;
 }
 
 .close-btn {
-  font-size: 24px;
+  font-size: 1.5rem;
   cursor: pointer;
   color: #999;
   line-height: 1;
 }
 
 .form-desc {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #666;
-  margin-bottom: 20px;
+  margin-bottom: 1.25rem;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 0.9375rem;
 }
 
 .form-group label {
   display: block;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #333;
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
 }
 
 .required {
@@ -283,10 +283,10 @@ const submitContactForm = async () => {
 
 .form-group input {
   width: 100%;
-  padding: 10px;
+  padding: 0.625rem;
   border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
   outline: none;
   transition: border-color 0.3s;
   box-sizing: border-box;
@@ -301,14 +301,14 @@ const submitContactForm = async () => {
 }
 
 .error-msg {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #ff4d4f;
-  margin-top: 4px;
+  margin-top: 0.25rem;
   display: block;
 }
 
 .form-actions {
-  margin-top: 25px;
+  margin-top: 1.5625rem;
 }
 
 .submit-btn {
@@ -316,9 +316,9 @@ const submitContactForm = async () => {
   background: #2473ba;
   color: white;
   border: none;
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 16px;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 1rem;
   cursor: pointer;
   transition: background 0.3s;
 }
@@ -330,37 +330,37 @@ const submitContactForm = async () => {
 
 .result-body {
   text-align: center;
-  padding: 20px 0;
+  padding: 1.25rem 0;
 }
 
 .success-icon {
-  width: 60px;
-  height: 60px;
+  width: 3.75rem;
+  height: 3.75rem;
   background: #52c41a;
   color: white;
   border-radius: 50%;
-  font-size: 36px;
-  line-height: 60px;
-  margin: 0 auto 15px;
+  font-size: 2.25rem;
+  line-height: 3.75rem;
+  margin: 0 auto 0.9375rem;
 }
 
 .error-icon {
-  width: 60px;
-  height: 60px;
+  width: 3.75rem;
+  height: 3.75rem;
   background: #ff4d4f;
   color: white;
   border-radius: 50%;
-  font-size: 36px;
-  line-height: 60px;
-  margin: 0 auto 15px;
+  font-size: 2.25rem;
+  line-height: 3.75rem;
+  margin: 0 auto 0.9375rem;
 }
 
 .close-result-btn {
-  margin-top: 20px;
-  padding: 8px 24px;
+  margin-top: 1.25rem;
+  padding: 0.5rem 1.5rem;
   border: 1px solid #ddd;
   background: white;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   cursor: pointer;
 }
 </style>
