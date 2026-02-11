@@ -114,6 +114,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_11_0912 _后端
+- **安全**: 修复图片上传接口路径穿越与任意文件写入漏洞, 升级 pdf2docx 依赖修复 CVE 漏洞.
+- **优化**: 图片处理异步化避免阻塞主线程, 爬虫启用去重机制.
+
 ### 2026_02_11_0853 _后端
 - **后端**: 优化 Excel 转 PDF 排版逻辑 (ReportLab), 支持根据行列密度动态调整页面尺寸 (A3/A4) 与边距, 解决宽表截断与乱码问题.
 - **后端**: 移除 pandas/xhtml2pdf 及其它冗余测试脚本与临时文件.

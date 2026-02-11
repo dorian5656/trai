@@ -259,4 +259,4 @@ pypandoc==1.13
 reportlab==4.2.0
 svglib==1.5.1
 xhtml2pdf==0.2.16
-pdf2docx==0.5.8
+pdf2docx>=0.5.9

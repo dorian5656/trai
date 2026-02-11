@@ -41,6 +41,10 @@ LOG_LEVEL = 'INFO'
 CONCURRENT_REQUESTS_PER_DOMAIN = 1
 DOWNLOAD_DELAY = 1
 
+# Duplication Filter
+# Use Scrapy's built-in RFPDupeFilter to filter duplicate requests
+DUPEFILTER_CLASS = 'scrapy.dupefilters.RFPDupeFilter'
+
 # Disable cookies (enabled by default)
 #COOKIES_ENABLED = False
 
