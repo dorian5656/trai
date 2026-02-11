@@ -11,6 +11,14 @@ import uuid
 from pathlib import Path
 from PIL import Image
 from backend.app.utils.logger import logger
+from backend.app.utils.upload_utils import UploadUtils
+from backend.app.utils.pg_utils import PGUtils
+from backend.app.utils.feishu_utils import feishu_bot
+import asyncio
+import io
+import json
+
+from backend.app.config import settings
 
 class ImageUtils:
     """图像处理工具类"""
@@ -31,7 +39,7 @@ class ImageUtils:
         """
         try:
             if not width and not height:
-                logger.warning("Resize params (width/height) are both empty")
+                logger.warning("调整尺寸参数 (width/height) 均为空")
                 return False
 
             with Image.open(input_path) as img:
@@ -47,7 +55,7 @@ class ImageUtils:
                 
                 # 如果两者都指定，则强制拉伸或裁剪（这里暂时采用强制拉伸，可根据需求修改）
                 
-                logger.info(f"Resizing image: {input_path} -> {width}x{height}")
+                logger.info(f"正在调整图片尺寸: {input_path} -> {width}x{height}")
                 
                 resized_img = img.resize((width, height), Image.Resampling.LANCZOS)
                 
@@ -57,11 +65,11 @@ class ImageUtils:
                     os.makedirs(output_dir)
                     
                 resized_img.save(output_path)
-                logger.info(f"Image saved to: {output_path}")
+                logger.info(f"图片已保存至: {output_path}")
                 return True
                 
         except Exception as e:
-            logger.error(f"Resize image failed: {e}")
+            logger.error(f"调整图片尺寸失败: {e}")
             return False
 
     @staticmethod
@@ -80,7 +88,7 @@ class ImageUtils:
         """
         try:
             with Image.open(input_path) as img:
-                logger.info(f"Converting image: {input_path} -> {format} (q={quality})")
+                logger.info(f"正在转换图片格式: {input_path} -> {format} (质量={quality})")
                 
                 # 如果是 RGBA 转 JPG，需要先转为 RGB (JPG 不支持透明度)
                 if format.upper() in ["JPEG", "JPG"] and img.mode in ["RGBA", "P"]:
@@ -92,12 +100,191 @@ class ImageUtils:
                     os.makedirs(output_dir)
                     
                 img.save(output_path, format=format, quality=quality)
-                logger.info(f"Image converted to: {output_path}")
+                logger.info(f"图片已转换并保存至: {output_path}")
                 return True
                 
         except Exception as e:
-            logger.error(f"Convert image failed: {e}")
+            logger.error(f"转换图片格式失败: {e}")
             return False
+
+    @staticmethod
+    async def _post_process_ico_result(user_id, output_filename, input_filename, s3_key, url, size, sizes, preview_bytes=None):
+        """异步处理 ICO 生成后的数据库记录和飞书通知"""
+        try:
+            # 1. 记录到 user_images 表
+            try:
+                insert_sql = """
+                    INSERT INTO user_images (
+                        user_id, filename, s3_key, url, size, mime_type, module, source, meta_data
+                    ) VALUES (
+                        :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data
+                    )
+                """
+                params = {
+                    "user_id": user_id,
+                    "filename": output_filename,
+                    "s3_key": s3_key,
+                    "url": url,
+                    "size": size,
+                    "mime_type": "image/x-icon",
+                    "module": "image_convert",
+                    "source": "converted",
+                    "meta_data": json.dumps({
+                        "original_file": input_filename, 
+                        "type": "img2ico",
+                        "sizes": str(sizes)
+                    })
+                }
+                await PGUtils.execute_update(insert_sql, params)
+                logger.info(f"ICO 记录已保存至数据库")
+            except Exception as e:
+                logger.error(f"ICO 记录保存数据库失败: {e}")
+                
+            # 2. 发送飞书通知
+            try:
+                # 上传预览图获取 img_key (使用 asyncio.to_thread 避免阻塞)
+                img_key = None
+                if preview_bytes:
+                    try:
+                        img_key = await asyncio.to_thread(feishu_bot.upload_image, preview_bytes)
+                    except Exception as e:
+                        logger.warning(f"上传预览图到飞书失败: {e}")
+
+                card_content = {
+                    "config": {"wide_screen_mode": True},
+                    "header": {
+                        "title": {"tag": "plain_text", "content": "🖼️ 图片转 ICO 完成"},
+                        "template": "blue"
+                    },
+                    "elements": [
+                        {
+                            "tag": "div",
+                            "text": {"tag": "lark_md", "content": f"**用户**: {user_id}\n**原文件名**: {input_filename}\n**转换尺寸**: {sizes}"}
+                        },
+                        {
+                            "tag": "action",
+                            "actions": [
+                                {
+                                    "tag": "button",
+                                    "text": {"tag": "plain_text", "content": "下载 ICO"},
+                                    "url": url,
+                                    "type": "primary"
+                                }
+                            ]
+                        }
+                    ]
+                }
+                
+                # 如果有 img_key，添加图片元素
+                if img_key:
+                    card_content["elements"].insert(0, {
+                        "tag": "img",
+                        "img_key": img_key,
+                        "alt": {
+                            "tag": "plain_text",
+                            "content": "ICO 预览"
+                        }
+                    })
+
+                # 使用配置的文生图 Webhook Token 发送通知
+                webhook_token = settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
+                # 使用 asyncio.to_thread 修复同步函数 await 错误
+                await asyncio.to_thread(feishu_bot.send_webhook_card, card_content, webhook_token=webhook_token)
+                logger.info(f"飞书通知发送成功 (Token: {webhook_token[:5]}***)")
+            except Exception as e:
+                logger.warning(f"飞书通知发送失败: {e}")
+                
+        except Exception as e:
+            logger.error(f"ICO 后置处理任务失败: {e}")
+
+    @staticmethod
+    async def image_to_ico(input_path: str, output_path: str, sizes: list = None, user_id: str = None) -> str:
+        """
+        将图片转换为 ICO 图标，并上传 S3、记录数据库及发送飞书通知
+        
+        Args:
+            input_path (str): 输入图片路径
+            output_path (str): 输出 ICO 路径
+            sizes (list): 包含的图标尺寸列表，默认包含常见尺寸
+            user_id (str): 用户ID (用于归属记录)
+            
+        Returns:
+            str: 生成的 ICO 文件的 URL (如果启用S3) 或 本地绝对路径
+        """
+        if not sizes:
+            # 默认尺寸，包含常见分辨率
+            sizes = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
+            
+        try:
+            # 1. 转换并保存 ICO
+            preview_bytes = None
+            with Image.open(input_path) as img:
+                logger.info(f"正在转换图片为 ICO: {input_path} -> {output_path}")
+                
+                # 确保是 RGBA 模式以保留透明度
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # 确保输出目录存在
+                output_dir = os.path.dirname(output_path)
+                if output_dir and not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                    
+                img.save(output_path, format='ICO', sizes=sizes)
+                logger.info(f"ICO 已保存至: {output_path}")
+                
+                # 生成预览图 (PNG)
+                try:
+                    preview_buffer = io.BytesIO()
+                    preview_img = img.copy()
+                    # 限制预览图大小，避免过大
+                    preview_img.thumbnail((300, 300))
+                    preview_img.save(preview_buffer, format='PNG')
+                    preview_bytes = preview_buffer.getvalue()
+                except Exception as e:
+                    logger.warning(f"生成预览图失败: {e}")
+            
+            # 2. 上传 S3 并记录数据库
+            final_url = str(output_path)
+            
+            # 无论是否有 user_id，都进行上传
+            # 如果没有 user_id，使用 'anonymous' 或 'guest' 作为路径的一部分
+            upload_user_id = user_id if user_id else "guest"
+            
+            try:
+                # 上传生成的 ICO
+                file_bytes = Path(output_path).read_bytes()
+                file_size = Path(output_path).stat().st_size
+                
+                # 构造 S3 Key
+                s3_key = f"images/{upload_user_id}/{uuid.uuid4()}_{Path(output_path).name}"
+                
+                url, key, size = await UploadUtils.save_from_bytes(
+                    file_bytes, 
+                    Path(output_path).name, 
+                    module="image_convert", 
+                    content_type="image/x-icon"
+                )
+                final_url = url
+                logger.info(f"ICO 已上传至 S3: {url}")
+                
+                # 3. 异步执行 DB 和 通知 (仅在有 user_id 时)
+                if user_id:
+                    asyncio.create_task(ImageUtils._post_process_ico_result(
+                        user_id, 
+                        Path(output_path).name,
+                        Path(input_path).name,
+                        key, url, size, sizes, preview_bytes
+                    ))
+
+            except Exception as e:
+                logger.error(f"ICO 上传 S3 失败: {e}")
+            
+            return final_url
+            
+        except Exception as e:
+            logger.error(f"转换 ICO 失败: {e}")
+            raise e
 
     @staticmethod
     def compress_to_target_size(input_path: str, output_path: str, target_size_mb: float, step: int = 5, min_quality: int = 10) -> bool:
