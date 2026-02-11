@@ -461,17 +461,17 @@ watchEffect(() => {
 /* 样式复用自原项目，稍微调整 */
 $primary: #2473ba;
 $bg: #e6f7ff;
-$radius: 20px;
+$radius: 1.25rem;
 $shadow: rgba(0, 0, 0, 0.15);
 
-@mixin desktop-only { @media (min-width: 1025px) { @content; } }
-@mixin tablet { @media (max-width: 1024px) and (min-width: 769px) { @content; } }
-@mixin mobile { @media (max-width: 768px) { @content; } }
+@mixin desktop-only { @media (min-width: 64.0625rem) { @content; } }
+@mixin tablet { @media (max-width: 64rem) and (min-width: 48.0625rem) { @content; } }
+@mixin mobile { @media (max-width: 48rem) { @content; } }
 
 .chat-window {
   width: 100%;
   height: 100vh;
-  min-height: 600px; /* 设置最小高度 */
+  min-height: 37.5rem; /* 设置最小高度 */
   background: $bg;
   display: flex;
   flex-direction: column;
@@ -487,7 +487,7 @@ $shadow: rgba(0, 0, 0, 0.15);
   /* iframe环境适配 */
   :global(html[data-iframe="true"]) & {
     height: 100%;
-    min-height: 500px;
+    min-height: 31.25rem;
     position: relative; /* iframe下不需要fixed */
   }
 
@@ -504,36 +504,36 @@ $shadow: rgba(0, 0, 0, 0.15);
     position: relative;
     
     :global(html[data-iframe="true"]) & {
-      min-height: 400px;
+      min-height: 25rem;
     }
   }
 }
 
 .chat-header {
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   background: rgba(255, 255, 255, 0.5);
   display: flex;
   justify-content: flex-end;
   
   @include mobile {
-    font-size: 15px;
-    padding: 10px 12px;
+    font-size: 0.9375rem;
+    padding: 0.625rem 0.75rem;
   }
 }
 
 .chat-body {
   flex: 1;
-  padding: 0 20px;
+  padding: 0 1.25rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-width: 800px;
+  max-width: 50rem;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
   
   @include mobile {
-    padding: 0 15px 10px 15px;
+    padding: 0 0.9375rem 0.625rem 0.9375rem;
   }
 }
 
@@ -545,73 +545,73 @@ $shadow: rgba(0, 0, 0, 0.15);
   align-items: center;
   width: 100%;
   overflow-y: auto;
-  padding-bottom: 20px;
+  padding-bottom: 1.25rem;
 
   .chat-avatar-wrapper {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 20px;
+    width: 5rem;
+    height: 5rem;
+    margin-bottom: 1.25rem;
     border-radius: 50%;
     background: #fff;
     overflow: hidden;
     img { width: 100%; height: 100%; object-fit: cover; }
     
     @include mobile {
-       width: 60px;
-       height: 60px;
+       width: 3.75rem;
+       height: 3.75rem;
     }
   }
 
   .message-box {
     background: rgba(255,255,255,0.7);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
     text-align: center;
     max-width: 80%;
 
     .greeting {
       font-weight: 600;
-      font-size: 18px;
-      margin-bottom: 10px;
-      @include mobile { font-size: 16px; }
+      font-size: 1.125rem;
+      margin-bottom: 0.625rem;
+      @include mobile { font-size: 1rem; }
     }
     .intro {
-      font-size: 14px;
+      font-size: 0.875rem;
       color: #555;
-      @include mobile { font-size: 12px; }
+      @include mobile { font-size: 0.75rem; }
     }
   }
 
   .example-questions {
-    margin-top: 30px;
+    margin-top: 1.875rem;
     width: 100%;
-    max-width: 400px;
+    max-width: 25rem;
     
     .title {
-      font-size: 14px;
+      font-size: 0.875rem;
       color: #777;
-      margin-bottom: 10px;
+      margin-bottom: 0.625rem;
       text-align: center;
-      @include mobile { font-size: 12px; }
+      @include mobile { font-size: 0.75rem; }
     }
     
     .question {
       background: white;
-      padding: 10px 15px;
-      margin-bottom: 8px;
-      border-radius: 20px;
-      font-size: 14px;
+      padding: 0.625rem 0.9375rem;
+      margin-bottom: 0.5rem;
+      border-radius: 1.25rem;
+      font-size: 0.875rem;
       color: $primary;
       cursor: pointer;
       text-align: center;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      box-shadow: 0 0.125rem 0.3125rem rgba(0,0,0,0.05);
       transition: transform 0.2s;
       
       &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateY(-0.125rem);
+        box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1);
       }
-      @include mobile { font-size: 12px; padding: 8px 10px; }
+      @include mobile { font-size: 0.75rem; padding: 0.5rem 0.625rem; }
     }
   }
 }
@@ -619,17 +619,17 @@ $shadow: rgba(0, 0, 0, 0.15);
 .chat-history {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 0;
+  padding: 1.25rem 0;
   
   @include mobile {
-     margin-bottom: 20px;
-     padding-bottom: 20px;
+     margin-bottom: 1.25rem;
+     padding-bottom: 1.25rem;
   }
   
   .message-row {
     display: flex;
-    margin-bottom: 20px;
-    gap: 10px;
+    margin-bottom: 1.25rem;
+    gap: 0.625rem;
     
     &.message-user {
       justify-content: flex-end;
@@ -641,7 +641,7 @@ $shadow: rgba(0, 0, 0, 0.15);
       .message-content {
         background: $primary;
         color: white;
-        border-radius: 12px 12px 0 12px;
+        border-radius: 0.75rem 0.75rem 0 0.75rem;
         position: relative;
         height: auto;
       }
@@ -656,21 +656,21 @@ $shadow: rgba(0, 0, 0, 0.15);
       }
 
       .ai-avatar {
-        width: 40px;
-        height: 40px;
+        width: 2.5rem;
+        height: 2.5rem;
         margin-right: 0; /* gap handles spacing now, but keep 0 to reset if needed */
         border-radius: 50%;
         overflow: hidden;
         flex-shrink: 0;
         background: #fff; /* 确保有背景 */
         img { width: 100%; height: 100%; object-fit: cover; }
-        @include mobile { width: 32px; height: 32px; min-width: 32px; }
+        @include mobile { width: 2rem; height: 2rem; min-width: 2rem; }
       }
       .message-content {
         background: white;
         color: #333;
-        border-radius: 0 12px 12px 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-radius: 0 0.75rem 0.75rem 0.75rem;
+        box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.08);
       }
     }
 
@@ -681,25 +681,25 @@ $shadow: rgba(0, 0, 0, 0.15);
     }
     
     .message-content {
-      padding: 12px 16px;
+      padding: 0.75rem 1rem;
       word-break: break-word; /* 参考首页逻辑 */
       line-height: 1.6;
-      font-size: 15px;
+      font-size: 0.9375rem;
       position: relative;
       
-      @include mobile { font-size: 14px; padding: 10px 12px; max-width: 100%; /* wrapper handles constraint */ }
+      @include mobile { font-size: 0.875rem; padding: 0.625rem 0.75rem; max-width: 100%; /* wrapper handles constraint */ }
       
       /* 修复 Markdown 内容样式 */
-      :deep(p) { margin: 0 0 8px 0; &:last-child { margin-bottom: 0; } }
-      :deep(ul), :deep(ol) { padding-left: 20px; margin: 0 0 8px 0; }
+      :deep(p) { margin: 0 0 0.5rem 0; &:last-child { margin-bottom: 0; } }
+      :deep(ul), :deep(ol) { padding-left: 1.25rem; margin: 0 0 0.5rem 0; }
       :deep(pre) { 
         background: #2d2d2d; 
-        padding: 12px; 
-        border-radius: 6px; 
+        padding: 0.75rem; 
+        border-radius: 0.375rem; 
         overflow-x: auto; 
         color: #f8f8f2; 
-        margin: 8px 0;
-        font-size: 13px;
+        margin: 0.5rem 0;
+        font-size: 0.8125rem;
       }
       :deep(code) { font-family: monospace; }
       :deep(.leave-contact) { cursor: pointer; color: $primary; text-decoration: underline; }
@@ -707,9 +707,9 @@ $shadow: rgba(0, 0, 0, 0.15);
       /* 限制图片大小，确保完整显示 */
       :deep(img) {
         max-width: 100%;
-        max-height: 300px;
+        max-height: 18.75rem;
         object-fit: contain;
-        border-radius: 4px;
+        border-radius: 0.25rem;
       }
       
       &.thinking {
@@ -717,10 +717,10 @@ $shadow: rgba(0, 0, 0, 0.15);
         &:after {
           content: "";
           position: absolute;
-          bottom: 10px;
-          right: 10px;
-          width: 8px;
-          height: 8px;
+          bottom: 0.625rem;
+          right: 0.625rem;
+          width: 0.5rem;
+          height: 0.5rem;
           background-color: $primary;
           border-radius: 50%;
           animation: pulse 1.5s infinite;
@@ -731,41 +731,41 @@ $shadow: rgba(0, 0, 0, 0.15);
 }
 
 .chat-input-area {
-  padding: 15px 0;
+  padding: 0.9375rem 0;
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   
   @include mobile {
-     margin: 10px 0 20px 0;
+     margin: 0.625rem 0 1.25rem 0;
   }
   
   input {
     flex: 1;
-    padding: 12px 15px;
+    padding: 0.75rem 0.9375rem;
     border: 1px solid #ddd;
-    border-radius: 25px;
-    font-size: 15px;
+    border-radius: 1.5625rem;
+    font-size: 0.9375rem;
     outline: none;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    box-shadow: 0 0.125rem 0.625rem rgba(0,0,0,0.05);
     &:focus { border-color: $primary; }
-    @include mobile { height: 38px; font-size: 13px; padding: 8px 0 8px 12px; }
+    @include mobile { height: 2.375rem; font-size: 0.8125rem; padding: 0.5rem 0 0.5rem 0.75rem; }
   }
   
   button {
-    width: 46px;
-    height: 46px;
+    width: 2.875rem;
+    height: 2.875rem;
     border-radius: 50%;
     border: none;
     background: $primary;
     color: white;
-    font-size: 20px;
+    font-size: 1.25rem;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
     transition: background 0.3s;
     
-    @include mobile { width: 38px; height: 38px; min-width: 38px; }
+    @include mobile { width: 2.375rem; height: 2.375rem; min-width: 2.375rem; }
     
     &:disabled {
       background: #ccc;
@@ -780,9 +780,9 @@ $shadow: rgba(0, 0, 0, 0.15);
 
 .chat-footer {
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #999;
-  padding-bottom: 10px;
+  padding-bottom: 0.625rem;
 }
 
 /* 确认弹窗样式 */
@@ -802,16 +802,16 @@ $shadow: rgba(0, 0, 0, 0.15);
 .chat-confirm-dialog {
   background: white;
   width: 80%;
-  max-width: 300px;
-  border-radius: 12px;
-  padding: 20px;
+  max-width: 18.75rem;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.15);
 }
 
 .confirm-body p {
-  margin: 0 0 20px 0;
-  font-size: 14px;
+  margin: 0 0 1.25rem 0;
+  font-size: 0.875rem;
   color: #333;
   line-height: 1.5;
 }
@@ -819,16 +819,16 @@ $shadow: rgba(0, 0, 0, 0.15);
 .confirm-buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .confirm-btn {
   background: $primary;
   color: white;
   border: none;
-  padding: 10px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: 0.625rem;
+  border-radius: 1.25rem;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
@@ -836,14 +836,9 @@ $shadow: rgba(0, 0, 0, 0.15);
   background: #f5f5f5;
   color: #666;
   border: none;
-  padding: 10px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: 0.625rem;
+  border-radius: 1.25rem;
+  font-size: 0.875rem;
   cursor: pointer;
-}
-
-@keyframes pulse {
-  0% { transform: scale(0.8); opacity: 0.5; }
-  100% { transform: scale(1.5); opacity: 0; }
 }
 </style>

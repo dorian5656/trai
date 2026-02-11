@@ -160,7 +160,7 @@ onMounted(async () => {
   <el-dialog
     v-model="appStore.showLoginModal"
     :title="isRegister ? '用户注册' : 'TRAI 系统登录'"
-    width="420px"
+    width="26.25rem"
     center
     align-center
     append-to-body
@@ -282,40 +282,40 @@ onMounted(async () => {
 
 <style>
 .login-modal-overlay {
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(0.625rem);
   background-color: rgba(0, 0, 0, 0.4) !important; /* 加深一点背景以便看清文字 */
 }
 </style>
 
 <style scoped>
 .login-content {
-  padding: 0 10px;
+  padding: 0 0.625rem;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 1.25rem;
 }
 
 .subtitle {
   color: #909399;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin: 0;
 }
 
 .login-form, .register-form {
-  margin-top: 10px;
+  margin-top: 0.625rem;
 }
 
 .submit-btn {
   width: 100%;
-  margin-top: 10px;
-  font-size: 16px;
-  padding: 12px 0;
+  margin-top: 0.625rem;
+  font-size: 1rem;
+  padding: 0.75rem 0;
 }
 
 .form-footer {
-  margin-top: 20px;
+  margin-top: 1.25rem;
   text-align: center;
 }
 </style>

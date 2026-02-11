@@ -8,7 +8,7 @@
 :root {
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   --bg-color: #f7f8fc;
-  --sidebar-width: 260px;
+  --sidebar-width: 16.25rem;
   --primary-color: #4e5969;
   --accent-color: #1d2129;
 }

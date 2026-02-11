@@ -347,7 +347,7 @@ const submit = async () => {
   margin-top: 0.3125rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 48rem) {
   :deep(.el-dialog) {
     margin: 0 !important;
   }

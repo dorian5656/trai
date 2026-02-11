@@ -27,18 +27,25 @@ export function useWebSocketSpeech() {
 
   // 初始化 WebSocket
   const connectWebSocket = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        resolve();
+    const candidates = (() => {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const sameOrigin = `${proto}://${location.host}${API_BASE_URL}/speech/ws/transcribe`;
+      const primary = WS_URL;
+      const arr = [primary, sameOrigin];
+      return Array.from(new Set(arr));
+    })();
+
+    const tryIndex = (idx: number, resolve: () => void, reject: (e: any) => void) => {
+      if (idx >= candidates.length) {
+        reject(new Error('WebSocket 连接错误'));
         return;
       }
-
+      const target: string = candidates[idx]!;
       try {
-        ws = new WebSocket(WS_URL);
+        ws = new WebSocket(target);
         ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {
-          console.log('✅ WebSocket Connected');
           isConnected.value = true;
           errorMsg.value = '';
           resolve();
@@ -49,33 +56,44 @@ export function useWebSocketSpeech() {
             const data = JSON.parse(event.data);
             if (data.text) {
               if (data.is_final) {
-                resultText.value += data.text; // 累加最终结果
-                interimText.value = ''; // 清空临时结果
+                resultText.value += data.text;
+                interimText.value = '';
               } else {
-                interimText.value = data.text; // 更新临时结果
+                interimText.value = data.text;
               }
             }
-          } catch (e) {
-            console.error('Failed to parse WebSocket message:', e);
-          }
+          } catch {}
         };
 
         ws.onerror = (e) => {
-          console.error('WebSocket Error:', e);
-          errorMsg.value = 'WebSocket 连接错误';
           isConnected.value = false;
-          reject(e);
+          errorMsg.value = 'WebSocket 连接错误';
+          try { ws?.close(); } catch {}
+          ws = null;
+          if (idx + 1 < candidates.length) {
+            tryIndex(idx + 1, resolve, reject);
+          } else {
+            ElMessage.error('网络连接异常：无法建立语音实时录音通道，请检查后端服务是否已启动以及端口配置');
+            reject(e);
+          }
         };
 
         ws.onclose = () => {
-          console.log('WebSocket Closed');
           isConnected.value = false;
           isRecording.value = false;
           isProcessingFile.value = false;
         };
       } catch (e) {
-        reject(e);
+        tryIndex(idx + 1, resolve, reject);
       }
+    };
+
+    return new Promise((resolve, reject) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        resolve();
+        return;
+      }
+      tryIndex(0, resolve, reject);
     });
   };
 

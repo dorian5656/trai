@@ -8,6 +8,7 @@ import { ref, computed } from 'vue';
 import type { Message, ChatSession, DifyConversation } from '@/types/chat';
 import { v4 as uuidv4 } from 'uuid';
 import { generateImage, chatWithImage } from '@/api/image';
+import { convertByExt } from '@/api/doc';
 import { streamDifyChat, streamImageChat } from '@/utils/stream';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { ElMessage } from 'element-plus';
@@ -47,8 +48,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
-  // 添加临时会话到列表首部
   const addTempDifyConversation = (title: string = '新对话') => {
+    const existingTemp = difyConversations.value.find(c => c.is_temp);
+    if (existingTemp) {
+      existingTemp.name = title;
+      return existingTemp.id;
+    }
     const tempId = `temp-${Date.now()}`;
     const newConv: DifyConversation = {
       id: tempId,
@@ -58,7 +63,7 @@ export const useChatStore = defineStore('chat', () => {
       introduction: '',
       created_at: Date.now() / 1000,
       updated_at: Date.now() / 1000,
-      is_temp: true // 标记为临时会话
+      is_temp: true
     };
     difyConversations.value.unshift(newConv);
     return tempId;
@@ -94,8 +99,14 @@ export const useChatStore = defineStore('chat', () => {
     // 如果切换了会话，可能需要同步 UI 状态，这里暂不处理复杂逻辑
   };
 
-  // 创建新会话
+  // 创建新会话（仅保留一个空会话）
   const createSession = (title: string = '新对话', fixedId?: string) => {
+    const existingEmpty = sessions.value.find(s => s.messages.length === 0);
+    if (existingEmpty) {
+      currentSessionId.value = existingEmpty.id;
+      difySessionId.value = null;
+      return existingEmpty;
+    }
     const newSession: ChatSession = {
       id: fixedId || Date.now().toString(),
       title,
@@ -104,7 +115,6 @@ export const useChatStore = defineStore('chat', () => {
     };
     sessions.value.unshift(newSession);
     currentSessionId.value = newSession.id;
-    // 重置 Dify 会话 ID
     difySessionId.value = null;
     return newSession;
   };
@@ -223,43 +233,9 @@ export const useChatStore = defineStore('chat', () => {
     addMessage('user', fullContent);
     isSending.value = true;
 
-    // 3. 处理图像生成技能
+    // 3. 处理图像生成技能 (入口保留，实际生成逻辑由 ImageGenDialog 承担)
     if (skill && skill.label === '图像生成' && content) {
-      // 添加 AI 占位消息
-      addMessage('assistant', '正在生成图片...');
-      
-      try {
-        // 调用图像生成接口
-        const result = await generateImage({
-          prompt: content,
-          model: 'Z-Image',
-          size: '512x512'
-        });
-        
-        // 处理返回结果
-        let imageUrl: string | null = null;
-        
-        // 情况1: 直接返回完整的 ImageGenResponse
-        if (result && (result as any).data && Array.isArray((result as any).data) && (result as any).data.length > 0) {
-          imageUrl = (result as any).data[0].url;
-        }
-        // 情况2: 响应拦截器自动解包了，直接返回了 data 数组
-        else if (Array.isArray(result) && result.length > 0) {
-          imageUrl = (result as any)[0].url;
-        }
-        
-        if (imageUrl) {
-          updateLastMessage(`![生成的图片](${imageUrl})`);
-        } else {
-          updateLastMessage('❌ 生成失败：未返回有效的图片 URL');
-        }
-      } catch (error: any) {
-        console.error('图像生成失败:', error);
-        const appError = ErrorHandler.handleHttpError(error);
-        updateLastMessage(`❌ 生成失败：${appError.message}`);
-      } finally {
-        isSending.value = false;
-      }
+      isSending.value = false;
       return;
     }
 
@@ -317,22 +293,43 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
-    // 4. 处理普通对话 (Dify)
+    // 4. 文档工具技能：根据上传文件类型进行格式转换
+    if (skill && skill.label === '文档工具') {
+      addMessage('assistant', '正在转换文档...');
+      try {
+        const first = files[0];
+        if (!first || !first.raw) {
+          ElMessage.warning('请先上传需要转换的文档文件');
+          isSending.value = false;
+          return;
+        }
+        const result = await convertByExt(first.raw);
+        if ((result as any).urls && Array.isArray((result as any).urls)) {
+          const urls: string[] = (result as any).urls;
+          const text = urls.map((u) => `结果：${u}`).join('\n');
+          updateLastMessage(text);
+        } else if ((result as any).url) {
+          const url: string = (result as any).url;
+          updateLastMessage(`结果：${url}`);
+        } else {
+          updateLastMessage('转换完成，但未返回结果链接');
+        }
+      } catch (e: any) {
+        const appError = ErrorHandler.handleHttpError(e);
+        updateLastMessage(`❌ 文档转换失败：${appError.message}`);
+      } finally {
+        isSending.value = false;
+      }
+      return;
+    }
+
+    // 5. 处理普通对话 (Dify)
     addMessage('assistant', ''); // 占位
 
     const userStore = useUserStore();
     const username = userStore.username || 'guest';
     const isPublic = !userStore.isLoggedIn;
-    
-    // 记录开始时的 conversationId
-    const initialConversationId = difySessionId.value;
-    let tempConversationId: string | null = null;
 
-    // 如果是新会话（没有ID），先创建一个临时会话占位
-    if (!initialConversationId) {
-        tempConversationId = addTempDifyConversation('新对话');
-    }
-    
     await streamDifyChat(
       {
         query: fullContent,
@@ -342,20 +339,9 @@ export const useChatStore = defineStore('chat', () => {
       },
       (text: string, conversationId?: string) => {
         updateLastMessage(text);
-        
-        // 当后端返回真实 ID 时
-        if (conversationId && !difySessionId.value) {
-            setDifySessionId(conversationId);
-            
-            // 如果之前创建了临时会话，将临时 ID 替换为真实 ID
-            if (tempConversationId) {
-                updateTempDifyConversation(tempConversationId, conversationId);
-            }
-            
-            // 如果是新会话，触发回调刷新列表 (获取真实标题等信息)
-            if (!initialConversationId && onConversationCreated) {
-                onConversationCreated();
-            }
+        if (conversationId && !difySessionId.value && onConversationCreated) {
+          setDifySessionId(conversationId);
+          onConversationCreated();
         }
       },
       () => {
