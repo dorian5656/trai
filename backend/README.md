@@ -114,6 +114,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 2026_02_11_0853 _后端
+- **后端**: 优化 Excel 转 PDF 排版逻辑 (ReportLab), 支持根据行列密度动态调整页面尺寸 (A3/A4) 与边距, 解决宽表截断与乱码问题.
+- **后端**: 移除 pandas/xhtml2pdf 及其它冗余测试脚本与临时文件.
+
 ### 2026_02_10_1038 _后端
 - **文档**: 重构项目文档结构, 拆分后端、前端及客户端文档至各模块目录, 根目录仅保留索引.
 - **后端**: 新增图片处理工具 (`ImageUtils`) 及路由模块 (`routers/tools/image`), 支持格式转换、压缩及缩放功能.

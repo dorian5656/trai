@@ -12,6 +12,7 @@ import tempfile
 import hashlib
 import subprocess
 import base64
+import uuid
 import requests
 import pypandoc
 import shutil
@@ -26,6 +27,13 @@ import pikepdf
 import easyofd
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPDF
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, A3, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import ParagraphStyle
+from openpyxl import load_workbook
 from pathlib import Path
 from loguru import logger
 from backend.app.utils.upload_utils import UploadUtils
@@ -490,7 +498,7 @@ class DocUtils:
 
     @staticmethod
     async def excel_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
-        """Excel 转 PDF (通过 Pandas -> HTML -> xhtml2pdf)"""
+        """Excel 转 PDF (优先 LibreOffice，其次 Pandas -> HTML -> xhtml2pdf)"""
         input_path = Path(input_path).resolve()
         if not input_path.exists():
             raise FileNotFoundError(f"文件未找到: {input_path}")
@@ -499,35 +507,212 @@ class DocUtils:
             output_path = input_path.with_suffix('.pdf')
             
         try:
-            # 读取 Excel
-            df = pd.read_excel(input_path)
-            html_content = df.to_html(index=False, classes="table table-striped")
-            
-            # 包装在支持中文字体的最小 HTML 中 (如果可用，使用 SimSun/Arial Unicode MS，否则使用标准字体)
-            # xhtml2pdf 需要中文字体。我们将尝试使用默认的 sans-serif。
-            full_html = f"""
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <style>
-                @page {{ size: A4 landscape; margin: 1cm; }}
-                body {{ font-family: sans-serif; }}
-                table {{ width: 100%; border-collapse: collapse; }}
-                th, td {{ border: 1px solid black; padding: 5px; text-align: left; }}
-            </style>
-            </head>
-            <body>
-            <h2>{input_path.name}</h2>
-            {html_content}
-            </body>
-            </html>
-            """
-            
-            with open(output_path, "wb") as f:
-                pisa_status = await asyncio.to_thread(pisa.CreatePDF, full_html, dest=f)
-                
-            if pisa_status.err:
-                raise Exception("xhtml2pdf 转换错误")
+            if shutil.which("soffice"):
+                out_dir = output_path.parent
+                cmd = ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(input_path)]
+                await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
+
+                generated_pdf = input_path.with_suffix('.pdf')
+                if generated_pdf != output_path and generated_pdf.exists():
+                    generated_pdf.rename(output_path)
+
+                if not output_path.exists():
+                    raise Exception("PDF 生成失败 (文件未创建)")
+            else:
+                try:
+                    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+                    font_family = "STSong-Light"
+                except Exception:
+                    font_family = "Helvetica"
+
+                wb = load_workbook(input_path, data_only=True)
+                ws = wb.active
+
+                def normalize_cell(value: object) -> str:
+                    if value is None:
+                        return ""
+                    s = str(value)
+                    if s.lower() in {"nan", "none", "null"}:
+                        return ""
+                    s = s.replace("\r\n", "\n").replace("\r", "\n")
+                    s = re.sub(r"[ \t]+", " ", s).strip()
+                    return s
+
+                max_row, max_col = ws.max_row, ws.max_column
+                last_row = 0
+                for r in range(1, max_row + 1):
+                    row_vals = [normalize_cell(ws.cell(r, c).value) for c in range(1, max_col + 1)]
+                    if any(row_vals):
+                        last_row = r
+                last_col = 0
+                for c in range(1, max_col + 1):
+                    col_vals = [normalize_cell(ws.cell(r, c).value) for r in range(1, max_row + 1)]
+                    if any(col_vals):
+                        last_col = c
+                if last_row == 0 or last_col == 0:
+                    raise Exception("Excel 内容为空")
+
+                rows = []
+                for r in range(1, last_row + 1):
+                    row_vals = [normalize_cell(ws.cell(r, c).value) for c in range(1, last_col + 1)]
+                    rows.append(row_vals)
+
+                non_empty_cols = [i for i in range(len(rows[0])) if any(row[i] for row in rows)]
+                rows = [[row[i] for i in non_empty_cols] for row in rows]
+                rows = [row for row in rows if any(cell for cell in row)]
+
+                title_text = ""
+                if rows:
+                    first_row_non_empty = [c for c in rows[0] if c]
+                    if len(first_row_non_empty) == 1:
+                        title_text = first_row_non_empty[0]
+                        rows = rows[1:]
+
+                if not rows:
+                    raise Exception("Excel 内容为空")
+
+                header_row = rows[0]
+                data_rows = rows[1:]
+
+                def wrap_text(value: str) -> str:
+                    if not value:
+                        return ""
+                    text = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    text = text.replace("\n", "<br/>")
+                    return text
+
+                row_count = len(data_rows) + 1
+                col_count = len(header_row)
+
+                col_lengths = []
+                sample_rows = rows[:200]
+                for col_idx in range(len(header_row)):
+                    max_len = 1
+                    for row in sample_rows:
+                        max_len = max(max_len, len(row[col_idx]))
+                    col_lengths.append(max_len)
+
+                def compute_col_widths(font_size: float) -> list[float]:
+                    widths = []
+                    per_char = font_size * 0.62
+                    for length in col_lengths:
+                        width = min(max(36.0, length * per_char + 12.0), 280.0)
+                        widths.append(width)
+                    return widths
+
+                def pick_layout() -> tuple[float, object, float, int, int, list[float]]:
+                    font_sizes = [9.0, 8.5, 8.0, 7.5, 7.0, 6.5]
+                    if col_count >= 8:
+                        size_order = [landscape(A3), landscape(A4), A3, A4]
+                    elif row_count >= 45:
+                        size_order = [A3, landscape(A3), A4, landscape(A4)]
+                    else:
+                        size_order = [landscape(A4), A4, landscape(A3), A3]
+
+                    for page_size in size_order:
+                        for font_size in font_sizes:
+                            margin = max(10, round(font_size * 1.9))
+                            if row_count >= 45:
+                                margin = max(10, margin - 2)
+                            doc = SimpleDocTemplate(
+                                str(output_path),
+                                pagesize=page_size,
+                                leftMargin=margin,
+                                rightMargin=margin,
+                                topMargin=margin,
+                                bottomMargin=margin,
+                            )
+                            col_widths = compute_col_widths(font_size)
+                            available_width = doc.width
+                            total_width = sum(col_widths)
+                            if total_width > available_width:
+                                scale = available_width / total_width
+                                col_widths = [w * scale for w in col_widths]
+                            elif total_width < available_width * 0.85:
+                                scale = (available_width * 0.95) / total_width
+                                col_widths = [w * scale for w in col_widths]
+
+                            pad_lr = max(3, round(font_size * 0.6))
+                            pad_tb = max(2, round(font_size * 0.45))
+                            row_height = font_size * 1.35 + pad_tb * 2
+                            title_height = font_size * 1.3 + 10 if title_text else 0
+                            needed_height = row_count * row_height + title_height + 12
+                            if needed_height <= doc.height:
+                                return font_size, page_size, margin, pad_lr, pad_tb, col_widths
+
+                    font_size = 6.5
+                    page_size = landscape(A3) if col_count >= 8 else A3
+                    margin = 10
+                    pad_lr = 3
+                    pad_tb = 2
+                    col_widths = compute_col_widths(font_size)
+                    return font_size, page_size, margin, pad_lr, pad_tb, col_widths
+
+                base_font_size, page_size, margin, pad_lr, pad_tb, col_widths = pick_layout()
+                body_style = ParagraphStyle(
+                    "body",
+                    fontName=font_family,
+                    fontSize=base_font_size,
+                    leading=base_font_size * 1.35,
+                )
+                header_style = ParagraphStyle(
+                    "header",
+                    fontName=font_family,
+                    fontSize=base_font_size,
+                    leading=base_font_size * 1.35,
+                )
+                title_style = ParagraphStyle(
+                    "title",
+                    fontName=font_family,
+                    fontSize=base_font_size + 3,
+                    leading=(base_font_size + 3) * 1.3,
+                    alignment=1,
+                    spaceAfter=6,
+                )
+
+                table_data = []
+                table_data.append([Paragraph(wrap_text(c), header_style) for c in header_row])
+                for row in data_rows:
+                    table_data.append([Paragraph(wrap_text(c), body_style) for c in row])
+
+                doc = SimpleDocTemplate(
+                    str(output_path),
+                    pagesize=page_size,
+                    leftMargin=margin,
+                    rightMargin=margin,
+                    topMargin=margin,
+                    bottomMargin=margin,
+                )
+                available_width = doc.width
+                total_width = sum(col_widths)
+                if total_width > available_width:
+                    scale = available_width / total_width
+                    col_widths = [w * scale for w in col_widths]
+                elif total_width < available_width * 0.85:
+                    scale = (available_width * 0.95) / total_width
+                    col_widths = [w * scale for w in col_widths]
+
+                table = Table(table_data, colWidths=col_widths, repeatRows=1)
+                table.setStyle(
+                    TableStyle(
+                        [
+                            ("GRID", (0, 0), (-1, -1), 0.6, colors.black),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f2f2f2")),
+                            ("LEFTPADDING", (0, 0), (-1, -1), pad_lr),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), pad_lr),
+                            ("TOPPADDING", (0, 0), (-1, -1), pad_tb),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), pad_tb),
+                        ]
+                    )
+                )
+
+                elements = []
+                if title_text:
+                    elements.append(Paragraph(wrap_text(title_text), title_style))
+                elements.append(Spacer(1, 6))
+                elements.append(table)
+                await asyncio.to_thread(doc.build, elements)
                 
             return await DocUtils._upload_and_record(
                 output_path, user_id, "doc_convert", "converted", "application/pdf", 
