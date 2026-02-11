@@ -13,11 +13,11 @@
         "default_download_dir": "D:\\AI"
     },
     "deepseek": {
-        "upload_url": "http://192.168.100.119:5778/api_trai/v1/upload/common",
+        "upload_url": "http://192.168.100.119:5777/api_trai/v1/upload/common",
         "chat_url": "http://192.168.100.119:5777/api_trai/v1/ai/chat/completions"
     },
     "image_gen": {
-        "api_url": "http://192.168.100.119:5778/api_trai/v1/ai/image/generations"
+        "api_url": "http://192.168.100.119:5777/api_trai/v1/ai/image/generations"
     },
     "image_parse": {
         "api_url": "http://192.168.100.119:5777/api_trai/v1/ai/image/chat/image/stream",
