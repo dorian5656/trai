@@ -6,8 +6,8 @@
 */
 
 export const IMAGEGEN_MODEL_OPTIONS = [
-  { label: 'Moonshot V1', value: 'moonshot-v1' },
-  { label: 'Qwen 2.5', value: 'qwen-2.5' },
+  { label: '月之暗面 V1', value: 'moonshot-v1' },
+  { label: '通义千问 2.5', value: 'qwen-2.5' },
   { label: 'OpenAI o4-mini', value: 'o4-mini' },
   { label: 'OpenAI gpt-4.1', value: 'gpt-4.1' },
   { label: 'Claude 3.5', value: 'claude-3.5' },

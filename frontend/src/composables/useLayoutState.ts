@@ -19,6 +19,7 @@ export function useLayoutState() {
   const showSimilarityDialog = ref(false);
   const showMeetingRecorder = ref(false);
   const showDocumentDialog = ref(false);
+  const showImageGenDialog = ref(false);
 
   const toggleDeepThinking = () => {
     isDeepThinking.value = !isDeepThinking.value;
@@ -42,6 +43,7 @@ export function useLayoutState() {
     showSimilarityDialog,
     showMeetingRecorder,
     showDocumentDialog,
+    showImageGenDialog,
     toggleDeepThinking,
     handleLogin,
     handleLogout,

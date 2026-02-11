@@ -233,43 +233,9 @@ export const useChatStore = defineStore('chat', () => {
     addMessage('user', fullContent);
     isSending.value = true;
 
-    // 3. 处理图像生成技能
+    // 3. 处理图像生成技能 (入口保留，实际生成逻辑由 ImageGenDialog 承担)
     if (skill && skill.label === '图像生成' && content) {
-      // 添加 AI 占位消息
-      addMessage('assistant', '正在生成图片...');
-      
-      try {
-        // 调用图像生成接口
-        const result = await generateImage({
-          prompt: content,
-          model: 'Z-Image',
-          size: '512x512'
-        });
-        
-        // 处理返回结果
-        let imageUrl: string | null = null;
-        
-        // 情况1: 直接返回完整的 ImageGenResponse
-        if (result && (result as any).data && Array.isArray((result as any).data) && (result as any).data.length > 0) {
-          imageUrl = (result as any).data[0].url;
-        }
-        // 情况2: 响应拦截器自动解包了，直接返回了 data 数组
-        else if (Array.isArray(result) && result.length > 0) {
-          imageUrl = (result as any)[0].url;
-        }
-        
-        if (imageUrl) {
-          updateLastMessage(`![生成的图片](${imageUrl})`);
-        } else {
-          updateLastMessage('❌ 生成失败：未返回有效的图片 URL');
-        }
-      } catch (error: any) {
-        console.error('图像生成失败:', error);
-        const appError = ErrorHandler.handleHttpError(error);
-        updateLastMessage(`❌ 生成失败：${appError.message}`);
-      } finally {
-        isSending.value = false;
-      }
+      isSending.value = false;
       return;
     }
 

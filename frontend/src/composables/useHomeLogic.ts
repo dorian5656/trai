@@ -124,6 +124,10 @@ export function useHomeLogic() {
       layout.showDocumentDialog.value = true;
       return;
     }
+    if (skill.label === '图像生成') {
+      layout.showImageGenDialog.value = true;
+      return;
+    }
     
     // 调用基础的技能点击逻辑 (处理相似度识别的回调或其他通用逻辑)
     skills.handleSkillClick(skill, () => {
@@ -151,13 +155,13 @@ export function useHomeLogic() {
     chatStore,
     userStore,
     messageListRef,
-    // Modules
+    // 模块
     ...speech,
     ...files,
     ...skills,
     ...session,
     ...layout,
-    // Actions
+    // 操作
     handleSend,
     handleRegenerate,
     handleSkillSelect,

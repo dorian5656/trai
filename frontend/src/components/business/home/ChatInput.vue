@@ -9,7 +9,6 @@ import { ref, computed } from 'vue';
 import type { UploadFile } from '@/composables/useFileUpload';
 import type { Skill } from '@/composables/useSkills';
 import { icons } from '@/assets/icons';
-import { IMAGEGEN_MODEL_OPTIONS, RATIO_OPTIONS, STYLE_OPTIONS, TEMPLATE_OPTIONS } from '@/constants/imagegen';
 import { PLACEHOLDER_TEXT, SKILL_PLACEHOLDERS } from '@/constants/texts';
 
 const props = defineProps<{
@@ -45,21 +44,6 @@ const handleEnter = (e: KeyboardEvent) => {
     emit('send');
   }
 };
-
-const modelName = ref('Seedream 4.5');
-const ratio = ref('1:1');
-const styleName = ref('默认');
-const templateName = ref('默认');
-
-const modelOptions = IMAGEGEN_MODEL_OPTIONS.map(i => i.label);
-const ratioOptions = RATIO_OPTIONS.map(i => i.label);
-const styleOptions = STYLE_OPTIONS.map(i => i.label);
-const templateOptions = TEMPLATE_OPTIONS.map(i => i.label);
-
-const onModelCommand = (cmd: string) => { modelName.value = cmd; };
-const onRatioCommand = (cmd: string) => { ratio.value = cmd; };
-const onStyleCommand = (cmd: string) => { styleName.value = cmd; };
-const onTemplateCommand = (cmd: string) => { templateName.value = cmd; };
 
 const placeholderText = computed(() => {
   const skill = props.activeSkill;
@@ -143,7 +127,7 @@ const placeholderText = computed(() => {
       :disabled="isSending"
       :placeholder="placeholderText" 
     />
-    <div v-show="!(activeSkill && activeSkill.label === '图像生成')" class="input-actions">
+    <div class="input-actions">
       <!-- 上传按钮 -->
       <button class="icon-btn" @click="triggerFileInput">
         <span style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.attachment"></span>
@@ -162,82 +146,6 @@ const placeholderText = computed(() => {
         <span v-if="isListening" style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.micListening"></span>
         <span v-else style="width: 1.25rem; height: 1.25rem; display: block" v-html="icons.micNormal"></span>
       </button>
-      <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
-        <span v-if="isSending" style="width: 0.875rem; height: 0.875rem; display: block" v-html="icons.sendSending"></span>
-        <span v-else style="width: 1rem; height: 1rem; display: block" v-html="icons.sendNormal"></span>
-      </button>
-    </div>
-    <div v-show="activeSkill && activeSkill.label === '图像生成'" class="param-bar">
-      <button class="chip" @click="triggerFileInput">
-        <span class="chip-icon" v-html="icons.attachment"></span>
-        <span class="chip-text">参考图</span>
-      </button>
-      
-      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
-        <template #reference>
-          <button class="chip active">
-            <span class="chip-icon" v-html="icons.star"></span>
-            <span class="chip-text">{{ modelName }}</span>
-            <span class="chip-chevron" v-html="icons.chevronDown"></span>
-          </button>
-        </template>
-        <div class="popover-list">
-          <div class="popover-item" v-for="opt in modelOptions" :key="opt" @click="onModelCommand(opt)" :class="{ active: opt === modelName }">
-            <span class="item-text">{{ opt }}</span>
-            <span v-if="opt === modelName" class="item-check" v-html="icons.check"></span>
-          </div>
-        </div>
-      </el-popover>
-      
-      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
-        <template #reference>
-          <button class="chip">
-            <span class="chip-icon" v-html="icons.ratio"></span>
-            <span class="chip-text">比例 {{ ratio }}</span>
-            <span class="chip-chevron" v-html="icons.chevronDown"></span>
-          </button>
-        </template>
-        <div class="popover-list">
-          <div class="popover-item" v-for="opt in ratioOptions" :key="opt" @click="onRatioCommand(opt)" :class="{ active: opt === ratio }">
-            <span class="item-text">{{ opt }}</span>
-            <span v-if="opt === ratio" class="item-check" v-html="icons.check"></span>
-          </div>
-        </div>
-      </el-popover>
-      
-      <el-popover placement="top-start" trigger="click" :width="200" popper-class="chip-popover">
-        <template #reference>
-          <button class="chip">
-            <span class="chip-icon" v-html="icons.palette"></span>
-            <span class="chip-text">风格 {{ styleName }}</span>
-            <span class="chip-chevron" v-html="icons.chevronDown"></span>
-          </button>
-        </template>
-        <div class="popover-list">
-          <div class="popover-item" v-for="opt in styleOptions" :key="opt" @click="onStyleCommand(opt)" :class="{ active: opt === styleName }">
-            <span class="item-text">{{ opt }}</span>
-            <span v-if="opt === styleName" class="item-check" v-html="icons.check"></span>
-          </div>
-        </div>
-      </el-popover>
-      
-      <el-popover placement="top-start" trigger="click" :width="180" popper-class="chip-popover">
-        <template #reference>
-          <button class="chip">
-            <span class="chip-icon" v-html="icons.template"></span>
-            <span class="chip-text">模板 {{ templateName }}</span>
-            <span class="chip-chevron" v-html="icons.chevronDown"></span>
-          </button>
-        </template>
-        <div class="popover-list">
-          <div class="popover-item" v-for="opt in templateOptions" :key="opt" @click="onTemplateCommand(opt)" :class="{ active: opt === templateName }">
-            <span class="item-text">{{ opt }}</span>
-            <span v-if="opt === templateName" class="item-check" v-html="icons.check"></span>
-          </div>
-        </div>
-      </el-popover>
-      
-      <div class="spacer"></div>
       <button class="send-btn" @click="isSending ? emit('stop') : emit('send')" :disabled="isSending">
         <span v-if="isSending" style="width: 0.875rem; height: 0.875rem; display: block" v-html="icons.sendSending"></span>
         <span v-else style="width: 1rem; height: 1rem; display: block" v-html="icons.sendNormal"></span>

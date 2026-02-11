@@ -12,6 +12,7 @@ import { ChatInput, MessageList } from '@/modules/chat';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
 import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
+import ImageGenDialog from '@/components/business/ImageGenDialog.vue';
 import { MOBILE_TEXT } from '@/constants/texts';
 
 const {
@@ -19,17 +20,17 @@ const {
   chatStore,
   userStore,
   messageListRef,
-  // Speech
+  // 语音识别
   isListening, result, toggleListening,
-  // File Upload
+  // 文件上传
   uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles,
-  // Skills
+  // 技能
   allSkills, activeSkill, removeSkill,
-  // Chat Session
+  // 会话管理
   isLoadingHistory, loadConversations, handleSwitchSession, handleNewChat, handleRenameConversation, handleDeleteConversation,
-  // Layout State
-  inputMessage, isDeepThinking, showSimilarityDialog, showMeetingRecorder, showDocumentDialog, toggleDeepThinking, handleLogin, handleLogout, handleStop,
-  // Actions
+  // 布局状态
+  inputMessage, isDeepThinking, showSimilarityDialog, showMeetingRecorder, showDocumentDialog, showImageGenDialog, toggleDeepThinking, handleLogin, handleLogout, handleStop,
+  // 操作
   handleSend, handleRegenerate, handleSkillSelect, mixedRecentItems
 } = useHomeLogic();
 </script>
@@ -154,6 +155,11 @@ const {
       v-if="showDocumentDialog"
       :visible="showDocumentDialog"
       @update:visible="(val: boolean) => showDocumentDialog = val"
+    />
+    <ImageGenDialog
+      v-if="showImageGenDialog"
+      :visible="showImageGenDialog"
+      @update:visible="(val: boolean) => showImageGenDialog = val"
     />
   </div>
 </template>

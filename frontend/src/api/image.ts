@@ -23,13 +23,23 @@ export interface ImageGenRequest {
  * 图像生成响应数据
  */
 export interface ImageGenResponse {
-  /** 创建时间戳 */
-  created: number;
-  /** 图片数据列表 */
-  data: Array<{
+  /** 创建时间戳 (秒级时间戳，历史记录可能不存在) */
+  created?: number;
+  /** 图片数据列表 (某些历史记录可能只返回单个 url 字段) */
+  data?: Array<{
     /** 图片 URL */
     url: string;
   }>;
+  /** 历史记录扩展字段 */
+  id?: string;
+  prompt?: string;
+  model?: string;
+  style?: string;
+  ratio?: string;
+  /** 历史记录场景下的图片 URL (部分接口直接返回该字段) */
+  url?: string;
+  /** 历史记录创建时间字符串，如 2026-02-10 20:47:29 */
+  created_at?: string;
 }
 
 /**
@@ -64,4 +74,12 @@ export interface ImageChatRequest {
  */
 export const chatWithImage = (data: ImageChatRequest) => {
   return request.post<any, any>('/ai/image/chat/image', data);
+};
+
+/**
+ * 获取图像生成历史
+ * @param params 分页参数
+ */
+export const getImageHistory = (params: { page?: number; size?: number } = {}) => {
+  return request.get<any, { total: number; items: ImageGenResponse[] }>('/ai/image/image/history', { params });
 };
