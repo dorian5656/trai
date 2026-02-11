@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts">
 import { useHomeLogic } from '@/composables/useHomeLogic';
-import MobileSidebar from '@/components/business/home/MobileSidebar.vue';
+import MobileSidebar from '@/components/business/home/mobile/Sidebar.vue';
 import { ElImageViewer } from 'element-plus';
 import { ChatInput, MessageList } from '@/modules/chat';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
