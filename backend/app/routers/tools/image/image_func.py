@@ -10,7 +10,6 @@ import os
 import uuid
 import shutil
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from PIL import Image
 from fastapi import UploadFile, HTTPException
@@ -19,9 +18,6 @@ from backend.app.utils.image_utils import ImageUtils
 
 # 临时文件存储路径
 TEMP_DIR = Path(os.getenv("IMAGE_TEMP_DIR", "backend/temp/images"))
-
-# 线程池用于异步执行耗时操作
-executor = ThreadPoolExecutor(max_workers=4)
 
 class ImageFunc:
     """图像处理业务逻辑类"""
@@ -112,9 +108,7 @@ class ImageFunc:
             logger.info(f"File uploaded to: {input_path}")
             
             # 异步调用工具类进行转换
-            loop = asyncio.get_event_loop()
-            success = await loop.run_in_executor(
-                executor, 
+            success = await asyncio.to_thread(
                 ImageUtils.convert_format, 
                 str(input_path), 
                 str(output_path), 
@@ -184,9 +178,7 @@ class ImageFunc:
 
             logger.info(f"File uploaded to: {input_path}")
             
-            loop = asyncio.get_event_loop()
-            success = await loop.run_in_executor(
-                executor,
+            success = await asyncio.to_thread(
                 ImageUtils.compress_to_target_size,
                 str(input_path),
                 str(output_path),
@@ -259,9 +251,7 @@ class ImageFunc:
             logger.info(f"File uploaded to: {input_path}")
             
             # 异步调用工具类进行缩放
-            loop = asyncio.get_event_loop()
-            success = await loop.run_in_executor(
-                executor,
+            success = await asyncio.to_thread(
                 ImageUtils.resize_image,
                 str(input_path),
                 str(output_path),
