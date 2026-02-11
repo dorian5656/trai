@@ -114,6 +114,13 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_11_1134
+- **安全(doc)**: 完善文档工具安全与健壮性:
+  - 增加路径穿越与非法访问校验 (`is_relative_to`).
+  - 修复 Windows 下字体路径 URI 格式错误 (`file://`).
+  - 优化字体查找性能 (`lru_cache`) 与异常日志 (`exception`).
+- **构建**: 发布客户端版本信息文件 `version.json`.
+
 ### 🛠️ 后端_2026_02_11_1126
 - **安全(doc)**: 修复文档工具路径穿越漏洞与PDF空文件风险, 增加资源泄漏防护.
 - **优化(doc)**: 优化CSS变量解析效率(O(n))与中文字体跨平台兼容性, 消除冗余IO.
