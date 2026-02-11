@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ChatFileList: typeof import('./components/business/home/ChatFileList.vue')['default']
     ChatInput: typeof import('./components/business/home/ChatInput.vue')['default']
     ContactForm: typeof import('./components/ContactForm.vue')['default']
     DocumentToolDialog: typeof import('./components/business/DocumentToolDialog.vue')['default']
