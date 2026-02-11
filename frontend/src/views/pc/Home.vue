@@ -125,6 +125,21 @@ const loadConversations = async () => {
     const res = await fetchDifyConversations(username);
     if (res && res.data) {
       chatStore.difyConversations = (res.data as unknown) as DifyConversation[];
+      // 自动加载第一条会话，避免进入后空白
+      if (
+        !chatStore.difySessionId &&
+        Array.isArray(chatStore.difyConversations) &&
+        chatStore.difyConversations.length > 0
+      ) {
+        const first = chatStore.difyConversations[0];
+        if (first && first.id) {
+          try {
+            await handleSwitchSession(first.id);
+          } catch (err) {
+            console.error('自动切换首会话失败', err);
+          }
+        }
+      }
     }
   } catch (e) {
     console.error('加载历史会话失败', e);
@@ -354,16 +369,20 @@ const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation)
 
       <!-- 内容主体：flex占满剩余高度，作为flex第二项 -->
       <div class="content-body">
-        <!-- 聊天模式：加载历史或有消息时显示，避免闪到欢迎页 -->
-        <div class="chat-layout" v-if="chatStore.messages.length > 0 || isLoadingHistory">
-          <!-- 消息列表 -->
+        <!-- 聊天模式：加载历史或有消息或已选择会话时显示 -->
+        <div class="chat-layout" v-if="chatStore.messages.length > 0 || isLoadingHistory || chatStore.difySessionId">
+          <div v-if="isLoadingHistory" class="loading-overlay">
+            <div class="spinner"></div>
+            <div class="loading-text">正在加载历史消息...</div>
+          </div>
           <MessageList 
+            v-if="!isLoadingHistory"
             :messages="chatStore.messages" 
             ref="messageListRef"
             @regenerate="handleRegenerate"
           />
           <!-- 底部输入区域 -->
-          <div class="chat-footer">
+          <div class="chat-footer" v-if="!isLoadingHistory">
             <div class="footer-input-wrapper">
               <ChatInput 
                 v-model="inputMessage"
@@ -721,6 +740,7 @@ const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation)
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  position: relative;
     
     :deep(.message-list) {
       flex: 1;
@@ -741,6 +761,36 @@ const onConversationCommand = (cmd: 'rename' | 'delete', conv: DifyConversation)
         max-width: 50rem;
       }
     }
+  }
+
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    z-index: 5;
+    .loading-text {
+      margin-top: 0.75rem;
+      color: #606266;
+      font-size: 0.875rem;
+    }
+    .spinner {
+      width: 2rem;
+      height: 2rem;
+      border: 0.25rem solid #e5e6eb;
+      border-top-color: #165dff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 }
 </style>

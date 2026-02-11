@@ -81,6 +81,7 @@ export class ErrorHandler {
    * @param appError 应用错误对象
    */
   static showError(appError: AppError): void {
+    if (appError.type === ErrorType.UNAUTHORIZED) return;
     ElMessage.error(appError.message);
   }
 

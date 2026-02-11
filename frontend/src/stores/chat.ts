@@ -48,8 +48,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
-  // 添加临时会话到列表首部
   const addTempDifyConversation = (title: string = '新对话') => {
+    const existingTemp = difyConversations.value.find(c => c.is_temp);
+    if (existingTemp) {
+      existingTemp.name = title;
+      return existingTemp.id;
+    }
     const tempId = `temp-${Date.now()}`;
     const newConv: DifyConversation = {
       id: tempId,
@@ -59,7 +63,7 @@ export const useChatStore = defineStore('chat', () => {
       introduction: '',
       created_at: Date.now() / 1000,
       updated_at: Date.now() / 1000,
-      is_temp: true // 标记为临时会话
+      is_temp: true
     };
     difyConversations.value.unshift(newConv);
     return tempId;
@@ -95,8 +99,14 @@ export const useChatStore = defineStore('chat', () => {
     // 如果切换了会话，可能需要同步 UI 状态，这里暂不处理复杂逻辑
   };
 
-  // 创建新会话
+  // 创建新会话（仅保留一个空会话）
   const createSession = (title: string = '新对话', fixedId?: string) => {
+    const existingEmpty = sessions.value.find(s => s.messages.length === 0);
+    if (existingEmpty) {
+      currentSessionId.value = existingEmpty.id;
+      difySessionId.value = null;
+      return existingEmpty;
+    }
     const newSession: ChatSession = {
       id: fixedId || Date.now().toString(),
       title,
@@ -105,7 +115,6 @@ export const useChatStore = defineStore('chat', () => {
     };
     sessions.value.unshift(newSession);
     currentSessionId.value = newSession.id;
-    // 重置 Dify 会话 ID
     difySessionId.value = null;
     return newSession;
   };
@@ -354,16 +363,7 @@ export const useChatStore = defineStore('chat', () => {
     const userStore = useUserStore();
     const username = userStore.username || 'guest';
     const isPublic = !userStore.isLoggedIn;
-    
-    // 记录开始时的 conversationId
-    const initialConversationId = difySessionId.value;
-    let tempConversationId: string | null = null;
 
-    // 如果是新会话（没有ID），先创建一个临时会话占位
-    if (!initialConversationId) {
-        tempConversationId = addTempDifyConversation('新对话');
-    }
-    
     await streamDifyChat(
       {
         query: fullContent,
@@ -373,20 +373,9 @@ export const useChatStore = defineStore('chat', () => {
       },
       (text: string, conversationId?: string) => {
         updateLastMessage(text);
-        
-        // 当后端返回真实 ID 时
-        if (conversationId && !difySessionId.value) {
-            setDifySessionId(conversationId);
-            
-            // 如果之前创建了临时会话，将临时 ID 替换为真实 ID
-            if (tempConversationId) {
-                updateTempDifyConversation(tempConversationId, conversationId);
-            }
-            
-            // 如果是新会话，触发回调刷新列表 (获取真实标题等信息)
-            if (!initialConversationId && onConversationCreated) {
-                onConversationCreated();
-            }
+        if (conversationId && !difySessionId.value && onConversationCreated) {
+          setDifySessionId(conversationId);
+          onConversationCreated();
         }
       },
       () => {

@@ -6,6 +6,7 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { ErrorHandler } from './errorHandler';
 import { API_URL } from '@/config';
+import { useUserStore } from '@/stores/user';
 
 // ✅ 创建 axios 实例
 const service: AxiosInstance = axios.create({
@@ -67,6 +68,16 @@ service.interceptors.response.use(
   },
   (error) => {
     console.error('❌ 网络错误:', error);
+    const status = error?.response?.status;
+    if (status === 401) {
+      localStorage.removeItem('token');
+      try {
+        const userStore = useUserStore();
+        userStore.token = '';
+        userStore.userInfo = null;
+      } catch {}
+      return Promise.reject(new Error('UNAUTHORIZED'));
+    }
     const appError = ErrorHandler.handleHttpError(error);
     ErrorHandler.showError(appError);
     return Promise.reject(new Error(appError.message));
