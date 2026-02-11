@@ -331,6 +331,9 @@ class MainWindow(QMainWindow):
 
     def display_page(self, index):
         """切换页面"""
+        if index == -1:
+            return
+            
         # 恢复设置按钮样式
         self.settings_btn.setStyleSheet("""
             QPushButton {
@@ -349,7 +352,7 @@ class MainWindow(QMainWindow):
     def show_settings_page(self):
         """显示设置页面"""
         # 取消侧边栏选中状态
-        self.sidebar.clearSelection()
+        self.sidebar.setCurrentRow(-1)
         
         # 切换到设置页 (最后一页)
         self.stacked_widget.setCurrentWidget(self.settings_page)
