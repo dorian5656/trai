@@ -7,12 +7,14 @@
 # 描述：主窗口逻辑 (侧边栏与页面切换)
 
 import os
+import sys
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QListWidget, QStackedWidget, QListWidgetItem, QFrame, QPushButton, QStyle)
+                             QListWidget, QStackedWidget, QListWidgetItem, QFrame, QPushButton, QStyle,
+                             QSystemTrayIcon, QMenu, QApplication, QMessageBox)
 from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction
 
-from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage, DocToolsPage
+from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage, DocToolsPage, SettingsPage
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -70,7 +72,7 @@ class MainWindow(QMainWindow):
         self.sidebar.setObjectName("sidebar") # 用于QSS
         self.sidebar.setFrameShape(QFrame.Shape.NoFrame) # 无边框
         self.sidebar.setFocusPolicy(Qt.FocusPolicy.NoFocus) # 去除选中虚线框
-        self.sidebar.setIconSize(QSize(24, 24)) # 设置图标大小
+        self.sidebar.setIconSize(QSize(32, 32)) # 设置图标大小
         self.sidebar.currentRowChanged.connect(self.display_page)
         
         # 添加侧边栏选项
@@ -86,6 +88,28 @@ class MainWindow(QMainWindow):
         # 将组件加入侧边栏容器
         self.sidebar_layout.addWidget(self.top_header)
         self.sidebar_layout.addWidget(self.sidebar)
+        
+        # 底部设置按钮
+        self.settings_btn = QPushButton("    设置")
+        self.settings_btn.setIcon(self.create_emoji_icon("⚙️"))
+        self.settings_btn.setIconSize(QSize(32, 32))
+        self.settings_btn.setObjectName("settingsBtn")
+        self.settings_btn.setFixedHeight(50)
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 10px;
+                border: none;
+                background-color: transparent;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #e6e6e6;
+            }
+        """)
+        self.settings_btn.clicked.connect(self.show_settings_page)
+        self.sidebar_layout.addWidget(self.settings_btn)
 
         # 2. 内容区域 (堆叠窗口)
         self.stacked_widget = QStackedWidget()
@@ -101,6 +125,7 @@ class MainWindow(QMainWindow):
         self.image_parse_page = ImageParsePage()
         self.rrdsppg_page = RrdsppgPage()
         self.system_monitor_page = SystemMonitorPage()
+        self.settings_page = SettingsPage()
         
         # 添加页面到堆叠窗口
         self.stacked_widget.addWidget(self.login_page)
@@ -111,6 +136,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.image_parse_page)
         self.stacked_widget.addWidget(self.rrdsppg_page)
         self.stacked_widget.addWidget(self.system_monitor_page)
+        self.stacked_widget.addWidget(self.settings_page)
         
         # 添加到主布局
         main_layout.addWidget(self.sidebar_container)
@@ -121,6 +147,104 @@ class MainWindow(QMainWindow):
         
         # 初始化权限控制
         self.update_sidebar_access(is_logged_in=False)
+
+        # 初始化系统托盘
+        self.tray_icon = None
+        self.init_system_tray()
+
+    def init_system_tray(self):
+        """初始化系统托盘"""
+        # 检查系统是否支持托盘
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # 设置图标 (使用窗口图标)
+        icon = self.windowIcon()
+        self.tray_icon.setIcon(icon)
+        self.tray_icon.setToolTip("TRAI")
+        
+        # 创建上下文菜单
+        tray_menu = QMenu()
+        
+        # 显示主界面动作
+        show_action = QAction("显示主界面", self)
+        show_action.triggered.connect(self.show_normal_window)
+        tray_menu.addAction(show_action)
+        
+        tray_menu.addSeparator()
+        
+        # 退出动作
+        quit_action = QAction("退出", self)
+        quit_action.triggered.connect(self.quit_app)
+        tray_menu.addAction(quit_action)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+        
+        # 连接激活信号 (如点击托盘图标)
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+
+    def on_tray_icon_activated(self, reason):
+        """处理托盘图标点击事件"""
+        # Trigger 通常是单击 (Windows/Linux)
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.show_normal_window()
+        # DoubleClick 双击
+        elif reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.show_normal_window()
+
+    def show_normal_window(self):
+        """显示并激活主窗口"""
+        self.show()
+        self.setWindowState(Qt.WindowState.WindowNoState)
+        self.activateWindow()
+
+    def quit_app(self):
+        """完全退出应用"""
+        # 隐藏托盘图标，避免退出后残留
+        if self.tray_icon:
+            self.tray_icon.hide()
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        """重写关闭事件: 询问是最小化到托盘还是直接退出"""
+        # 只有在托盘图标可用且显示时，才询问
+        if self.tray_icon and self.tray_icon.isVisible():
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("退出确认")
+            msg_box.setText("您点击了关闭按钮，请选择：")
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            
+            # 设置样式表，调整字体大小
+            msg_box.setStyleSheet("""
+                QLabel { font-size: 13px; }
+                QPushButton { font-size: 12px; padding: 4px 12px; }
+            """)
+            
+            # 自定义按钮
+            minimize_btn = msg_box.addButton("最小化至托盘", QMessageBox.ButtonRole.ActionRole)
+            quit_btn = msg_box.addButton("直接退出", QMessageBox.ButtonRole.DestructiveRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+            
+            # 默认选中最小化
+            msg_box.setDefaultButton(minimize_btn)
+            
+            msg_box.exec()
+            
+            clicked_button = msg_box.clickedButton()
+            
+            if clicked_button == minimize_btn:
+                event.ignore()
+                self.hide()
+            elif clicked_button == quit_btn:
+                self.quit_app() # 调用清理逻辑
+                event.accept()
+            else:
+                event.ignore() # 取消关闭
+        else:
+            event.accept()
 
     def create_emoji_icon(self, emoji, size=64):
         pixmap = QPixmap(size, size)
@@ -206,7 +330,40 @@ class MainWindow(QMainWindow):
             self.sidebar.setCurrentRow(1)
 
     def display_page(self, index):
+        """切换页面"""
+        # 恢复设置按钮样式
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 10px;
+                border: none;
+                background-color: transparent;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #e6e6e6;
+            }
+        """)
         self.stacked_widget.setCurrentIndex(index)
+
+    def show_settings_page(self):
+        """显示设置页面"""
+        # 取消侧边栏选中状态
+        self.sidebar.clearSelection()
+        
+        # 切换到设置页 (最后一页)
+        self.stacked_widget.setCurrentWidget(self.settings_page)
+        
+        # 高亮设置按钮
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 10px;
+                border: none;
+                background-color: #d1d1d1;
+                font-size: 14px;
+            }
+        """)
 
     def toggle_sidebar(self):
         width = self.sidebar_container.width()

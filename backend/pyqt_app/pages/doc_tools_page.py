@@ -9,15 +9,15 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QGridLayout, QScrollArea, QFrame, 
                              QGraphicsDropShadowEffect, QMessageBox, QFileDialog, QProgressDialog)
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QThread
-from PyQt6.QtGui import QColor, QFont, QCursor
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QThread, QUrl
+from PyQt6.QtGui import QColor, QFont, QCursor, QDesktopServices
 import os
 import requests
 from .config_loader import config
 
 class DocConvertWorker(QThread):
     """通用文档转换异步工作线程"""
-    finished_signal = pyqtSignal(bool, str)
+    finished_signal = pyqtSignal(bool, str, str)
 
     def __init__(self, input_path, output_path, api_key, token="", extra_data=None):
         super().__init__()
@@ -33,7 +33,7 @@ class DocConvertWorker(QThread):
             # 1. 获取 API 地址
             url = config.get("doc_tools", {}).get(self.api_key, "")
             if not url:
-                self.finished_signal.emit(False, f"配置错误: 未找到 {self.api_key}")
+                self.finished_signal.emit(False, f"配置错误: 未找到 {self.api_key}", "")
                 return
 
             # 2. 上传文件并转换
@@ -60,12 +60,12 @@ class DocConvertWorker(QThread):
             response = requests.post(url, files=files_to_send, data=self.extra_data, headers=headers, timeout=120)
             
             if response.status_code != 200:
-                self.finished_signal.emit(False, f"服务器返回错误: {response.status_code}")
+                self.finished_signal.emit(False, f"服务器返回错误: {response.status_code}", "")
                 return
 
             res_json = response.json()
             if res_json.get("code") != 200:
-                self.finished_signal.emit(False, f"转换失败: {res_json.get('msg', '未知错误')}")
+                self.finished_signal.emit(False, f"转换失败: {res_json.get('msg', '未知错误')}", "")
                 return
 
             # 3. 解析下载链接
@@ -77,7 +77,7 @@ class DocConvertWorker(QThread):
                 download_url = data.get("url") or data.get("download_url")
 
             if not download_url:
-                self.finished_signal.emit(False, "服务端未返回有效的下载链接")
+                self.finished_signal.emit(False, "服务端未返回有效的下载链接", "")
                 return
 
             # 4. 下载文件
@@ -88,12 +88,12 @@ class DocConvertWorker(QThread):
                 with open(self.output_path, 'wb') as f:
                     for chunk in file_res.iter_content(chunk_size=8192):
                         f.write(chunk)
-                self.finished_signal.emit(True, f"转换成功！已保存至: {self.output_path}")
+                self.finished_signal.emit(True, f"转换成功！已保存至: {self.output_path}", self.output_path)
             else:
-                self.finished_signal.emit(False, f"下载结果文件失败: {file_res.status_code}")
+                self.finished_signal.emit(False, f"下载结果文件失败: {file_res.status_code}", "")
 
         except Exception as e:
-            self.finished_signal.emit(False, f"发生异常: {str(e)}")
+            self.finished_signal.emit(False, f"发生异常: {str(e)}", "")
         finally:
             # 关闭所有打开的文件
             for f in opened_files:
@@ -201,7 +201,7 @@ class DocToolsPage(QWidget):
         
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(20, 20, 20, 20)
+        content_layout.setContentsMargins(50, 20, 50, 20)
         content_layout.setSpacing(20)
         
         # --- 功能分组 ---
@@ -250,7 +250,7 @@ class DocToolsPage(QWidget):
         grid_widget = QWidget()
         grid_layout = QGridLayout(grid_widget)
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(48)
+        grid_layout.setSpacing(24)
         grid_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         
         # 添加卡片
@@ -753,11 +753,32 @@ class DocToolsPage(QWidget):
         self.worker.finished_signal.connect(self.on_convert_finished)
         self.worker.start()
 
-    def on_convert_finished(self, success, msg):
+    def on_convert_finished(self, success, msg, file_path=""):
         """转换完成回调"""
         self.progress.close()
         if success:
-            QMessageBox.information(self, "成功", msg)
+            # 自定义成功对话框
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("成功")
+            msg_box.setText(msg)
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            
+            # 添加按钮
+            open_file_btn = msg_box.addButton("打开文件", QMessageBox.ButtonRole.ActionRole)
+            open_dir_btn = msg_box.addButton("打开所在目录", QMessageBox.ButtonRole.ActionRole)
+            close_btn = msg_box.addButton("关闭", QMessageBox.ButtonRole.RejectRole)
+            
+            msg_box.exec()
+            
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == open_file_btn:
+                if file_path and os.path.exists(file_path):
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
+            elif clicked_button == open_dir_btn:
+                if file_path:
+                    folder_path = os.path.dirname(file_path)
+                    if os.path.exists(folder_path):
+                        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
         else:
             QMessageBox.warning(self, "失败", msg)
 

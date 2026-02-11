@@ -14,9 +14,21 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QT_VERSION_STR
 from main_window import MainWindow
 
+# 配置 logging
+# 注意：在 PyInstaller 打包后的无控制台模式下 (noconsole)，sys.stderr 为 None
+# 此时默认的 StreamHandler 会导致 AttributeError: 'NoneType' object has no attribute 'write'
+# 因此我们需要检查环境，避免添加默认 handler
+handlers = []
+if sys.stderr:
+    handlers.append(logging.StreamHandler())
+else:
+    # 可以在这里添加 FileHandler 用于调试，或者什么都不加 (使用 NullHandler)
+    handlers.append(logging.NullHandler())
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [启动日志] %(levelname)s: %(message)s",
+    handlers=handlers
 )
 
 def get_resource_path(relative_path):
