@@ -155,7 +155,9 @@ export const useUserStore = defineStore('user', () => {
 
   const getTokenExp = (t: string): number | null => {
     try {
-      const p = JSON.parse(atob(t.split('.')[1]));
+      const part = t.split('.')[1];
+      if (!part) return null;
+      const p = JSON.parse(atob(part));
       return typeof p.exp === 'number' ? p.exp : null;
     } catch {
       return null;
