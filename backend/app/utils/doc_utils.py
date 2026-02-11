@@ -6,6 +6,7 @@
 # 日期：2026-02-09 16:00:00
 # 描述：文档处理工具类，提供文件格式转换等功能
 
+import platform
 import os
 import re
 import tempfile
@@ -21,14 +22,11 @@ import json
 import pandas as pd
 from PIL import Image
 from pdf2docx import Converter
-from xhtml2pdf import pisa
 import pypdfium2 as pdfium
 import pikepdf
 import easyofd
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPDF
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, A3, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -36,11 +34,39 @@ from reportlab.lib.styles import ParagraphStyle
 from openpyxl import load_workbook
 from pathlib import Path
 from loguru import logger
+try:
+    from playwright.async_api import async_playwright
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
+
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import PGUtils
 
 class DocUtils:
     """文档处理工具类"""
+
+    @staticmethod
+    async def _html_to_pdf_playwright(input_path: Path, output_path: Path) -> None:
+        """
+        使用 Playwright 将 HTML 转换为 PDF (支持 JS/Charts)
+        """
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            
+            # 使用 file:// 协议访问本地文件
+            file_url = input_path.as_uri()
+            await page.goto(file_url, wait_until="networkidle")
+            
+            # 额外等待一点时间确保动画完成 (可选)
+            # await page.wait_for_timeout(1000) 
+            
+            # 生成 PDF
+            # print_background=True 确保背景色和图片被打印
+            await page.pdf(path=str(output_path), format="A4", print_background=True, margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"})
+            
+            await browser.close()
 
     @staticmethod
     def _process_mermaid_diagrams(content: str, temp_dir: Path) -> str:
@@ -498,7 +524,7 @@ class DocUtils:
 
     @staticmethod
     async def excel_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
-        """Excel 转 PDF (优先 LibreOffice，其次 Pandas -> HTML -> xhtml2pdf)"""
+        """Excel 转 PDF (优先 LibreOffice，其次 Pandas -> HTML -> Playwright)"""
         input_path = Path(input_path).resolve()
         if not input_path.exists():
             raise FileNotFoundError(f"文件未找到: {input_path}")
@@ -520,8 +546,7 @@ class DocUtils:
                     raise Exception("PDF 生成失败 (文件未创建)")
             else:
                 try:
-                    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-                    font_family = "STSong-Light"
+                    font_family = "Helvetica"
                 except Exception:
                     font_family = "Helvetica"
 
@@ -722,6 +747,8 @@ class DocUtils:
             logger.error(f"Excel 转 PDF 失败: {e}")
             raise e
 
+
+
     @staticmethod
     async def html_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
         """HTML 文件转 PDF"""
@@ -733,9 +760,12 @@ class DocUtils:
             output_path = input_path.with_suffix('.pdf')
             
         try:
-            html_content = input_path.read_text(encoding='utf-8')
-            with open(output_path, "wb") as f:
-                await asyncio.to_thread(pisa.CreatePDF, html_content, dest=f)
+            # 使用 Playwright 转换 (如果可用)
+            if HAS_PLAYWRIGHT:
+                logger.info(f"使用 Playwright 转换 HTML 到 PDF: {input_path}")
+                await DocUtils._html_to_pdf_playwright(input_path, output_path)
+            else:
+                raise ImportError("未安装 Playwright，无法转换 HTML 到 PDF。请运行 pip install playwright 并安装浏览器内核。")
                 
             return await DocUtils._upload_and_record(
                 output_path, user_id, "doc_convert", "converted", "application/pdf", 
