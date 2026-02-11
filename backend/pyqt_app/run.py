@@ -10,8 +10,8 @@ import sys
 import os
 import logging
 import traceback
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QT_VERSION_STR
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import QT_VERSION_STR, QSharedMemory
 from main_window import MainWindow
 
 # 配置 logging
@@ -60,6 +60,37 @@ def main():
         logging.info("启动应用: 创建 QApplication")
         app = QApplication(sys.argv)
         
+        # --- 单实例检查开始 ---
+        # 使用 QSharedMemory 检查是否已经有实例在运行
+        # 这里的 Key 必须是系统唯一的，建议包含应用名称和版本信息
+        shared_memory_key = "TraiClient_Unique_Instance_Key_2026"
+        shared_memory = QSharedMemory(shared_memory_key)
+        
+        if shared_memory.attach():
+            # 尝试附加成功，说明共享内存段已存在，即另一个实例正在运行
+            logging.warning("检测到应用程序已在运行，正在退出当前实例...")
+            
+            # 可以在这里弹窗提示用户
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("提示")
+            msg_box.setText("程序已经在运行中！")
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.exec()
+            
+            sys.exit(0)
+        
+        if not shared_memory.create(1):
+            # 创建失败，可能是权限问题或者其他异常
+            # 但通常如果是 create 失败且 attach 也失败，说明可以继续尝试运行
+            # 不过为了保险起见，如果 create 失败，我们记录错误但允许运行，或者根据需求退出
+            # 这里我们记录错误日志
+            logging.error(f"无法创建共享内存段: {shared_memory.errorString()}")
+            # 如果仅仅是之前的实例崩溃导致的段残留，Qt在Unix上可能需要处理，但在Windows上系统会自动回收
+            # 考虑到Windows环境，这里可以视为非阻塞性错误，或者选择退出
+            # 暂时允许继续，除非非常严格
+        # --- 单实例检查结束 ---
+
         # 设置工作目录
         if getattr(sys, 'frozen', False):
             # 打包后，工作目录设置为可执行文件所在目录 (方便读取外部 config.json)

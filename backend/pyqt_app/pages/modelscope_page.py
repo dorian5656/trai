@@ -26,7 +26,7 @@ sys.path.append(str(Path(__file__).resolve().parents[3]))
 from loguru import logger
 from modelscope.hub.api import HubApi
 from modelscope.hub.snapshot_download import snapshot_download
-from .config_loader import config
+from .config_loader import config, ConfigLoader
 
 # 默认配置
 DEFAULT_MODEL_ID = config["modelscope"]["default_model_id"]
@@ -268,6 +268,13 @@ class UploadTab(QWidget):
         else:
             QMessageBox.critical(self, "失败", f"上传失败: {message}")
 
+    def update_config(self, new_config):
+        """更新配置"""
+        ms_config = new_config.get("modelscope", {})
+        self.model_id_input.setText(ms_config.get("default_model_id", ""))
+        self.local_dir_input.setText(ms_config.get("default_upload_dir", ""))
+        self.token_input.setText(ms_config.get("api_key", ""))
+
 class DownloadTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -367,6 +374,12 @@ class DownloadTab(QWidget):
         else:
             QMessageBox.critical(self, "失败", f"下载失败: {message}")
 
+    def update_config(self, new_config):
+        """更新配置"""
+        ms_config = new_config.get("modelscope", {})
+        self.model_id_input.setText(ms_config.get("default_model_id", ""))
+        self.local_dir_input.setText(ms_config.get("default_download_dir", ""))
+
 class ModelScopePage(QWidget):
     def __init__(self):
         super().__init__()
@@ -376,6 +389,14 @@ class ModelScopePage(QWidget):
         
         # 配置日志
         self.setup_logging()
+
+        # 监听配置变更
+        ConfigLoader.get_instance().config_changed.connect(self.on_config_changed)
+
+    def on_config_changed(self, new_config):
+        """响应配置变更"""
+        self.upload_tab.update_config(new_config)
+        self.download_tab.update_config(new_config)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self) # 直接使用 self 作为布局父对象
