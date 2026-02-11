@@ -108,6 +108,96 @@ class ImageUtils:
             return False
 
     @staticmethod
+    async def _post_process_ico_result(user_id, output_filename, input_filename, s3_key, url, size, sizes, preview_bytes=None):
+        """异步处理 ICO 生成后的数据库记录和飞书通知"""
+        try:
+            # 1. 记录到 user_images 表
+            try:
+                insert_sql = """
+                    INSERT INTO user_images (
+                        user_id, filename, s3_key, url, size, mime_type, module, source, meta_data
+                    ) VALUES (
+                        :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data
+                    )
+                """
+                params = {
+                    "user_id": user_id,
+                    "filename": output_filename,
+                    "s3_key": s3_key,
+                    "url": url,
+                    "size": size,
+                    "mime_type": "image/x-icon",
+                    "module": "image_convert",
+                    "source": "converted",
+                    "meta_data": json.dumps({
+                        "original_file": input_filename, 
+                        "type": "img2ico",
+                        "sizes": str(sizes)
+                    })
+                }
+                await PGUtils.execute_update(insert_sql, params)
+                logger.info(f"ICO 记录已保存至数据库")
+            except Exception as e:
+                logger.error(f"ICO 记录保存数据库失败: {e}")
+                
+            # 2. 发送飞书通知
+            try:
+                # 上传预览图获取 img_key (使用 asyncio.to_thread 避免阻塞)
+                img_key = None
+                if preview_bytes:
+                    try:
+                        img_key = await asyncio.to_thread(feishu_bot.upload_image, preview_bytes)
+                    except Exception as e:
+                        logger.warning(f"上传预览图到飞书失败: {e}")
+
+                card_content = {
+                    "config": {"wide_screen_mode": True},
+                    "header": {
+                        "title": {"tag": "plain_text", "content": "🖼️ 图片转 ICO 完成"},
+                        "template": "blue"
+                    },
+                    "elements": [
+                        {
+                            "tag": "div",
+                            "text": {"tag": "lark_md", "content": f"**用户**: {user_id}\n**原文件名**: {input_filename}\n**转换尺寸**: {sizes}"}
+                        },
+                        {
+                            "tag": "action",
+                            "actions": [
+                                {
+                                    "tag": "button",
+                                    "text": {"tag": "plain_text", "content": "下载 ICO"},
+                                    "url": url,
+                                    "type": "primary"
+                                }
+                            ]
+                        }
+                    ]
+                }
+                
+                # 如果有 img_key，添加图片元素
+                if img_key:
+                    card_content["elements"].insert(0, {
+                        "tag": "img",
+                        "img_key": img_key,
+                        "alt": {
+                            "tag": "plain_text",
+                            "content": "ICO 预览"
+                        }
+                    })
+
+                # 使用配置的文生图 Webhook Token 发送通知
+                webhook_token = settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
+                # 使用 asyncio.to_thread 修复同步函数 await 错误
+                await asyncio.to_thread(feishu_bot.send_webhook_card, card_content, webhook_token=webhook_token)
+                logger.info(f"飞书通知发送成功 (Token: {webhook_token[:5]}***)")
+            except Exception as e:
+                logger.warning(f"飞书通知发送失败: {e}")
+                
+        except Exception as e:
+            logger.error(f"ICO 后置处理任务失败: {e}")
+
+    @staticmethod
     async def image_to_ico(input_path: str, output_path: str, sizes: list = None, user_id: str = None) -> str:
         """
         将图片转换为 ICO 图标，并上传 S3、记录数据库及发送飞书通知
@@ -121,7 +211,7 @@ class ImageUtils:
         Returns:
             str: 生成的 ICO 文件的 URL (如果启用S3) 或 本地绝对路径
         """
-        if sizes is None:
+        if not sizes:
             # 默认尺寸，包含常见分辨率
             sizes = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
             
@@ -178,90 +268,14 @@ class ImageUtils:
                 final_url = url
                 logger.info(f"ICO 已上传至 S3: {url}")
                 
-                # 仅在有 user_id 时记录到 user_images 表
+                # 3. 异步执行 DB 和 通知 (仅在有 user_id 时)
                 if user_id:
-                    try:
-                        insert_sql = """
-                            INSERT INTO user_images (
-                                user_id, filename, s3_key, url, size, mime_type, module, source, meta_data
-                            ) VALUES (
-                                :user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :meta_data
-                            )
-                        """
-                        params = {
-                            "user_id": user_id,
-                            "filename": Path(output_path).name,
-                            "s3_key": key,
-                            "url": url,
-                            "size": size,
-                            "mime_type": "image/x-icon",
-                            "module": "image_convert",
-                            "source": "converted",
-                            "meta_data": json.dumps({
-                                "original_file": Path(input_path).name, 
-                                "type": "img2ico",
-                                "sizes": str(sizes)
-                            })
-                        }
-                        await PGUtils.execute_update(insert_sql, params)
-                        logger.info(f"ICO 记录已保存至数据库")
-                    except Exception as e:
-                        logger.error(f"ICO 记录保存数据库失败: {e}")
-                
-                # 发送飞书通知 (仅在有 user_id 时，避免匿名请求骚扰)
-                if user_id:
-                    try:
-                        # 上传预览图获取 img_key (使用 asyncio.to_thread 避免阻塞)
-                        img_key = None
-                        if preview_bytes:
-                            try:
-                                img_key = await asyncio.to_thread(feishu_bot.upload_image, preview_bytes)
-                            except Exception as e:
-                                logger.warning(f"上传预览图到飞书失败: {e}")
-
-                        card_content = {
-                            "config": {"wide_screen_mode": True},
-                            "header": {
-                                "title": {"tag": "plain_text", "content": "🖼️ 图片转 ICO 完成"},
-                                "template": "blue"
-                            },
-                            "elements": [
-                                {
-                                    "tag": "div",
-                                    "text": {"tag": "lark_md", "content": f"**用户**: {user_id}\n**原文件名**: {Path(input_path).name}\n**转换尺寸**: {sizes}"}
-                                },
-                                {
-                                    "tag": "action",
-                                    "actions": [
-                                        {
-                                            "tag": "button",
-                                            "text": {"tag": "plain_text", "content": "下载 ICO"},
-                                            "url": url,
-                                            "type": "primary"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                        
-                        # 如果有 img_key，添加图片元素
-                        if img_key:
-                            card_content["elements"].insert(0, {
-                                "tag": "img",
-                                "img_key": img_key,
-                                "alt": {
-                                    "tag": "plain_text",
-                                    "content": "ICO 预览"
-                                }
-                            })
-
-                        # 使用配置的文生图 Webhook Token 发送通知
-                        webhook_token = settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
-                        # 使用 asyncio.to_thread 修复同步函数 await 错误
-                        await asyncio.to_thread(feishu_bot.send_webhook_card, card_content, webhook_token=webhook_token)
-                        logger.info(f"飞书通知发送成功 (Token: {webhook_token[:5]}***)")
-                    except Exception as e:
-                        logger.warning(f"飞书通知发送失败: {e}")
+                    asyncio.create_task(ImageUtils._post_process_ico_result(
+                        user_id, 
+                        Path(output_path).name,
+                        Path(input_path).name,
+                        key, url, size, sizes, preview_bytes
+                    ))
 
             except Exception as e:
                 logger.error(f"ICO 上传 S3 失败: {e}")
