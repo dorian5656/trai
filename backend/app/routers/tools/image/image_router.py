@@ -12,6 +12,7 @@ from backend.app.utils.response import ResponseHelper as Response, ResponseCode
 from backend.app.utils.dependencies import get_current_active_user
 from backend.app.utils.image_utils import ImageUtils
 from backend.app.utils.logger import logger
+from backend.app.config import settings
 import shutil
 import uuid
 import os
@@ -59,7 +60,8 @@ async def image_to_ico(
          user_id = current_user.get("username")
     
     # 1. 保存上传文件到临时目录
-    temp_dir = Path("backend/static/uploads/temp")
+    # 使用 settings.BASE_DIR 确保路径正确，避免出现 backend/backend/static/...
+    temp_dir = settings.BASE_DIR / "static/uploads/temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
     
     file_ext = Path(file.filename).suffix
