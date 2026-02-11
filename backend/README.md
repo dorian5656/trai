@@ -36,7 +36,23 @@ python backend/run.py
 - `opencv-python-headless`: 用于视频帧提取
 - GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
 
-## 🕷️ 网络爬虫 (Crawler)
+## �️ 图片工具 (Image Tools)
+
+### 图片转 ICO (Image to ICO)
+
+支持将常见图片格式 (PNG/JPG/BMP) 转换为 ICO 图标文件，并支持自动生成预览图推送到飞书。
+
+**特性**:
+- **自动透明处理**: 自动转换非 RGBA 图片，保留透明度
+- **多尺寸支持**: 默认生成 256/128/64/48/32/16 等多尺寸图层
+- **S3 存储**: 转换后的 ICO 自动上传至 S3 对象存储
+- **飞书通知**: 转换完成自动推送卡片到飞书，包含 ICO 预览图和下载链接
+- **高性能**: 异步处理数据库记录和通知推送，接口响应毫秒级
+
+**接口**:
+`POST /api_trai/v1/tools/image/image2ico`
+
+## �️ 网络爬虫 (Crawler)
 
 本项目集成了 Scrapy 爬虫框架，用于采集网络公开信息。
 
@@ -113,6 +129,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 🛠️ 后端_2026_02_11_1540
+- **新功能(image)**: 新增图片转 ICO 工具 (`image2ico`), 支持多尺寸生成、S3 存储及飞书预览通知.
+- **优化**: 异步处理 ICO 转换后的数据库记录与通知推送, 提升接口响应速度.
+- **修复**: 修复临时文件路径重复问题 (`backend/backend`), 完善文件清理逻辑.
 
 ### 🛠️ 后端_2026_02_11_1134
 - **安全(doc)**: 完善文档工具安全与健壮性:
