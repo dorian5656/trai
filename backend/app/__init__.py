@@ -69,7 +69,8 @@ def create_app() -> FastAPI:
         static_path = base_path / "static"
         
         # 定义需要自动创建的子目录结构
-        sub_dirs = ["doc", "exe", "other", "uploads"]
+        # 包含: doc(文档), exe(可执行), other(其他), uploads(上传), releases(发布), gen(生成)
+        sub_dirs = ["doc", "exe", "other", "uploads", "releases", "gen", "uploads/temp"]
         
         if not static_path.exists():
             static_path.mkdir(parents=True, exist_ok=True)
@@ -79,7 +80,7 @@ def create_app() -> FastAPI:
         for sub_dir in sub_dirs:
             sub_path = static_path / sub_dir
             if not sub_path.exists():
-                sub_path.mkdir(exist_ok=True)
+                sub_path.mkdir(parents=True, exist_ok=True)
                 logger.success(f"新建静态分类目录: {sub_dir}")
 
         logger.info(f"静态资源目录检查完成: {static_path} ({', '.join(sub_dirs)})")
