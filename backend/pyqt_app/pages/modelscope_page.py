@@ -10,6 +10,7 @@ import sys
 import os
 import shutil
 import re
+import logging  # Added for stdlib logging manipulation
 from pathlib import Path
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, 
@@ -406,7 +407,7 @@ class ModelScopePage(QWidget):
         main_layout.addWidget(log_group, 1)
 
     def setup_logging(self):
-        # 移除默认 handler
+        # 移除 loguru 默认 handler
         logger.remove()
         
         # 定义日志格式 (添加换行符以适配 insertText)
@@ -437,21 +438,29 @@ class ModelScopePage(QWidget):
         except AttributeError:
             pass # 某些环境可能不允许修改 __stderr__
 
-        # 关键修复：修复标准 logging 模块在 Windowed 模式下因 sys.stderr 为 None 导致的 AttributeError
-        # ModelScope 等库使用标准 logging，初始化时可能捕获了为 None 的 stderr
-        import logging
-        def fix_logger_handlers(logger_name=None):
-            logger_obj = logging.getLogger(logger_name)
-            for handler in logger_obj.handlers:
-                if isinstance(handler, logging.StreamHandler):
-                    # 如果 handler 的 stream 是 None (Windowed 模式默认) 或者无效，替换为我们的 stream_logger
-                    if getattr(handler, 'stream', None) is None:
-                        handler.stream = self.stream_logger
-        
-        # 修复根日志记录器和 modelscope 日志记录器
-        fix_logger_handlers()
-        fix_logger_handlers('modelscope')
+        # 配置 modelscope 的 stdlib 日志，使其输出到 GUI
+        def setup_stdlib_logger(logger_name):
+            target_logger = logging.getLogger(logger_name)
+            target_logger.setLevel(logging.INFO)
+            
+            # 检查是否已存在 GUI handler
+            has_gui_handler = False
+            for handler in target_logger.handlers:
+                if getattr(handler, 'stream', None) == self.stream_logger:
+                    has_gui_handler = True
+                    break
+            
+            if not has_gui_handler:
+                # 添加一个新的 StreamHandler 指向我们的流
+                handler = logging.StreamHandler(self.stream_logger)
+                # 设置简单的格式
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                target_logger.addHandler(handler)
 
+        # 仅捕获 modelscope 相关的日志，不捕获根日志 (避免显示全局启动日志)
+        setup_stdlib_logger('modelscope')
+        
     @pyqtSlot(str)
     def append_log(self, text):
         try:

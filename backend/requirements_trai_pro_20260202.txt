@@ -258,5 +258,10 @@ pikepdf==9.0.0
 pypandoc==1.13
 reportlab==4.2.0
 svglib==1.5.1
+<<<<<<< HEAD
 xhtml2pdf==0.2.16
+pdf2docx==0.5.8
+playwright==1.58.0
+=======
 pdf2docx>=0.5.9
+>>>>>>> 8691734806381bbd01241005252398d360890288
