@@ -101,6 +101,9 @@ backend/static/
 backend/logs/
 backend/app/models/._____temp/
 backend/app/models/.lock/
+
+# Gitkeep
+.gitkeep
 **/temp/
 
 # Large AI Models
