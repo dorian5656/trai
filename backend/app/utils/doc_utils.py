@@ -20,8 +20,11 @@ import shutil
 import asyncio
 import json
 import pandas as pd
+import uuid
 from PIL import Image
 from pdf2docx import Converter
+from playwright.async_api import async_playwright
+from xhtml2pdf import pisa
 import pypdfium2 as pdfium
 import pikepdf
 import easyofd
@@ -43,30 +46,55 @@ except ImportError:
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import PGUtils
 
+# 定义项目根目录用于安全校验
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
 class DocUtils:
     """文档处理工具类"""
 
     @staticmethod
-    async def _html_to_pdf_playwright(input_path: Path, output_path: Path) -> None:
+    async def _html_to_pdf_playwright(input_path: Path, output_path: Path) -> bool:
         """
-        使用 Playwright 将 HTML 转换为 PDF (支持 JS/Charts)
+        使用 Playwright 将 HTML 转换为 PDF
+        :param input_path: 输入 HTML 文件路径
+        :param output_path: 输出 PDF 文件路径
+        :return: 是否成功
         """
-        async with async_playwright() as p:
-            browser = await p.chromium.launch()
-            page = await browser.new_page()
-            
-            # 使用 file:// 协议访问本地文件
-            file_url = input_path.as_uri()
-            await page.goto(file_url, wait_until="networkidle")
-            
-            # 额外等待一点时间确保动画完成 (可选)
-            # await page.wait_for_timeout(1000) 
-            
-            # 生成 PDF
-            # print_background=True 确保背景色和图片被打印
-            await page.pdf(path=str(output_path), format="A4", print_background=True, margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"})
-            
-            await browser.close()
+        try:
+            # 1. 路径安全校验 (防止路径穿越)
+            resolved_path = Path(input_path).resolve()
+            if not resolved_path.is_relative_to(BASE_DIR):
+                logger.error(f"路径越界风险: {input_path}")
+                raise PermissionError(f"非法访问: {input_path}")
+                
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(args=['--no-sandbox', '--disable-setuid-sandbox'])
+                try:
+                    page = await browser.new_page()
+                    
+                    # 使用 file:// 协议加载本地文件
+                    file_url = resolved_path.as_uri()
+                    await page.goto(file_url, wait_until="networkidle")
+                    
+                    # 生成 PDF (A4, 打印背景)
+                    await page.pdf(
+                        path=str(output_path),
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "1cm", "right": "1cm", "bottom": "1cm", "left": "1cm"}
+                    )
+                finally:
+                    await browser.close()
+                
+                # 2. 验证生成结果
+                if not output_path.exists() or output_path.stat().st_size == 0:
+                    logger.error("PDF生成为空文件或未生成")
+                    return False
+                    
+                return True
+        except Exception as e:
+            logger.error(f"Playwright 转换 PDF 失败: {e}")
+            return False
 
     @staticmethod
     def _process_mermaid_diagrams(content: str, temp_dir: Path) -> str:
@@ -750,8 +778,97 @@ class DocUtils:
 
 
     @staticmethod
+    def _resolve_css_variables(html_content: str) -> str:
+        """解析并替换 CSS 变量 (为 xhtml2pdf 兼容)"""
+        try:
+            # 1. 提取 :root 定义
+            root_match = re.search(r':root\s*{([^}]+)}', html_content)
+            if root_match:
+                vars_block = root_match.group(1)
+                variables = {}
+                
+                # 2. 解析变量
+                # 移除注释 (支持多行)
+                vars_block = re.sub(r'/\*[^*]*\*+([^/*][^*]*\*+)*/', '', vars_block, flags=re.DOTALL)
+                
+                for match in re.finditer(r'(--[\w-]+)\s*:\s*([^;]+);', vars_block):
+                    variables[match.group(1)] = match.group(2).strip()
+                    
+                # 3. 替换 var() - O(n) 效率优化
+                def replacer(match):
+                    var_name = match.group(1) # 包含 --前缀
+                    return variables.get(var_name, match.group(0))
+                
+                html_content = re.sub(r'var\((--[\w-]+)\)', replacer, html_content)
+            
+            # 4. 移除残留的 var() 防止报错 (替换为黑色或透明)
+            # xhtml2pdf 遇到无法解析的 var() 会报错
+            html_content = re.sub(r'var\(--[^)]+\)', '#000000', html_content)
+            
+            return html_content
+        except Exception as e:
+            logger.error(f"CSS变量解析失败: {e}")
+            return html_content
+
+    @staticmethod
+    def _inject_chinese_font_style(html_content: str) -> str:
+        """注入中文字体样式 (解决乱码问题)"""
+        # 常见中文字体路径 (Droid Sans Fallback 是通用的中文后备字体)
+        # 优先从环境变量获取，增强跨平台兼容性
+        default_path = "/usr/share/fonts/google-droid-sans-fonts/DroidSansFallbackFull.ttf"
+        font_path = os.getenv('CHINESE_FONT_PATH', default_path)
+        
+        if not os.path.exists(font_path):
+            # 尝试搜索其他常见路径
+            common_paths = [
+                "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                "/System/Library/Fonts/PingFang.ttc", # macOS
+                "C:\\Windows\\Fonts\\msyh.ttc" # Windows
+            ]
+            found = False
+            for p in common_paths:
+                if os.path.exists(p):
+                    font_path = p
+                    found = True
+                    break
+            
+            if not found:
+                logger.warning(f"中文字体未找到，PDF 可能乱码。建议设置 CHINESE_FONT_PATH 环境变量。")
+                return html_content
+            
+        # xhtml2pdf 需要显式定义字体
+        font_style = f"""
+        <style>
+            @font-face {{
+                font-family: 'DroidSansFallback';
+                src: url('{font_path}');
+            }}
+            body, div, p, span, a, li, ul, ol, h1, h2, h3, h4, h5, h6, table, td, th {{
+                font-family: 'DroidSansFallback', sans-serif;
+            }}
+        </style>
+        """
+        
+        # 插入到 </head> 之前
+        if "</head>" in html_content:
+            return html_content.replace("</head>", f"{font_style}</head>")
+        # 如果没有 head 标签但有 html 标签
+        elif "<html" in html_content:
+             # 尝试找到 html 标签结束的地方插入 head
+             match = re.search(r'(<html[^>]*>)', html_content)
+             if match:
+                 return html_content.replace(match.group(1), f"{match.group(1)}<head>{font_style}</head>")
+        
+        # 兜底：直接拼接到开头 (xhtml2pdf 容错性较好)
+        return f"<html><head>{font_style}</head><body>{html_content}</body></html>"
+
+
+
+    @staticmethod
     async def html_to_pdf(input_path: str | Path, output_path: str | Path = None, user_id: str = None) -> str:
-        """HTML 文件转 PDF"""
+        """HTML 文件转 PDF (优先使用 Playwright，降级使用 xhtml2pdf)"""
         input_path = Path(input_path).resolve()
         if not input_path.exists():
             raise FileNotFoundError(f"文件未找到: {input_path}")
@@ -759,21 +876,31 @@ class DocUtils:
         if output_path is None:
             output_path = input_path.with_suffix('.pdf')
             
-        try:
-            # 使用 Playwright 转换 (如果可用)
-            if HAS_PLAYWRIGHT:
-                logger.info(f"使用 Playwright 转换 HTML 到 PDF: {input_path}")
-                await DocUtils._html_to_pdf_playwright(input_path, output_path)
-            else:
-                raise ImportError("未安装 Playwright，无法转换 HTML 到 PDF。请运行 pip install playwright 并安装浏览器内核。")
+        # 1. 尝试使用 Playwright (支持现代 CSS, Flexbox, Grid)
+        success = await DocUtils._html_to_pdf_playwright(input_path, output_path)
+        
+        # 2. 如果 Playwright 失败，降级使用 xhtml2pdf
+        if not success:
+            logger.warning("Playwright 转换失败，降级使用 xhtml2pdf")
+            try:
+                html_content = input_path.read_text(encoding='utf-8')
                 
-            return await DocUtils._upload_and_record(
-                output_path, user_id, "doc_convert", "converted", "application/pdf", 
-                {"original_file": input_path.name, "type": "html2pdf"}
-            )
-        except Exception as e:
-            logger.error(f"HTML 转 PDF 失败: {e}")
-            raise e
+                # 预处理: 替换 CSS 变量
+                html_content = DocUtils._resolve_css_variables(html_content)
+                
+                # 预处理: 注入中文字体
+                html_content = DocUtils._inject_chinese_font_style(html_content)
+                
+                with open(output_path, "wb") as f:
+                    await asyncio.to_thread(pisa.CreatePDF, html_content, dest=f)
+            except Exception as e:
+                logger.error(f"HTML 转 PDF 失败 (xhtml2pdf): {e}")
+                raise e
+                
+        return await DocUtils._upload_and_record(
+            output_path, user_id, "doc_convert", "converted", "application/pdf", 
+            {"original_file": input_path.name, "type": "html2pdf", "engine": "playwright" if success else "xhtml2pdf"}
+        )
 
     @staticmethod
     async def pdf_to_images(input_path: str | Path, output_dir: str | Path = None, user_id: str = None) -> list[str]:

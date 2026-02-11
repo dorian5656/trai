@@ -2,7 +2,7 @@
 
 TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO/Dify/DeepSeek) 构建。
 
-## 🚀 快速启动 (Quick Start)
+##  快速启动 (Quick Start)
 
 ### 1. 激活环境
 
@@ -113,6 +113,15 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 🛠️ 后端_2026_02_11_1126
+- **安全(doc)**: 修复文档工具路径穿越漏洞与PDF空文件风险, 增加资源泄漏防护.
+- **优化(doc)**: 优化CSS变量解析效率(O(n))与中文字体跨平台兼容性, 消除冗余IO.
+- **构建**: 完善静态资源目录初始化逻辑, 自动创建 doc/exe 等分类文件夹.
+
+### 🛠️ 后端_2026_02_11_1101
+- **新功能(doc)**: 升级 HTML 转 PDF 引擎为 Playwright，支持 Flexbox/Grid 布局及现代 CSS 特性，完美解决中文乱码与样式丢失问题.
+- **依赖**: 新增 `playwright` 依赖.
 
 ### 2026_02_11_0912 _后端
 - **安全**: 修复图片上传接口路径穿越与任意文件写入漏洞, 升级 pdf2docx 依赖修复 CVE 漏洞.
