@@ -23,6 +23,25 @@
         "api_url": "http://192.168.100.119:5777/api_trai/v1/ai/image/chat/image/stream",
         "upload_url": "http://192.168.100.119:5777/api_trai/v1/upload/common"
     },
+    "doc_tools": {
+        "md2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/md2pdf",
+        "word2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/word2pdf",
+        "img2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/img2pdf",
+        "excel2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/excel2pdf",
+        "ppt2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/ppt2pdf",
+        "html2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/html2pdf",
+        "pdf2img_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf2img",
+        "pdf2word_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf2word",
+        "pdf2ppt_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf2ppt",
+        "pdf2pdfa_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf2pdfa",
+        "pdf_unlock_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf_unlock",
+        "pdf_longimg_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/pdf_longimg",
+        "img_convert_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/img_convert",
+        "ofd2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/ofd2pdf",
+        "ofd2img_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/ofd2img",
+        "svg2pdf_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/svg2pdf",
+        "ebook_convert_url": "http://192.168.100.119:5777/api_trai/v1/tools/doc/ebook_convert"
+    },
     "rrdsppg": {
         "api_url": "http://192.168.100.119:5777/api_trai/v1/rrdsppg/predict",
         "update_check_url": "http://192.168.100.119:5777/static/update/version.json",

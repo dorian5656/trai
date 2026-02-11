@@ -19,12 +19,22 @@ logging.basicConfig(
     format="%(asctime)s [启动日志] %(levelname)s: %(message)s",
 )
 
+def get_resource_path(relative_path):
+    """获取资源绝对路径，兼容开发环境和打包环境"""
+    if getattr(sys, 'frozen', False):
+        # 打包后，资源文件在 sys._MEIPASS
+        base_path = sys._MEIPASS
+    else:
+        # 开发环境，资源文件在当前脚本所在目录
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
 def load_stylesheet(app):
     try:
-        style_path = os.path.join("styles", "style.qss")
+        style_path = get_resource_path(os.path.join("styles", "style.qss"))
         logging.info(f"加载样式表: {os.path.abspath(style_path)}")
         if not os.path.exists(style_path):
-            logging.warning("样式文件不存在: styles/style.qss")
+            logging.warning(f"样式文件不存在: {style_path}")
             return
         with open(style_path, "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
@@ -37,7 +47,15 @@ def main():
     try:
         logging.info("启动应用: 创建 QApplication")
         app = QApplication(sys.argv)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 设置工作目录
+        if getattr(sys, 'frozen', False):
+            # 打包后，工作目录设置为可执行文件所在目录 (方便读取外部 config.json)
+            script_dir = os.path.dirname(sys.executable)
+        else:
+            # 开发环境，工作目录为脚本所在目录
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
         logging.info(f"设置工作目录: {script_dir}")
         os.chdir(script_dir)
         logging.info(f"Qt 版本: {QT_VERSION_STR}")
