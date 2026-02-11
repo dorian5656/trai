@@ -46,11 +46,39 @@ except ImportError:
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import PGUtils
 
+import functools
+
 # 定义项目根目录用于安全校验
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class DocUtils:
     """文档处理工具类"""
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _get_system_font_path() -> str | None:
+        """获取系统中可用的中文字体路径 (缓存结果)"""
+        # 优先从环境变量获取
+        default_path = "/usr/share/fonts/google-droid-sans-fonts/DroidSansFallbackFull.ttf"
+        font_path = os.getenv('CHINESE_FONT_PATH', default_path)
+        
+        if os.path.exists(font_path):
+            return font_path
+
+        # 尝试搜索其他常见路径
+        common_paths = [
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/System/Library/Fonts/PingFang.ttc", # macOS
+            "C:\\Windows\\Fonts\\msyh.ttc" # Windows
+        ]
+        
+        for p in common_paths:
+            if os.path.exists(p):
+                return p
+        
+        return None
 
     @staticmethod
     async def _html_to_pdf_playwright(input_path: Path, output_path: Path) -> bool:
@@ -93,7 +121,7 @@ class DocUtils:
                     
                 return True
         except Exception as e:
-            logger.error(f"Playwright 转换 PDF 失败: {e}")
+            logger.exception(f"Playwright 转换 PDF 失败: {e}")
             return False
 
     @staticmethod
@@ -813,37 +841,21 @@ class DocUtils:
     @staticmethod
     def _inject_chinese_font_style(html_content: str) -> str:
         """注入中文字体样式 (解决乱码问题)"""
-        # 常见中文字体路径 (Droid Sans Fallback 是通用的中文后备字体)
-        # 优先从环境变量获取，增强跨平台兼容性
-        default_path = "/usr/share/fonts/google-droid-sans-fonts/DroidSansFallbackFull.ttf"
-        font_path = os.getenv('CHINESE_FONT_PATH', default_path)
+        font_path = DocUtils._get_system_font_path()
         
-        if not os.path.exists(font_path):
-            # 尝试搜索其他常见路径
-            common_paths = [
-                "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-                "/System/Library/Fonts/PingFang.ttc", # macOS
-                "C:\\Windows\\Fonts\\msyh.ttc" # Windows
-            ]
-            found = False
-            for p in common_paths:
-                if os.path.exists(p):
-                    font_path = p
-                    found = True
-                    break
-            
-            if not found:
-                logger.warning(f"中文字体未找到，PDF 可能乱码。建议设置 CHINESE_FONT_PATH 环境变量。")
-                return html_content
+        if not font_path:
+            logger.warning(f"中文字体未找到，PDF 可能乱码。建议设置 CHINESE_FONT_PATH 环境变量。")
+            return html_content
             
         # xhtml2pdf 需要显式定义字体
+        # 使用 Path.as_uri() 生成正确的 file:// URI，避免 Windows 路径反斜杠问题
+        font_uri = Path(font_path).as_uri()
+        
         font_style = f"""
         <style>
             @font-face {{
                 font-family: 'DroidSansFallback';
-                src: url('{font_path}');
+                src: url('{font_uri}');
             }}
             body, div, p, span, a, li, ul, ol, h1, h2, h3, h4, h5, h6, table, td, th {{
                 font-family: 'DroidSansFallback', sans-serif;
