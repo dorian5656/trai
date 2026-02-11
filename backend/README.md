@@ -1,12 +1,8 @@
-### 🛠️ 后端_2026_02_11_1101
-- **新功能(doc)**: 升级 HTML 转 PDF 引擎为 Playwright，支持 Flexbox/Grid 布局及现代 CSS 特性，完美解决中文乱码与样式丢失问题.
-- **依赖**: 新增 `playwright` 依赖.
-
 # TRAI 后端服务 (TRAI Backend)
 
 TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO/Dify/DeepSeek) 构建。
 
-## 🚀 快速启动 (Quick Start)
+##  快速启动 (Quick Start)
 
 ### 1. 激活环境
 
@@ -117,6 +113,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 🛠️ 后端_2026_02_11_1101
+- **新功能(doc)**: 升级 HTML 转 PDF 引擎为 Playwright，支持 Flexbox/Grid 布局及现代 CSS 特性，完美解决中文乱码与样式丢失问题.
+- **依赖**: 新增 `playwright` 依赖.
 
 ### 2026_02_10_1038 _后端
 - **文档**: 重构项目文档结构, 拆分后端、前端及客户端文档至各模块目录, 根目录仅保留索引.
