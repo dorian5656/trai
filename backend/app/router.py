@@ -20,6 +20,7 @@ from backend.app.routers import speech
 from backend.app.routers.contact import contact_router
 from backend.app.routers.tools.doc import doc_router
 
+
 api_router = APIRouter()
 
 # 注册 认证路由
@@ -46,3 +47,4 @@ api_router.include_router(speech.router, prefix="/speech", tags=["语音服务"]
 api_router.include_router(contact_router.router, prefix="/contact", tags=["客户留资"])
 # 注册 工具路由
 api_router.include_router(doc_router.router, prefix="/tools/doc", tags=["文档工具"])
+
