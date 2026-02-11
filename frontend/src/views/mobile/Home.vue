@@ -1,310 +1,55 @@
 <!--
 文件名：frontend/src/views/mobile/Home.vue
 作者：zcl
-日期：2026-01-28
-描述：移动端主页组件 (修复输入框显示问题)
+日期：2026-02-11
+描述：移动端主页组件
 -->
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAppStore, useChatStore, useUserStore } from '@/stores';
-import { ElImageViewer, ElMessage } from 'element-plus';
-import { useSpeechRecognition, useFileUpload, useSkills } from '@/composables';
+import { useHomeLogic } from '@/composables/useHomeLogic';
+import MobileSidebar from '@/components/business/home/MobileSidebar.vue';
+import { ElImageViewer } from 'element-plus';
 import { ChatInput, MessageList } from '@/modules/chat';
 import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
 import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
 import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
-import { fetchDifyConversations, fetchConversationMessages, renameDifyConversation, deleteDifyConversation } from '@/api/dify';
-import { ElMessageBox } from 'element-plus';
-import type { DifyConversation } from '@/types/chat';
 import { MOBILE_TEXT } from '@/constants/texts';
-import { MoreFilled, Delete, Edit } from '@element-plus/icons-vue';
 
-const router = useRouter();
-const appStore = useAppStore();
-const chatStore = useChatStore();
-const userStore = useUserStore();
-const { isListening, result, toggleListening } = useSpeechRecognition();
-const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles } = useFileUpload();
-const { allSkills, activeSkill, handleSkillClick, removeSkill } = useSkills();
-
-const inputMessage = ref('');
-const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
-const isDeepThinking = ref(false);
-const showSimilarityDialog = ref(false);
-const showMeetingRecorder = ref(false);
-const showDocumentDialog = ref(false);
-const isLoadingHistory = ref(false);
-
-// 自动滚动
-watch(
-  () => chatStore.messages,
-  () => {
-    messageListRef.value?.scrollToBottom();
-  },
-  { deep: true }
-);
-
-const handleSend = async () => {
-  const content = inputMessage.value.trim();
-  if ((!content && uploadedFiles.value.length === 0) || chatStore.isSending) return;
-
-  // 1. 捕获当前状态
-  const currentFiles = [...uploadedFiles.value];
-  const currentSkill = activeSkill.value;
-  
-  // 2. 立即清空 UI 输入状态
-  inputMessage.value = '';
-  clearFiles();
-  activeSkill.value = null;
-
-  // 3. 调用 Store Action
-  await chatStore.sendMessage(content, currentFiles, currentSkill);
-};
-
-const handleStop = () => {
-  chatStore.stopGenerating();
-};
-
-const toggleDeepThinking = () => {
-  isDeepThinking.value = !isDeepThinking.value;
-};
-
-// 监听语音识别结果
-watch(result, (newVal) => {
-  if (newVal) {
-    inputMessage.value = newVal;
-  }
-});
-
-// 监听登录状态变化，自动刷新会话列表
-watch(
-  () => userStore.isLoggedIn,
-  (isLoggedIn) => {
-    if (isLoggedIn) {
-      loadConversations();
-    } else {
-      chatStore.clearAllConversations();
-    }
-  }
-);
-
-// 初始化用户信息
-onMounted(async () => {
-  await userStore.init();
-  if (userStore.isLoggedIn) {
-    loadConversations();
-  }
-});
-
-const loadConversations = async () => {
-  try {
-    const username = userStore.username;
-    if (!username || username === '未登录') return;
-    const res = await fetchDifyConversations(username, 50, 'guanwang');
-    let list: DifyConversation[] = [];
-    if (Array.isArray(res)) {
-      list = res as unknown as DifyConversation[];
-    } else if (res && (res as any).data) {
-      list = (res as any).data as DifyConversation[];
-    }
-    chatStore.difyConversations = list;
-  } catch (e) {
-    console.error('加载会话失败', e);
-  }
-};
-
-const handleSwitchDify = async (conv: DifyConversation) => {
-  isLoadingHistory.value = true;
-  chatStore.clearSession();
-  chatStore.setDifySessionId(conv.id);
-  try {
-    const username = userStore.username || 'guest';
-    const res = await fetchConversationMessages(conv.id, username, 50, 'guanwang');
-    let history: any[] = [];
-    if (Array.isArray(res)) {
-      history = res as any[];
-    } else if (res && (res as any).data) {
-      history = (res as any).data as any[];
-    }
-    chatStore.replaceMessagesFromDify(history, conv.name || '会话', conv.id);
-  } catch (e) {
-    console.error('加载历史消息失败', e);
-    ElMessage.error('加载历史消息失败');
-  } finally {
-    isLoadingHistory.value = false;
-  }
-};
-
-const handleRenameDify = async (conv: DifyConversation) => {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名会话', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputValue: conv.name,
-      inputPattern: /\S/,
-      inputErrorMessage: '名称不能为空',
-    });
-    if (value && value !== conv.name) {
-      await renameDifyConversation(conv.id, value, 'guanwang', false);
-      chatStore.renameDifyConversation(conv.id, value);
-      ElMessage.success('重命名成功');
-    }
-  } catch (e: any) {
-    if (e === 'cancel' || e === 'close') return;
-    ElMessage.error('重命名失败，请稍后重试');
-  }
-};
-
-const handleDeleteDify = async (conv: DifyConversation) => {
-  try {
-    await ElMessageBox.confirm(
-      '确定要删除该会话吗？删除后无法恢复。',
-      '删除确认',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    );
-    await deleteDifyConversation(conv.id, 'guanwang');
-    chatStore.removeDifyConversation(conv.id);
-    ElMessage.success('删除成功');
-  } catch (e: any) {
-    if (e === 'cancel' || e === 'close') return;
-    ElMessage.error('删除失败，请稍后重试');
-  }
-};
-
-const handleLogin = () => {
-  appStore.openLoginModal();
-};
-
-const handleLogout = () => {
-  userStore.logout();
-};
-
-const handleMobileSkillClick = (skill: any) => {
-  if (!userStore.isLoggedIn) {
-    appStore.openLoginModal();
-    return;
-  }
-  if (skill.label === '会议记录') {
-    showMeetingRecorder.value = true;
-    return;
-  }
-  if (skill.label === '文档工具') {
-    showDocumentDialog.value = true;
-    return;
-  }
-  if (skill.label === '相似度识别') {
-    showSimilarityDialog.value = true;
-    return;
-  }
-  handleSkillClick(skill);
-  nextTick(() => {
-    const input = document.querySelector('.input-box input') as HTMLInputElement;
-    if (input) input.focus();
-  });
-};
-
-const recentItems = computed(() => {
-  const locals = chatStore.sessions.map(s => ({ id: s.id, title: s.title, type: 'local' as const }));
-  const dify = chatStore.difyConversations.map(c => ({ id: c.id, title: c.name || '新对话', type: 'dify' as const }));
-  return [...locals, ...dify];
-});
-
-const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
-  if (item.type === 'local') {
-    chatStore.switchSession(item.id);
-  } else {
-    const conv = chatStore.difyConversations.find(c => c.id === item.id);
-    if (conv) handleSwitchDify(conv);
-  }
-  appStore.closeMobileSidebar();
-};
+const {
+  appStore,
+  chatStore,
+  userStore,
+  messageListRef,
+  // Speech
+  isListening, result, toggleListening,
+  // File Upload
+  uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles,
+  // Skills
+  allSkills, activeSkill, removeSkill,
+  // Chat Session
+  isLoadingHistory, loadConversations, handleSwitchSession, handleNewChat, handleRenameConversation, handleDeleteConversation,
+  // Layout State
+  inputMessage, isDeepThinking, showSimilarityDialog, showMeetingRecorder, showDocumentDialog, toggleDeepThinking, handleLogin, handleLogout, handleStop,
+  // Actions
+  handleSend, handleRegenerate, handleSkillSelect, mixedRecentItems
+} = useHomeLogic();
 </script>
 
 <template>
   <div class="mobile-container">
-    <!-- 侧边栏遮罩 -->
-    <div v-if="appStore.isMobileSidebarOpen" class="sidebar-mask" @click="appStore.closeMobileSidebar"></div>
-
-    <!-- 侧边栏抽屉 -->
-    <aside class="mobile-sidebar" :class="{ 'open': appStore.isMobileSidebarOpen }">
-      <div class="sidebar-header">
-        <div class="user-info">
-          <div class="avatar" v-if="userStore.avatar">
-            <img :src="userStore.avatar" alt="Avatar" />
-          </div>
-          <div class="avatar" v-else>👩‍💻</div>
-          <span class="username">{{ userStore.isLoggedIn ? userStore.username : MOBILE_TEXT.sidebar.usernameFallback }}</span>
-        </div>
-        <button class="close-btn" @click="appStore.closeMobileSidebar">{{ MOBILE_TEXT.sidebar.closeBtn }}</button>
-      </div>
-      
-      <div class="action-area">
-        <button class="new-chat-btn" @click="chatStore.createSession()">{{ MOBILE_TEXT.sidebar.newChatBtn }}</button>
-      </div>
-
-      <!-- <nav class="menu-list">
-        <div class="menu-item"><span class="icon">✍️</span> 帮我写作</div>
-        <div class="menu-item"><span class="icon">🎨</span> AI 创作</div>
-        <div class="menu-item"><span class="icon">🧩</span> 更多</div>
-      </nav> -->
-
-      <div class="recent-chats">
-        <div class="section-title">{{ MOBILE_TEXT.sidebar.recentSectionTitle }}</div>
-        <div
-          v-for="item in recentItems"
-          :key="`${item.type}-${item.id}`"
-          class="chat-item"
-          @click="handleRecentClick(item)"
-        >
-          <span>{{ item.title }}</span>
-          <template v-if="item.type === 'dify'">
-            <el-popover
-              placement="left"
-              trigger="click"
-              :width="180"
-              popper-class="mobile-action-popover"
-            >
-              <div class="action-menu">
-                <button 
-                  class="menu-item" 
-                  @click.stop="handleRenameDify(chatStore.difyConversations.find(c=>c.id===item.id)!)"
-                >
-                  <el-icon><Edit /></el-icon>
-                  <span>重命名</span>
-                </button>
-                <button 
-                  class="menu-item danger" 
-                  @click.stop="handleDeleteDify(chatStore.difyConversations.find(c=>c.id===item.id)!)"
-                >
-                  <el-icon><Delete /></el-icon>
-                  <span>删除</span>
-                </button>
-              </div>
-              <template #reference>
-                <button class="mini-icon-btn" @click.stop>
-                  <el-icon><MoreFilled /></el-icon>
-                </button>
-              </template>
-            </el-popover>
-          </template>
-        </div>
-      </div>
-      
-      <div class="sidebar-footer">
-        <button class="footer-btn">{{ MOBILE_TEXT.sidebar.aboutBtn }}</button>
-      </div>
-    </aside>
+    <!-- 侧边栏 -->
+    <MobileSidebar
+      :handle-new-chat="handleNewChat"
+      :handle-switch-session="handleSwitchSession"
+      :handle-rename-conversation="handleRenameConversation"
+      :handle-delete-conversation="handleDeleteConversation"
+      :recent-items="mixedRecentItems"
+    />
 
     <!-- 顶部导航 -->
     <header class="mobile-header">
       <div class="left">
         <button class="icon-btn" @click="appStore.toggleMobileSidebar">☰</button>
-        <button class="new-chat-pill" @click="chatStore.createSession()">{{ MOBILE_TEXT.header.newChatPill }}</button>
+        <button class="new-chat-pill" @click="handleNewChat">{{ MOBILE_TEXT.header.newChatPill }}</button>
       </div>
       <div class="right">
         <div v-if="userStore.isLoggedIn" class="user-actions">
@@ -374,7 +119,7 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
             v-for="skill in allSkills" 
             :key="skill.label" 
             class="skill-item"
-            @click="handleMobileSkillClick(skill)"
+            @click="handleSkillSelect(skill)"
           >
             <div class="skill-icon-wrapper" :style="{ color: skill.color }">
               <span class="skill-icon" v-html="skill.icon"></span>
@@ -397,7 +142,7 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
     <SimilarityDialog
       v-if="showSimilarityDialog"
       :visible="showSimilarityDialog"
-      @update:visible="(val) => showSimilarityDialog = val"
+      @update:visible="(val: boolean) => showSimilarityDialog = val"
     />
 
     <!-- 会议记录组件 -->
@@ -408,7 +153,7 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
     <DocumentToolDialog
       v-if="showDocumentDialog"
       :visible="showDocumentDialog"
-      @update:visible="(val) => showDocumentDialog = val"
+      @update:visible="(val: boolean) => showDocumentDialog = val"
     />
   </div>
 </template>
@@ -437,157 +182,7 @@ const handleRecentClick = (item: { id: string; type: 'local' | 'dify' }) => {
   overflow: hidden; // 防止滚动穿透
 }
 
-.sidebar-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 99;
-}
-
-.mobile-sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 17.5rem;
-  height: 100%;
-  background: #f7f8fa;
-  z-index: 100;
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  box-shadow: 0.125rem 0 0.5rem rgba(0,0,0,0.1);
-
-  &.open {
-    transform: translateX(0);
-  }
-
-  .sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    
-    .user-info {
-      display: flex;
-      align-items: center;
-      .avatar {
-        width: 2rem;
-        height: 2rem;
-        background: #ccc;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.5rem;
-      }
-      .username { font-weight: 600; font-size: 1rem; }
-    }
-    
-    .close-btn {
-      background: none;
-      border: none;
-      font-size: 1.25rem;
-      color: #86909c;
-    }
-  }
-
-  .new-chat-btn {
-    width: 100%;
-    padding: 0.625rem;
-    background: #e8f3ff;
-    color: #165dff;
-    border: none;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    margin-bottom: 1.5rem;
-  }
-
-  .menu-list {
-    .menu-item {
-      padding: 0.75rem 0;
-      font-size: 0.9375rem;
-      color: #4e5969;
-      display: flex;
-      align-items: center;
-      .icon { margin-right: 0.75rem; }
-    }
-  }
-
-  .recent-chats {
-    margin-top: 1.5rem;
-    flex: 1;
-    overflow-y: auto;
-    .section-title {
-      font-size: 0.75rem;
-      color: #86909c;
-      margin-bottom: 0.75rem;
-    }
-    .chat-item {
-      padding: 0.5rem 0;
-      font-size: 0.875rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-  }
-
-  .sidebar-footer {
-    padding-top: 1rem;
-    border-top: 1px solid #e5e6eb;
-    .footer-btn {
-      background: none;
-      border: none;
-      color: #86909c;
-      font-size: 0.8125rem;
-      display: flex;
-      align-items: center;
-    }
-  }
-}
-
-.mini-icon-btn {
-  background: none;
-  border: none;
-  padding: 0.25rem;
-  border-radius: 0.375rem;
-  color: #86909c;
-}
-.mini-icon-btn:active {
-  background-color: rgba(0,0,0,0.06);
-}
-
-.mobile-action-popover {
-  padding: 0.5rem;
-}
-.action-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e5e6eb;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #1d2129;
-}
-.menu-item:active {
-  background: #f2f3f5;
-}
-.menu-item.danger {
-  border-color: #ffccc7;
-  color: #f56c6c;
-}
+/* Sidebar styles removed (moved to MobileSidebar.vue) */
 
 .mobile-header {
   display: flex;

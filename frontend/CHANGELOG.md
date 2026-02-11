@@ -1,3 +1,10 @@
+### 2026_02_11_1230
+- **前端-内容**: 深度代码重构: 创建 `useHomeLogic` 聚合主页业务逻辑; 抽离 PC 端侧边栏为 `Sidebar.vue`，抽离移动端侧边栏为 `MobileSidebar.vue`; 大幅精简 `pc/Home.vue` 与 `mobile/Home.vue` 代码行数; 修复 `useSkills` 状态共享问题.
+
+### 2026_02_11_1120
+- **前端-内容**: 样式规范统一: 强制将 ChatInput, MessageList, SimilarityDialog, LoginModal, MeetingRecorder 等组件中的 `px` 单位替换为 `rem` 等相对单位，以符合前端强制规范; 更新前端规范文档。
+- **前端-内容**: 代码重构与功能调整: 移除图像生成相关功能; 重构 PC 与 Mobile 端 Home 页，抽离会话管理 (`useChatSession`) 与布局状态 (`useLayoutState`) 逻辑至 composables，显著减少代码冗余; 影响文件: frontend/src/views/pc/Home.vue, frontend/src/views/mobile/Home.vue, frontend/src/composables/*.
+
 ### 2026_02_11_1050
 - **前端-内容**: 修复自动切会话异常: 首会话切换增加健壮性与错误捕获, 避免 await 报错中断; 影响文件: frontend/src/views/pc/Home.vue。
 
