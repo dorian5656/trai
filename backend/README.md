@@ -1,3 +1,7 @@
+### 🛠️ 后端_2026_02_11_1101
+- **新功能(doc)**: 升级 HTML 转 PDF 引擎为 Playwright，支持 Flexbox/Grid 布局及现代 CSS 特性，完美解决中文乱码与样式丢失问题.
+- **依赖**: 新增 `playwright` 依赖.
+
 # TRAI 后端服务 (TRAI Backend)
 
 TRAI 核心后端服务仓库，基于 FastAPI + PostgreSQL + AI (PaddleOCR/YOLO/Dify/DeepSeek) 构建。
