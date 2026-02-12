@@ -35,6 +35,7 @@ MANIFEST
 
 # 配置文件
 backend/pyqt_app/pages/config.json
+nginx_fixed.conf
 
 # 安装程序日志
 pip-log.txt
@@ -111,6 +112,16 @@ nohup.out
 backend/app/models/Wan-AI/
 backend/app/models/Qwen/
 backend/app/models/Robbyant/
+backend/app/models/ACE-Step/
+backend/app/model_runtimes/
+
+# Model Weights extensions
+*.safetensors
+*.bin
+*.pth
+*.pt
+*.ckpt
+*.onnx
 
 # Test Files
 test_audio.wav
@@ -124,7 +135,6 @@ scripts/
 *.xlsx
 *.doc
 *.docx
-*.bin
 *.log
 
 scripts/
@@ -133,9 +143,6 @@ frontend/src/auto-imports.d.ts
 frontend/src/components.d.ts
 backend/app/models/Tongyi-MAI/
 backend/app/models/iic/
-backend/app/models/*.pth
-backend/app/models/*.safetensors
-backend/app/models/*.bin
 node_modules
 
 # Frontend Artifacts
