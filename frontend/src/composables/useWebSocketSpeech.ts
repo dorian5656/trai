@@ -14,6 +14,7 @@ const WS_URL = `${WS_BASE_URL}${API_BASE_URL}/speech/ws/transcribe`;
 export function useWebSocketSpeech() {
   const isConnected = ref(false);
   const isRecording = ref(false);
+  const isConnecting = ref(false);
   const isProcessingFile = ref(false);
   const resultText = ref('');
   const interimText = ref('');
@@ -73,8 +74,9 @@ export function useWebSocketSpeech() {
           if (idx + 1 < candidates.length) {
             tryIndex(idx + 1, resolve, reject);
           } else {
-            ElMessage.error('网络连接异常：无法建立语音实时录音通道，请检查后端服务是否已启动以及端口配置');
-            reject(e);
+            const err = new Error('网络连接异常：无法建立语音实时录音通道，请检查后端服务是否已启动以及端口配置');
+            errorMsg.value = err.message;
+            reject(err);
           }
         };
 
@@ -141,6 +143,10 @@ export function useWebSocketSpeech() {
   // 开始麦克风录音
   const startMicrophone = async () => {
     try {
+      if (isRecording.value || isConnecting.value) {
+        return;
+      }
+      isConnecting.value = true;
       resultText.value = '';
       interimText.value = '';
       await connectWebSocket();
@@ -168,8 +174,15 @@ export function useWebSocketSpeech() {
       isRecording.value = true;
     } catch (e: any) {
       console.error('Microphone Error:', e);
-      ErrorHandler.showError(ErrorHandler.handleHttpError(e));
+      if (e && (e.message === '网络连接异常：无法建立语音实时录音通道，请检查后端服务是否已启动以及端口配置' || e.message === 'WebSocket 连接错误')) {
+        ElMessage.closeAll();
+        ElMessage.error(e.message);
+      } else {
+        ErrorHandler.showError(ErrorHandler.handleHttpError(e));
+      }
       closeWebSocket();
+    } finally {
+      isConnecting.value = false;
     }
   };
 
@@ -238,6 +251,7 @@ export function useWebSocketSpeech() {
   return {
     isConnected,
     isRecording,
+    isConnecting,
     isProcessingFile,
     resultText,
     interimText,
