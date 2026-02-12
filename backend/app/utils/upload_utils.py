@@ -11,6 +11,8 @@ import time
 import json
 import aioboto3
 import aiofiles
+import aiohttp
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import List, Optional, Tuple
 from fastapi import UploadFile, HTTPException
@@ -36,6 +38,73 @@ class UploadUtils:
     
     # 基础存储路径 (backend/static/uploads)
     BASE_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "uploads"
+
+    @classmethod
+    async def upload_local_file(cls, local_path: Path, object_name: str, content_type: str = None) -> str:
+        """
+        上传本地文件到存储 (S3 或 Local)
+        
+        Args:
+            local_path: 本地文件绝对路径
+            object_name: 目标路径 (S3 Key 或 相对路径)
+            content_type: MIME 类型
+            
+        Returns:
+            str: 访问 URL
+        """
+        if settings.S3_ENABLED:
+            # S3 Upload
+            bucket_name = settings.S3_BUCKET_NAME
+            session = aioboto3.Session()
+            async with session.client(
+                's3',
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION_NAME
+            ) as s3:
+                try:
+                    # Auto create bucket if needed (simplified check)
+                    try:
+                        await s3.head_bucket(Bucket=bucket_name)
+                    except Exception:
+                        try:
+                            await s3.create_bucket(Bucket=bucket_name)
+                            await cls._set_bucket_public(s3, bucket_name)
+                        except:
+                            pass
+
+                    async with aiofiles.open(local_path, 'rb') as f:
+                        data = await f.read()
+                        
+                    await s3.put_object(
+                        Bucket=bucket_name,
+                        Key=object_name,
+                        Body=data,
+                        ContentType=content_type or "application/octet-stream",
+                        ACL='public-read'
+                    )
+                    
+                    if settings.S3_PUBLIC_DOMAIN:
+                        return f"{settings.S3_PUBLIC_DOMAIN}/{object_name}"
+                    else:
+                        return f"{settings.S3_ENDPOINT_URL}/{bucket_name}/{object_name}"
+                except Exception as e:
+                    logger.error(f"S3上传失败: {e}")
+                    raise e
+        else:
+            # Local Copy
+            # object_name might be "tools/gif/..."
+            # target: static/uploads/tools/gif/...
+            # Remove leading slash if present to ensure proper joining
+            clean_object_name = object_name.lstrip('/')
+            target_path = cls.BASE_UPLOAD_DIR / clean_object_name
+            
+            if not target_path.parent.exists():
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            shutil.copy2(local_path, target_path)
+            return f"/static/uploads/{clean_object_name}"
 
     @classmethod
     async def save_from_bytes(cls, data: bytes, filename: str, module: str = "common", content_type: str = None) -> Tuple[str, str, int]:
@@ -200,6 +269,63 @@ class UploadUtils:
             return await cls._save_to_s3(file, object_name, bucket_name)
         else:
             return await cls._save_to_local(file, module, date_str, new_filename)
+
+    @classmethod
+    async def save_file_from_url(cls, file_url: str, module: str = "common") -> Tuple[str, str, int]:
+        """
+        从 URL 下载并保存文件 (SSRF 安全防护)
+        
+        Args:
+            file_url: 文件下载链接
+            module: 模块名称
+            
+        Returns:
+            Tuple[str, str, int]: (相对路径/URL路径, 本地绝对路径/S3 Key, 文件大小)
+        """
+        # 1. URL Scheme 校验
+        parsed_url = urlparse(file_url)
+        if parsed_url.scheme not in ('http', 'https'):
+             raise HTTPException(status_code=400, detail="仅支持 http/https 协议")
+        
+        # 2. 限制文件大小 (100MB)
+        MAX_SIZE = 100 * 1024 * 1024 
+        
+        timeout = aiohttp.ClientTimeout(total=30)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(file_url) as response:
+                    if response.status != 200:
+                        raise HTTPException(status_code=400, detail=f"下载失败: Status {response.status}")
+                    
+                    # 检查 Content-Length (可选)
+                    content_length = response.headers.get("Content-Length")
+                    if content_length and int(content_length) > MAX_SIZE:
+                         raise HTTPException(status_code=400, detail="文件过大")
+
+                    # 流式读取
+                    data = bytearray()
+                    async for chunk in response.content.iter_chunked(8192):
+                        data.extend(chunk)
+                        if len(data) > MAX_SIZE:
+                             raise HTTPException(status_code=400, detail="文件过大")
+                             
+                    # 提取文件名
+                    path_name = parsed_url.path
+                    filename = Path(path_name).name
+                    if not filename:
+                        filename = f"download_{int(time.time())}.bin"
+                    
+                    # 调用 save_from_bytes 保存
+                    return await cls.save_from_bytes(bytes(data), filename, module=module)
+                    
+        except aiohttp.ClientError as e:
+             logger.error(f"下载文件网络错误: {e}")
+             raise HTTPException(status_code=400, detail="文件下载失败")
+        except HTTPException:
+            raise
+        except Exception as e:
+             logger.error(f"下载文件异常: {e}")
+             raise HTTPException(status_code=500, detail="文件处理失败")
 
     @classmethod
     async def _save_to_local(cls, file: UploadFile, module: str, date_str: str, filename: str) -> Tuple[str, str, int]:

@@ -7,6 +7,8 @@
 # 描述：文档处理工具类，提供文件格式转换等功能
 
 import platform
+import html
+from datetime import datetime, date
 import os
 import re
 import tempfile
@@ -34,6 +36,8 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, A3, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from openpyxl import load_workbook
 from pathlib import Path
 from loguru import logger
@@ -91,7 +95,20 @@ class DocUtils:
         try:
             # 1. 路径安全校验 (防止路径穿越)
             resolved_path = Path(input_path).resolve()
-            if not resolved_path.is_relative_to(BASE_DIR):
+            
+            is_safe = False
+            try:
+                if resolved_path.is_relative_to(BASE_DIR):
+                    is_safe = True
+                # 允许系统临时目录
+                elif resolved_path.is_relative_to(Path(tempfile.gettempdir())):
+                    is_safe = True
+                elif str(resolved_path).startswith("/tmp/"):
+                    is_safe = True
+            except Exception:
+                pass
+                
+            if not is_safe:
                 logger.error(f"路径越界风险: {input_path}")
                 raise PermissionError(f"非法访问: {input_path}")
                 
@@ -109,7 +126,8 @@ class DocUtils:
                         path=str(output_path),
                         format="A4",
                         print_background=True,
-                        margin={"top": "1cm", "right": "1cm", "bottom": "1cm", "left": "1cm"}
+                        # 减小页边距，让内容更宽
+                        margin={"top": "0.8cm", "right": "0.5cm", "bottom": "0.8cm", "left": "0.5cm"}
                     )
                 finally:
                     await browser.close()
@@ -601,200 +619,217 @@ class DocUtils:
                 if not output_path.exists():
                     raise Exception("PDF 生成失败 (文件未创建)")
             else:
-                try:
-                    font_family = "Helvetica"
-                except Exception:
-                    font_family = "Helvetica"
-
-                wb = load_workbook(input_path, data_only=True)
-                ws = wb.active
-
-                def normalize_cell(value: object) -> str:
-                    if value is None:
-                        return ""
-                    s = str(value)
-                    if s.lower() in {"nan", "none", "null"}:
-                        return ""
-                    s = s.replace("\r\n", "\n").replace("\r", "\n")
-                    s = re.sub(r"[ \t]+", " ", s).strip()
-                    return s
-
-                max_row, max_col = ws.max_row, ws.max_column
-                last_row = 0
-                for r in range(1, max_row + 1):
-                    row_vals = [normalize_cell(ws.cell(r, c).value) for c in range(1, max_col + 1)]
-                    if any(row_vals):
-                        last_row = r
-                last_col = 0
-                for c in range(1, max_col + 1):
-                    col_vals = [normalize_cell(ws.cell(r, c).value) for r in range(1, max_row + 1)]
-                    if any(col_vals):
-                        last_col = c
-                if last_row == 0 or last_col == 0:
-                    raise Exception("Excel 内容为空")
-
-                rows = []
-                for r in range(1, last_row + 1):
-                    row_vals = [normalize_cell(ws.cell(r, c).value) for c in range(1, last_col + 1)]
-                    rows.append(row_vals)
-
-                non_empty_cols = [i for i in range(len(rows[0])) if any(row[i] for row in rows)]
-                rows = [[row[i] for i in non_empty_cols] for row in rows]
-                rows = [row for row in rows if any(cell for cell in row)]
-
-                title_text = ""
-                if rows:
-                    first_row_non_empty = [c for c in rows[0] if c]
-                    if len(first_row_non_empty) == 1:
-                        title_text = first_row_non_empty[0]
-                        rows = rows[1:]
-
-                if not rows:
-                    raise Exception("Excel 内容为空")
-
-                header_row = rows[0]
-                data_rows = rows[1:]
-
-                def wrap_text(value: str) -> str:
-                    if not value:
-                        return ""
-                    text = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    text = text.replace("\n", "<br/>")
-                    return text
-
-                row_count = len(data_rows) + 1
-                col_count = len(header_row)
-
-                col_lengths = []
-                sample_rows = rows[:200]
-                for col_idx in range(len(header_row)):
-                    max_len = 1
-                    for row in sample_rows:
-                        max_len = max(max_len, len(row[col_idx]))
-                    col_lengths.append(max_len)
-
-                def compute_col_widths(font_size: float) -> list[float]:
-                    widths = []
-                    per_char = font_size * 0.62
-                    for length in col_lengths:
-                        width = min(max(36.0, length * per_char + 12.0), 280.0)
-                        widths.append(width)
-                    return widths
-
-                def pick_layout() -> tuple[float, object, float, int, int, list[float]]:
-                    font_sizes = [9.0, 8.5, 8.0, 7.5, 7.0, 6.5]
-                    if col_count >= 8:
-                        size_order = [landscape(A3), landscape(A4), A3, A4]
-                    elif row_count >= 45:
-                        size_order = [A3, landscape(A3), A4, landscape(A4)]
-                    else:
-                        size_order = [landscape(A4), A4, landscape(A3), A3]
-
-                    for page_size in size_order:
-                        for font_size in font_sizes:
-                            margin = max(10, round(font_size * 1.9))
-                            if row_count >= 45:
-                                margin = max(10, margin - 2)
-                            doc = SimpleDocTemplate(
-                                str(output_path),
-                                pagesize=page_size,
-                                leftMargin=margin,
-                                rightMargin=margin,
-                                topMargin=margin,
-                                bottomMargin=margin,
-                            )
-                            col_widths = compute_col_widths(font_size)
-                            available_width = doc.width
-                            total_width = sum(col_widths)
-                            if total_width > available_width:
-                                scale = available_width / total_width
-                                col_widths = [w * scale for w in col_widths]
-                            elif total_width < available_width * 0.85:
-                                scale = (available_width * 0.95) / total_width
-                                col_widths = [w * scale for w in col_widths]
-
-                            pad_lr = max(3, round(font_size * 0.6))
-                            pad_tb = max(2, round(font_size * 0.45))
-                            row_height = font_size * 1.35 + pad_tb * 2
-                            title_height = font_size * 1.3 + 10 if title_text else 0
-                            needed_height = row_count * row_height + title_height + 12
-                            if needed_height <= doc.height:
-                                return font_size, page_size, margin, pad_lr, pad_tb, col_widths
-
-                    font_size = 6.5
-                    page_size = landscape(A3) if col_count >= 8 else A3
-                    margin = 10
-                    pad_lr = 3
-                    pad_tb = 2
-                    col_widths = compute_col_widths(font_size)
-                    return font_size, page_size, margin, pad_lr, pad_tb, col_widths
-
-                base_font_size, page_size, margin, pad_lr, pad_tb, col_widths = pick_layout()
-                body_style = ParagraphStyle(
-                    "body",
-                    fontName=font_family,
-                    fontSize=base_font_size,
-                    leading=base_font_size * 1.35,
-                )
-                header_style = ParagraphStyle(
-                    "header",
-                    fontName=font_family,
-                    fontSize=base_font_size,
-                    leading=base_font_size * 1.35,
-                )
-                title_style = ParagraphStyle(
-                    "title",
-                    fontName=font_family,
-                    fontSize=base_font_size + 3,
-                    leading=(base_font_size + 3) * 1.3,
-                    alignment=1,
-                    spaceAfter=6,
-                )
-
-                table_data = []
-                table_data.append([Paragraph(wrap_text(c), header_style) for c in header_row])
-                for row in data_rows:
-                    table_data.append([Paragraph(wrap_text(c), body_style) for c in row])
-
-                doc = SimpleDocTemplate(
-                    str(output_path),
-                    pagesize=page_size,
-                    leftMargin=margin,
-                    rightMargin=margin,
-                    topMargin=margin,
-                    bottomMargin=margin,
-                )
-                available_width = doc.width
-                total_width = sum(col_widths)
-                if total_width > available_width:
-                    scale = available_width / total_width
-                    col_widths = [w * scale for w in col_widths]
-                elif total_width < available_width * 0.85:
-                    scale = (available_width * 0.95) / total_width
-                    col_widths = [w * scale for w in col_widths]
-
-                table = Table(table_data, colWidths=col_widths, repeatRows=1)
-                table.setStyle(
-                    TableStyle(
-                        [
-                            ("GRID", (0, 0), (-1, -1), 0.6, colors.black),
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f2f2f2")),
-                            ("LEFTPADDING", (0, 0), (-1, -1), pad_lr),
-                            ("RIGHTPADDING", (0, 0), (-1, -1), pad_lr),
-                            ("TOPPADDING", (0, 0), (-1, -1), pad_tb),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), pad_tb),
-                        ]
-                    )
-                )
-
-                elements = []
-                if title_text:
-                    elements.append(Paragraph(wrap_text(title_text), title_style))
-                elements.append(Spacer(1, 6))
-                elements.append(table)
-                await asyncio.to_thread(doc.build, elements)
+                # 方案二: openpyxl -> HTML -> Playwright (解决排版、合并单元格和乱码问题)
+                logger.info("Excel转PDF: 使用 openpyxl -> HTML -> Playwright 方案")
                 
+                try:
+                    wb = load_workbook(input_path, data_only=True)
+                except Exception as e:
+                    logger.error(f"openpyxl 读取 Excel 失败: {e}")
+                    raise e
+
+                # 构建 HTML 内容
+                html_parts = []
+                
+                # 注入 CSS 样式 (模拟 Excel 网格)
+                # 引入中文字体 (尝试使用系统字体)
+                font_path = DocUtils._get_system_font_path()
+                font_face_css = ""
+                if font_path:
+                    font_uri = Path(font_path).as_uri()
+                    font_face_css = f"""
+                    @font-face {{
+                        font-family: 'SystemChinese';
+                        src: url('{font_uri}');
+                    }}
+                    """
+                    font_family = "'SystemChinese', 'Microsoft YaHei', 'SimHei', sans-serif"
+                else:
+                    font_family = "'Microsoft YaHei', 'SimHei', sans-serif"
+
+                css_style = f"""
+                <style>
+                    {font_face_css}
+                    body {{
+                        font-family: {font_family};
+                        margin: 0;
+                        padding: 10px;
+                        background-color: white;
+                    }}
+                    .sheet-container {{
+                        margin-bottom: 20px;
+                        page-break-after: always;
+                        width: 100%;
+                    }}
+                    .sheet-title {{
+                        font-size: 16px;
+                        font-weight: bold;
+                        margin-bottom: 10px;
+                        color: #333;
+                        text-align: center;
+                    }}
+                    table {{
+                        border-collapse: collapse;
+                        width: 100%; /* 强制撑满宽度 */
+                        table-layout: fixed; /* 固定布局，遵循 col 宽度 */
+                        font-size: 11px; /* 稍微调小字体以容纳更多内容 */
+                    }}
+                    th, td {{
+                        border: 1px solid #c0c0c0;
+                        padding: 4px 6px;
+                        vertical-align: top;
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                    }}
+                </style>
+                """
+                
+                html_parts.append(f"<html><head><meta charset='utf-8'>{css_style}</head><body>")
+                
+                from openpyxl.utils import range_boundaries, get_column_letter
+
+                for sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    # 跳过空 sheet
+                    if ws.max_row == 0 or ws.max_column == 0:
+                        continue
+                    
+                    html_parts.append(f"<div class='sheet-container'>")
+                    # 如果有多个 sheet，显示 sheet 名称作为标题
+                    if len(wb.sheetnames) > 1:
+                        html_parts.append(f"<div class='sheet-title'>{sheet_name}</div>")
+                    
+                    html_parts.append("<table>")
+                    
+                    # 计算总宽度以分配百分比
+                    col_widths_raw = []
+                    total_width_raw = 0
+                    for c in range(1, ws.max_column + 1):
+                        col_letter = get_column_letter(c)
+                        dim = ws.column_dimensions.get(col_letter)
+                        # 估算宽度权重
+                        width = dim.width if dim and dim.width else 10.0
+                        col_widths_raw.append(width)
+                        total_width_raw += width
+                    
+                    html_parts.append("<colgroup>")
+                    for w in col_widths_raw:
+                        # 使用百分比宽度，实现左右拉伸撑满
+                        pct = (w / total_width_raw) * 100
+                        html_parts.append(f"<col style='width:{pct:.2f}%'>")
+                    html_parts.append("</colgroup>")
+                    
+                    # 预处理合并单元格
+                    merged_cells_map = {} # (row, col) -> (rowspan, colspan)
+                    hidden_cells = set() # (row, col) to skip
+
+                    if ws.merged_cells:
+                        for merged_range in ws.merged_cells.ranges:
+                            min_col, min_row, max_col, max_row = range_boundaries(str(merged_range))
+                            rowspan = max_row - min_row + 1
+                            colspan = max_col - min_col + 1
+                            
+                            merged_cells_map[(min_row, min_col)] = (rowspan, colspan)
+                            
+                            for r in range(min_row, max_row + 1):
+                                for c in range(min_col, max_col + 1):
+                                    if r == min_row and c == min_col:
+                                        continue
+                                    hidden_cells.add((r, c))
+
+                    # 遍历行
+                    for r in range(1, ws.max_row + 1):
+                        row_dim = ws.row_dimensions.get(r)
+                        row_height = row_dim.height if row_dim and row_dim.height else None
+                        row_style = f" style='height:{int(row_height * 1.333)}px'" if row_height else ""
+                        html_parts.append(f"<tr{row_style}>")
+                        # 遍历列
+                        for c in range(1, ws.max_column + 1):
+                            if (r, c) in hidden_cells:
+                                continue
+                            
+                            cell = ws.cell(row=r, column=c)
+                            value = cell.value if cell.value is not None else ""
+                            
+                            style_attrs = []
+                            if cell.font and cell.font.bold:
+                                style_attrs.append("font-weight: bold")
+                            if cell.font and cell.font.italic:
+                                style_attrs.append("font-style: italic")
+                            if cell.font and cell.font.sz:
+                                style_attrs.append(f"font-size: {cell.font.sz}pt")
+                            if cell.fill and cell.fill.fgColor and cell.fill.fgColor.type == "rgb":
+                                rgb = cell.fill.fgColor.rgb
+                                # 忽略全透明或全黑默认值 (openpyxl 默认无填充往往是 00000000)
+                                if rgb and len(rgb) == 8 and rgb != "00000000":
+                                    style_attrs.append(f"background-color: #{rgb[2:]}")
+                            
+                            if cell.alignment:
+                                if cell.alignment.horizontal:
+                                    h_align = cell.alignment.horizontal
+                                    if h_align in ("center", "centerContinuous"):
+                                        h_align = "center"
+                                    elif h_align in ("left", "right", "justify"):
+                                        h_align = h_align
+                                    else:
+                                        h_align = "left"
+                                    style_attrs.append(f"text-align: {h_align}")
+                                else:
+                                    style_attrs.append("text-align: left")
+                                
+                                if cell.alignment.vertical:
+                                    v_align = cell.alignment.vertical
+                                    if v_align == 'center':
+                                        v_align = 'middle'
+                                    style_attrs.append(f"vertical-align: {v_align}")
+                                if cell.alignment.wrap_text is False:
+                                    style_attrs.append("white-space: nowrap")
+                            
+                            style_str = f" style='{'; '.join(style_attrs)}'" if style_attrs else ""
+                            
+                            # 合并属性
+                            span_attr = ""
+                            if (r, c) in merged_cells_map:
+                                rs, cs = merged_cells_map[(r, c)]
+                                if rs > 1: span_attr += f" rowspan='{rs}'"
+                                if cs > 1: span_attr += f" colspan='{cs}'"
+                            
+                            if isinstance(value, (datetime, date)):
+                                value_str = value.strftime("%Y-%m-%d")
+                            elif isinstance(value, (int, float)) and isinstance(cell.number_format, str) and "%" in cell.number_format:
+                                value_str = f"{value * 100:.2f}%"
+                            else:
+                                value_str = str(value)
+                            value_str = html.escape(value_str)
+                            html_parts.append(f"<td{span_attr}{style_str}>{value_str}</td>")
+                        
+                        html_parts.append("</tr>")
+
+                    html_parts.append("</table>")
+                    html_parts.append("</div>")
+                
+                html_parts.append("</body></html>")
+                full_html = "\n".join(html_parts)
+                
+                # 3. 保存临时 HTML 文件
+                with tempfile.NamedTemporaryFile(suffix=".html", delete=False, dir=input_path.parent, mode="w", encoding="utf-8") as tmp_html:
+                    tmp_html.write(full_html)
+                    tmp_html_path = Path(tmp_html.name)
+                
+                try:
+                    # 4. 调用 Playwright 转 PDF
+                    # 使用已有的 _html_to_pdf_playwright 方法
+                    success = await DocUtils._html_to_pdf_playwright(tmp_html_path, output_path)
+                    if not success:
+                         raise Exception("Playwright 转换 PDF 失败")
+                finally:
+                    # 清理临时 HTML
+                    if tmp_html_path.exists():
+                        try:
+                            os.remove(tmp_html_path)
+                        except:
+                            pass
+
             return await DocUtils._upload_and_record(
                 output_path, user_id, "doc_convert", "converted", "application/pdf", 
                 {"original_file": input_path.name, "type": "excel2pdf"}

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>官网嵌入演示 (Host Page)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 800px;
+            background: white;
+        }
+
+        /* 悬浮按钮样式 */
+        .chat-widget-trigger {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background-color: #2473ba;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(36, 115, 186, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 9999;
+            transition: transform 0.3s;
+        }
+
+        .chat-widget-trigger:hover {
+            transform: scale(1.1);
+        }
+
+        .chat-widget-trigger img {
+            width: 30px;
+            height: 30px;
+        }
+
+        /* Iframe 容器样式 */
+        .chat-widget-container {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 380px;
+            height: 600px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            z-index: 9998;
+            overflow: hidden;
+            display: none; /* 默认隐藏 */
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .chat-widget-container.visible {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .chat-widget-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .chat-widget-container {
+                bottom: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>驼人集团官网 (模拟)</h1>
+        <p>这是一个模拟宿主页面，演示如何嵌入智能助手 Widget。</p>
+    </div>
+
+    <div class="content">
+        <h2>页面内容区域</h2>
+        <p>点击右下角的蓝色按钮打开智能助手。</p>
+        <button onclick="testPostMessage()">测试发送消息给 Widget</button>
+    </div>
+
+    <!-- 悬浮按钮 -->
+    <div class="chat-widget-trigger" onclick="toggleChatWidget()">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+        </svg>
+    </div>
+
+    <!-- Widget 容器 -->
+    <div class="chat-widget-container" id="chatWidget">
+        <!-- src 指向 Vue 项目的 /guanwang 路由 -->
+        <!-- 注意：这里假设本地开发端口为 5173，部署时需改为实际域名 -->
+        <iframe id="chatFrame" src="http://localhost:5173/guanwang"></iframe>
+    </div>
+
+    <script>
+        const widget = document.getElementById('chatWidget');
+        const iframe = document.getElementById('chatFrame');
+        let isVisible = false;
+
+        function toggleChatWidget() {
+            isVisible = !isVisible;
+            if (isVisible) {
+                widget.classList.add('visible');
+            } else {
+                widget.classList.remove('visible');
+            }
+        }
+
+        function testPostMessage() {
+            // 演示：向 iframe 发送消息
+            if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'showSuccessMessage',
+                    message: '这是来自官网父页面的测试消息！'
+                }, '*');
+            }
+        }
+
+        // 监听来自 iframe 的消息
+        window.addEventListener('message', (event) => {
+            console.log('收到来自 Widget 的消息:', event.data);
+
+            if (event.data.type === 'confirmClose') {
+                // 收到关闭请求，隐藏 Widget
+                isVisible = false;
+                widget.classList.remove('visible');
+            }
+            
+            if (event.data.type === 'setControlsVisibility') {
+                // 控制父页面元素的显示/隐藏（例如遮罩层冲突时）
+                const trigger = document.querySelector('.chat-widget-trigger');
+                if (event.data.visible) {
+                    trigger.style.display = 'flex';
+                } else {
+                    trigger.style.display = 'none';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

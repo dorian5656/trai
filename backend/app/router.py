@@ -20,6 +20,7 @@ from backend.app.routers import speech
 from backend.app.routers.contact import contact_router
 from backend.app.routers.tools.doc import doc_router
 from backend.app.routers.tools.image import image_router
+from backend.app.routers.tools.media import media_router
 
 api_router = APIRouter()
 
@@ -49,4 +50,5 @@ api_router.include_router(contact_router.router, prefix="/contact", tags=["客�
 # 注册 工具路由
 api_router.include_router(doc_router.router, prefix="/tools/doc", tags=["文档工具"])
 api_router.include_router(image_router.router, prefix="/tools/image", tags=["图像工具"])
+api_router.include_router(media_router.router, prefix="/tools/media", tags=["媒体工具"])
 
