@@ -7,8 +7,9 @@
 # 描述：媒体处理工具类，提供视频转GIF等功能
 
 import os
+import subprocess
+import asyncio
 from pathlib import Path
-from moviepy import VideoFileClip
 from loguru import logger
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.config import settings
@@ -43,18 +44,29 @@ class MediaUtils:
         
         try:
             # 1. 转换逻辑
-            # 使用 moviepy 进行转换
-            clip = VideoFileClip(str(input_path))
+            # 使用 subprocess 调用 ffmpeg 进行转换，避免 moviepy/os.system 的 RCE 风险
+            cmd = [
+                "ffmpeg",
+                "-y",  # 覆盖输出文件
+                "-i", str(input_path),
+                "-vf", f"fps={fps},scale={width}:-1:flags=lanczos",
+                str(output_path)
+            ]
             
-            # 调整大小
-            if width:
-                clip = clip.resized(width=width)
-                
-            # 写入 GIF
-            clip.write_gif(str(output_path), fps=fps, logger=None) # logger=None 禁用 moviepy 默认打印
+            logger.info(f"执行转换命令: {' '.join(cmd)}")
             
-            # 关闭资源
-            clip.close()
+            # 使用 subprocess.run 配合参数列表，避免 shell=True
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "未知错误"
+                raise Exception(f"FFmpeg 转换失败: {error_msg}")
             
             # 2. 上传并记录
             if not output_path.exists() or output_path.stat().st_size == 0:

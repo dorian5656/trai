@@ -11,6 +11,8 @@ import time
 import json
 import aioboto3
 import aiofiles
+import aiohttp
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import List, Optional, Tuple
 from fastapi import UploadFile, HTTPException
@@ -267,6 +269,63 @@ class UploadUtils:
             return await cls._save_to_s3(file, object_name, bucket_name)
         else:
             return await cls._save_to_local(file, module, date_str, new_filename)
+
+    @classmethod
+    async def save_file_from_url(cls, file_url: str, module: str = "common") -> Tuple[str, str, int]:
+        """
+        从 URL 下载并保存文件 (SSRF 安全防护)
+        
+        Args:
+            file_url: 文件下载链接
+            module: 模块名称
+            
+        Returns:
+            Tuple[str, str, int]: (相对路径/URL路径, 本地绝对路径/S3 Key, 文件大小)
+        """
+        # 1. URL Scheme 校验
+        parsed_url = urlparse(file_url)
+        if parsed_url.scheme not in ('http', 'https'):
+             raise HTTPException(status_code=400, detail="仅支持 http/https 协议")
+        
+        # 2. 限制文件大小 (100MB)
+        MAX_SIZE = 100 * 1024 * 1024 
+        
+        timeout = aiohttp.ClientTimeout(total=30)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(file_url) as response:
+                    if response.status != 200:
+                        raise HTTPException(status_code=400, detail=f"下载失败: Status {response.status}")
+                    
+                    # 检查 Content-Length (可选)
+                    content_length = response.headers.get("Content-Length")
+                    if content_length and int(content_length) > MAX_SIZE:
+                         raise HTTPException(status_code=400, detail="文件过大")
+
+                    # 流式读取
+                    data = bytearray()
+                    async for chunk in response.content.iter_chunked(8192):
+                        data.extend(chunk)
+                        if len(data) > MAX_SIZE:
+                             raise HTTPException(status_code=400, detail="文件过大")
+                             
+                    # 提取文件名
+                    path_name = parsed_url.path
+                    filename = Path(path_name).name
+                    if not filename:
+                        filename = f"download_{int(time.time())}.bin"
+                    
+                    # 调用 save_from_bytes 保存
+                    return await cls.save_from_bytes(bytes(data), filename, module=module)
+                    
+        except aiohttp.ClientError as e:
+             logger.error(f"下载文件网络错误: {e}")
+             raise HTTPException(status_code=400, detail="文件下载失败")
+        except HTTPException:
+            raise
+        except Exception as e:
+             logger.error(f"下载文件异常: {e}")
+             raise HTTPException(status_code=500, detail="文件处理失败")
 
     @classmethod
     async def _save_to_local(cls, file: UploadFile, module: str, date_str: str, filename: str) -> Tuple[str, str, int]:
