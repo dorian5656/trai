@@ -32,7 +32,7 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  font-size: 16px;
+  font-size: 1rem;
   color: #606266;
 }
 </style>

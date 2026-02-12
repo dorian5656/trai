@@ -11,15 +11,81 @@ import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QTextEdit, QMessageBox, QGroupBox,
                              QApplication, QLineEdit, QFormLayout)
-from PyQt6.QtCore import Qt, QTimer, QUrl
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QTimer, QUrl, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QDesktopServices
 from .config_loader import ConfigLoader
 import re
 import json
 import copy
+import requests
 
 # 当前版本号
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.2.2"
+
+def _is_timestamp(v: str) -> bool:
+    """判断是否为时间戳格式 (纯数字且长度>=8)"""
+    s = v.strip().lstrip("vV")
+    return s.isdigit() and len(s) >= 8
+
+def _parse_semver(v: str):
+    try:
+        parts = v.strip().lstrip("vV").split(".")
+        return tuple(int(p) for p in parts)
+    except Exception:
+        return None
+
+def _compare_versions(a: str, b: str) -> int:
+    """
+    比较版本号 a 和 b
+    返回: 1 (a>b), -1 (a<b), 0 (a==b)
+    逻辑:
+    1. 如果都是时间戳，按数值比较
+    2. 如果一个是时间戳，一个是语义化版本，认为时间戳(新系统)永远更新
+    3. 如果都是语义化版本，按段比较
+    4. 兜底使用原始字符串比较
+    """
+    is_a_ts = _is_timestamp(a)
+    is_b_ts = _is_timestamp(b)
+
+    # 1. 都是时间戳
+    if is_a_ts and is_b_ts:
+        ta = int(a.strip().lstrip("vV"))
+        tb = int(b.strip().lstrip("vV"))
+        return (ta > tb) - (ta < tb)
+
+    # 2. 混合模式：时间戳(新) > 语义化(旧)
+    if is_a_ts and not is_b_ts:
+        return 1
+    if not is_a_ts and is_b_ts:
+        return -1
+
+    # 3. 都是语义化版本
+    sa = _parse_semver(a)
+    sb = _parse_semver(b)
+    if sa is not None and sb is not None:
+        return (sa > sb) - (sa < sb)
+
+    # 4. 兜底
+    return (a > b) - (a < b)
+
+class UpdateCheckThread(QThread):
+    """异步检查更新线程"""
+    finished = pyqtSignal(bool, dict, str) # success, data, msg
+
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        try:
+            response = requests.get(self.url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                self.finished.emit(True, data, "")
+            else:
+                self.finished.emit(False, {}, f"HTTP {response.status_code} ({self.url})")
+        except Exception as e:
+            self.finished.emit(False, {}, f"连接失败: {str(e)} ({self.url})")
 
 class SettingsPage(QWidget):
     def __init__(self):
@@ -276,16 +342,116 @@ class SettingsPage(QWidget):
 
 
     def check_update(self):
-        """检查更新 (模拟)"""
+        """检查更新"""
+        # 注意：这里我们强制优先使用 /static/version.json，这是系统标准
+        ip = self.ip_input.text().strip()
+        port = self.port_input.text().strip()
+        
+        if not ip or not port:
+            QMessageBox.warning(self, "警告", "请先配置并保存服务器 IP 和端口")
+            return
+
+        # 候选地址列表
+        self.update_candidates = []
+        
+        # 候选 1: 绝对的标准路径 (不依赖任何 JSON 配置)
+        self.update_candidates.append(f"http://{ip}:{port}/static/version.json")
+        
+        # 候选 2: 配置文件中的地址 (作为兜底)
+        config = self.config_loader.get_config()
+        cfg_url = config.get("system_settings", {}).get("update_check_url", "")
+        if cfg_url:
+            if cfg_url.startswith("/"):
+                cfg_url = f"http://{ip}:{port}{cfg_url}"
+            
+            if cfg_url not in self.update_candidates:
+                self.update_candidates.append(cfg_url)
+
+        if not self.update_candidates:
+            QMessageBox.warning(self, "错误", "未找到任何更新检测地址")
+            return
+            
+        self.update_try_index = 0
         self.check_update_btn.setEnabled(False)
         self.check_update_btn.setText("正在检查...")
-        self.update_status_label.setText("正在连接服务器...")
+        self.update_status_label.setText(f"正在检查更新...")
         
-        # 模拟延时
-        QTimer.singleShot(2000, self.finish_check_update)
+        self._start_update_thread(self.update_candidates[0])
 
-    def finish_check_update(self):
+    def _start_update_thread(self, url: str):
+        self.update_thread = UpdateCheckThread(url)
+        self.update_thread.finished.connect(self.on_update_check_finished)
+        self.update_thread.start()
+
+    def on_update_check_finished(self, success, data, msg):
+        """处理更新检查结果"""
+        if not success:
+            if hasattr(self, "update_candidates"):
+                next_index = getattr(self, "update_try_index", 0) + 1
+                if next_index < len(self.update_candidates):
+                    self.update_try_index = next_index
+                    next_url = self.update_candidates[next_index]
+                    self.update_status_label.setText(f"尝试备用检测地址...")
+                    self._start_update_thread(next_url)
+                    return
+            
+            self.check_update_btn.setEnabled(True)
+            self.check_update_btn.setText("检查更新")
+            # 汇总错误信息，如果标准路径失败了，明确提示
+            final_msg = msg
+            if "static/version.json" in msg:
+                final_msg = f"无法获取更新配置。请确认服务器 {self.ip_input.text()}:{self.port_input.text()} 已启动，且版本文件已部署。\n详情: {msg}"
+            
+            self.update_status_label.setText("检查失败")
+            QMessageBox.critical(self, "更新失败", final_msg)
+            return
+
         self.check_update_btn.setEnabled(True)
         self.check_update_btn.setText("检查更新")
-        self.update_status_label.setText(f"当前版本 v{CURRENT_VERSION} 已是最新")
-        QMessageBox.information(self, "检查更新", "当前已是最新版本！")
+
+        latest_version = data.get("version", "")
+        download_url = data.get("download_url", "")
+        update_log = data.get("update_log", "暂无更新说明")
+
+        if not latest_version:
+            self.update_status_label.setText("服务器返回版本格式不正确")
+            return
+
+        cmp = _compare_versions(latest_version, CURRENT_VERSION)
+        if cmp > 0:
+            self.update_status_label.setText(f"发现新版本: v{latest_version}")
+            
+            # 弹出更新提示
+            reply = QMessageBox.question(
+                self, 
+                "发现新版本", 
+                f"当前版本: v{CURRENT_VERSION}\n"
+                f"最新版本: v{latest_version}\n\n"
+                f"更新内容:\n{update_log}\n\n"
+                f"是否立即前往下载？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                ip = self.ip_input.text().strip()
+                port = self.port_input.text().strip()
+                
+                # 1. 如果没有下载地址，尝试根据版本号拼接
+                if not download_url:
+                    ts = _parse_timestamp(latest_version)
+                    if ts is not None and ip and port:
+                        download_url = f"http://{ip}:{port}/static/TraiClient_{latest_version}.exe"
+                
+                # 2. 如果是相对路径，补全为绝对路径
+                if download_url and download_url.startswith("/"):
+                    if ip and port:
+                        download_url = f"http://{ip}:{port}{download_url}"
+                
+                if download_url and (download_url.startswith("http://") or download_url.startswith("https://")):
+                    QDesktopServices.openUrl(QUrl(download_url))
+                else:
+                    QMessageBox.warning(self, "错误", f"无效的下载地址: {download_url}\n请检查服务器配置。")
+        else:
+            self.update_status_label.setText(f"当前版本 v{CURRENT_VERSION} 已是最新")
+            QMessageBox.information(self, "检查更新", "当前已是最新版本！")

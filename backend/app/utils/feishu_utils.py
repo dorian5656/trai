@@ -82,42 +82,6 @@ class FeishuBot:
         except Exception as e:
             logger.error(f"飞书卡片发送异常: {e}")
 
-    def upload_image(self, image_data: bytes) -> str:
-        """
-        上传图片到飞书，获取 img_key (用于卡片展示)
-        :param image_data: 图片二进制数据
-        :return: image_key 或 None
-        """
-        access_token = self.get_tenant_access_token()
-        if not access_token:
-            logger.warning("无法获取 tenant_access_token，跳过图片上传")
-            return None
-            
-        url = "https://open.feishu.cn/open-apis/im/v1/images"
-        headers = {
-            "Authorization": f"Bearer {access_token}"
-        }
-        # multipart/form-data
-        files = {
-            "image_type": (None, "message"),
-            "image": ("preview.png", image_data, "image/png")
-        }
-        
-        try:
-            response = requests.post(url, headers=headers, files=files)
-            response.raise_for_status()
-            result = response.json()
-            if result.get("code") == 0:
-                image_key = result.get("data", {}).get("image_key")
-                logger.info(f"飞书图片上传成功: {image_key}")
-                return image_key
-            else:
-                logger.error(f"飞书图片上传失败: {result}")
-                return None
-        except Exception as e:
-            logger.error(f"飞书图片上传异常: {e}")
-            return None
-
     def get_tenant_access_token(self):
         """
         获取 tenant_access_token (用于调用飞书服务端API)

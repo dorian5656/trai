@@ -101,6 +101,7 @@ backend/static/
 backend/logs/
 backend/app/models/._____temp/
 backend/app/models/.lock/
+nohup.out
 
 # Gitkeep
 .gitkeep
@@ -118,6 +119,13 @@ scripts/
 *.mp3
 *.m4a
 *.mp4
+*.gif
+*.pdf
+*.xlsx
+*.doc
+*.docx
+*.bin
+*.log
 
 scripts/
 frontend/nignx.txt
@@ -129,3 +137,11 @@ backend/app/models/*.pth
 backend/app/models/*.safetensors
 backend/app/models/*.bin
 node_modules
+
+# Frontend Artifacts
+dist/
+dist1/
+dist2/
+frontend/dist/
+frontend/dist1/
+frontend/dist2/

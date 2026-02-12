@@ -123,10 +123,47 @@ export const useUserStore = defineStore('user', () => {
    * 初始化（恢复会话）
    */
   const init = async () => {
-    if (token.value && !userInfo.value) {
-      await fetchUserInfo();
+    if (!token.value) return;
+    const exp = getTokenExp(token.value);
+    if (exp && exp * 1000 <= Date.now()) {
+      token.value = '';
+      userInfo.value = null;
+      localStorage.removeItem('token');
+      return;
+    }
+    // 先从 Token 解析用户以减少“未登录”闪烁
+    if (!userInfo.value) {
+      try {
+        const parts = token.value.split('.');
+        if (parts.length === 3 && parts[1]) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload && payload.sub) {
+            userInfo.value = {
+              id: 'local',
+              username: payload.sub,
+              full_name: payload.sub,
+              is_active: true,
+              is_superuser: false,
+              created_at: new Date().toISOString()
+            } as UserInfo;
+          }
+        }
+      } catch {}
+    }
+    if (!userInfo.value) await fetchUserInfo();
+  };
+
+  const getTokenExp = (t: string): number | null => {
+    try {
+      const part = t.split('.')[1];
+      if (!part) return null;
+      const p = JSON.parse(atob(part));
+      return typeof p.exp === 'number' ? p.exp : null;
+    } catch {
+      return null;
     }
   };
+
 
   return {
     token,

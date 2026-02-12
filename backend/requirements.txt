@@ -256,3 +256,4 @@ xhtml2pdf==0.2.16
 pdf2docx==0.5.8
 playwright==1.58.0
 scrapy
+moviepy

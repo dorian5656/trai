@@ -48,6 +48,24 @@ const extractImageUrls = (content: string): string[] => {
   return urls;
 };
 
+const isPureImageMessage = (content: string): boolean => {
+  const urls = extractImageUrls(content);
+  if (urls.length === 0) return false;
+  const text = content.replace(/!\[[^\]]*?\]\((.*?)\)/g, '').replace(/\s+/g, '');
+  return text === '';
+};
+
+const getImageUrls = (content: string): string[] => {
+  return extractImageUrls(content);
+};
+
+const openImageViewer = (urls: string[], index: number) => {
+  if (!urls.length) return;
+  previewUrlList.value = urls;
+  initialIndex.value = Math.max(0, index);
+  showViewer.value = true;
+};
+
 const onMessageListClick = (e: MouseEvent) => {
   const target = e.target as HTMLElement;
   if (target && target.tagName === 'IMG') {
@@ -150,8 +168,30 @@ defineExpose({
           <div class="sender-name">{{ msg.role === 'user' ? '我' : '驼人GPT' }}</div>
           
           <div class="content-bubble">
-             <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
-             <div v-else class="markdown-body user-content" v-html="renderMarkdown(msg.content)"></div>
+            <template v-if="isPureImageMessage(msg.content)">
+              <div class="image-grid">
+                <div
+                  v-for="(url, imgIndex) in getImageUrls(msg.content)"
+                  :key="`${msg.id}-${imgIndex}`"
+                  class="image-cell"
+                  @click.stop="openImageViewer(getImageUrls(msg.content), imgIndex)"
+                >
+                  <img :src="url" alt="生成的图片" />
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div
+                v-if="msg.role === 'assistant'"
+                class="markdown-body"
+                v-html="renderMarkdown(msg.content)"
+              />
+              <div
+                v-else
+                class="markdown-body user-content"
+                v-html="renderMarkdown(msg.content)"
+              />
+            </template>
           </div>
 
           <!-- AI 消息下方的操作栏 -->
@@ -214,7 +254,7 @@ defineExpose({
       display: none;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 48rem) {
       max-width: 95vw;
     }
   }
@@ -263,7 +303,7 @@ defineExpose({
           p { margin-bottom: 0.625rem; }
           p:last-child { margin-bottom: 0; }
           pre { background: #f7f8fa; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; color: #333; border: 1px solid #e5e6eb; }
-          code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+          code { font-family: 'Consolas', monospace; color: #c7254e; background-color: #f9f2f4; padding: 0.125rem 0.25rem; border-radius: 0.25rem; }
           pre code { color: inherit; background-color: transparent; padding: 0; }
           
           /* 通用图片样式 */
@@ -278,7 +318,34 @@ defineExpose({
           }
         }
 
-        @media (max-width: 768px) {
+        .image-grid {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+
+          .image-cell {
+            /* 竖版，大尺寸卡片 */
+            width: 9rem;
+            height: 14rem;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background: #f7f8fa;
+            border: 1px solid #e5e6eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+            }
+          }
+        }
+
+        @media (max-width: 48rem) {
           :deep(.markdown-body) {
             font-size: 0.875rem;
             line-height: 1.7;
@@ -325,6 +392,15 @@ defineExpose({
             }
             a {
               word-break: break-all;
+            }
+          }
+
+          .image-grid {
+            justify-content: center;
+
+            .image-cell {
+              width: 10rem;
+              height: 15.5rem;
             }
           }
         }

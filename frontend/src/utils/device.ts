@@ -10,7 +10,7 @@ export const isMobile = (): boolean => {
   const isMobileAgent = mobileAgents.some((agent) => userAgent.includes(agent));
   
   // 也可以结合屏幕宽度判断
-  const isSmallScreen = window.matchMedia('(max-width: 768px)').matches;
+  const isSmallScreen = window.matchMedia('(max-width: 48rem)').matches;
   
   return isMobileAgent || isSmallScreen;
 };
