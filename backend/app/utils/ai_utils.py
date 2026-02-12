@@ -17,6 +17,42 @@ class AIUtils:
     """
 
     @staticmethod
+    def get_best_gpu_device() -> str:
+        """
+        获取显存最空闲的 GPU 设备
+        """
+        import torch
+        
+        if not torch.cuda.is_available():
+            logger.warning("未检测到 CUDA 设备，回退到 CPU")
+            return "cpu"
+            
+        try:
+            device_count = torch.cuda.device_count()
+            if device_count == 0:
+                return "cpu"
+                
+            max_free_memory = -1
+            best_device_index = 0
+            
+            for i in range(device_count):
+                # mem_get_info 返回 (free, total) 单位字节
+                free_mem, total_mem = torch.cuda.mem_get_info(i)
+                free_gb = free_mem / (1024**3)
+                logger.info(f"GPU {i}: 空闲显存 {free_gb:.2f} GB / 总显存 {total_mem / (1024**3):.2f} GB")
+                
+                if free_mem > max_free_memory:
+                    max_free_memory = free_mem
+                    best_device_index = i
+            
+            logger.info(f"✨ 自动选择最佳 GPU: cuda:{best_device_index} (空闲: {max_free_memory / (1024**3):.2f} GB)")
+            return f"cuda:{best_device_index}"
+            
+        except Exception as e:
+            logger.error(f"GPU 检测失败: {e}, 回退到 cuda:0")
+            return "cuda:0"
+
+    @staticmethod
     def scan_local_models() -> List[str]:
         """
         扫描 backend/app/models 目录下的本地模型

@@ -63,6 +63,13 @@ def create_app() -> FastAPI:
         # 2. 初始化 AI 模型管理器 (创建默认文件夹)
         await ModelManager.initialize()
 
+        # 3. 预加载视频生成模型 (Eager Loading)
+        # 根据需求：自动选择显存最空闲的 GPU 并加载
+        from backend.app.routers.ai.video_func import VideoManager
+        # 使用 asyncio.create_task 后台加载，不阻塞服务启动响应，但会占用 GPU 资源
+        import asyncio
+        asyncio.create_task(VideoManager.preload_model())
+
         # 初始化静态资源目录 (backend/static)
         # 用于存放 exe、图片等静态文件
         base_path = Path(__file__).resolve().parent.parent

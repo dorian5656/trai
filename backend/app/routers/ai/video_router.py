@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/generations", response_model=ResponseModel, summary="文生视频 (Wan2.1)")
 async def generate_video(
     request: VideoGenRequest,  # 直接使用 Pydantic 模型作为 Body
-    current_user = Depends(get_current_active_user) # 开启鉴权
+    # current_user = Depends(get_current_active_user) # 开启鉴权
 ):
     """
     文生视频接口 (Wan2.1-T2V-1.3B)

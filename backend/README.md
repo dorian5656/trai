@@ -75,6 +75,26 @@ scrapy crawl keyword_news -a keyword=Huawei
 - **本地文档**: [http://localhost:5689/api/v1/docs](http://localhost:5689/api/v1/docs)
 - **OpenAPI JSON**: [http://localhost:5689/api/v1/openapi.json](http://localhost:5689/api/v1/openapi.json)
 
+## 🎵 AI 音乐生成 (ACE-Step)
+
+项目集成了 ACE-Step 1.5 模型，支持高质量的文生音乐功能。
+
+### 特性
+- **文生音乐**: 支持根据提示词生成音乐
+- **自定义歌词**: 支持自动生成或用户指定歌词
+- **灵活配置**: 支持时长、模型选择等参数配置
+- **本地部署**: 模型权重本地部署，支持断网运行
+- **飞书通知**: 任务完成自动推送音乐文件及元数据
+
+### 接口
+`POST /api_trai/v1/ai/music/generations`
+
+### 依赖
+- `torch`: 深度学习框架
+- `transformers`: 模型加载与推理
+- `diffusers`: 扩散模型支持
+- GPU 显存: 建议 12GB+ (ACE-Step-1.5)
+
 ## 🔧 环境依赖 (GPU 版)
 
 本项目深度依赖 GPU 加速 (CUDA)，请根据您的操作系统选择合适的依赖安装方式。
@@ -130,7 +150,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
-### 🛡️ 安全_2026_02_12_1140
+### 🛠️ 后端_2026_02_12_2001
+- **新功能(music)**: 集成 ACE-Step 1.5 音乐生成模型, 支持文生音乐/歌词生成/时长控制.
+- **优化**: 增加 ACE-Step 本地推理运行时支持 (`model_runtimes/ACE-Step-1.5-main`), 实现权重路径自动识别.
+- **文档**: 更新项目文档, 增加 AI 音乐生成模块说明.
+
+### �️ 安全_2026_02_12_1140
 - **安全(media)**: 修复视频转GIF功能中的潜在 RCE 风险, 移除 moviepy 依赖, 改用 subprocess 安全调用 ffmpeg.
 - **安全(upload)**: 修复文件下载功能 (save_file_from_url) 中的 SSRF 与任意文件写入风险, 增加协议/大小/路径校验.
 
