@@ -1,1 +1,0 @@
-import{d as s,u as a,o as n,c as r,a as c,b as p,e as u,_}from"./index-DcelCsWV.js";const d={class:"login-redirect"},i=s({__name:"Login",setup(l){const e=c(),o=p(),t=a();return n(()=>{e.replace({path:"/",query:o.query}),t.openLoginModal()}),(f,m)=>(u(),r("div",d,"正在跳转..."))}}),h=_(i,[["__scopeId","data-v-6e52fcfd"]]);export{h as default};

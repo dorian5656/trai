@@ -1,1 +1,0 @@
-import{d as s,u as a,o as n,c as r,a as c,b as p,e as u,_}from"./index-BRtV-TUT.js";const d={class:"login-redirect"},i=s({__name:"Login",setup(l){const e=c(),o=p(),t=a();return n(()=>{e.replace({path:"/",query:o.query}),t.openLoginModal()}),(m,f)=>(u(),r("div",d,"正在跳转..."))}}),h=_(i,[["__scopeId","data-v-634bda60"]]);export{h as default};
