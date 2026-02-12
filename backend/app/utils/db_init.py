@@ -632,6 +632,52 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+    async def init_tool_usage_logs_table(self, conn):
+        """
+        初始化工具使用日志表 (tool_usage_logs)
+        """
+        table_name = "tool_usage_logs"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS tool_usage_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            tool_name VARCHAR(50) NOT NULL,
+            input_source TEXT,
+            output_result TEXT,
+            params JSONB,
+            status VARCHAR(20) DEFAULT 'success',
+            error_msg TEXT,
+            client_ip VARCHAR(50),
+            duration_ms DOUBLE PRECISION,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE tool_usage_logs IS '工具使用日志表，记录工具类功能的使用情况';
+        COMMENT ON COLUMN tool_usage_logs.id IS '主键ID';
+        COMMENT ON COLUMN tool_usage_logs.user_id IS '用户ID';
+        COMMENT ON COLUMN tool_usage_logs.tool_name IS '工具名称';
+        COMMENT ON COLUMN tool_usage_logs.input_source IS '输入源';
+        COMMENT ON COLUMN tool_usage_logs.output_result IS '输出结果';
+        COMMENT ON COLUMN tool_usage_logs.params IS '参数';
+        COMMENT ON COLUMN tool_usage_logs.status IS '状态';
+        COMMENT ON COLUMN tool_usage_logs.error_msg IS '错误信息';
+        COMMENT ON COLUMN tool_usage_logs.client_ip IS '客户端IP';
+        COMMENT ON COLUMN tool_usage_logs.duration_ms IS '耗时(ms)';
+        COMMENT ON COLUMN tool_usage_logs.created_at IS '创建时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_tool_usage_logs_user_id ON tool_usage_logs(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_tool_usage_logs_tool_name ON tool_usage_logs(tool_name)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_tool_usage_logs_created_at ON tool_usage_logs(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "工具使用日志表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
+
     async def init_superuser(self, conn):
         """
         初始化超级管理员 (A6666)
@@ -1131,7 +1177,10 @@ class DBInitializer:
             # 6.4 初始化 AI 视频任务表
             await self.init_ai_video_tasks_table(conn)
 
-            # 6.5 初始化 Dify 应用表
+            # 6.5 初始化工具使用日志表
+            await self.init_tool_usage_logs_table(conn)
+
+            # 6.6 初始化 Dify 应用表
             await self.init_dify_apps_table(conn)
 
 

@@ -38,6 +38,73 @@ class UploadUtils:
     BASE_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "uploads"
 
     @classmethod
+    async def upload_local_file(cls, local_path: Path, object_name: str, content_type: str = None) -> str:
+        """
+        上传本地文件到存储 (S3 或 Local)
+        
+        Args:
+            local_path: 本地文件绝对路径
+            object_name: 目标路径 (S3 Key 或 相对路径)
+            content_type: MIME 类型
+            
+        Returns:
+            str: 访问 URL
+        """
+        if settings.S3_ENABLED:
+            # S3 Upload
+            bucket_name = settings.S3_BUCKET_NAME
+            session = aioboto3.Session()
+            async with session.client(
+                's3',
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION_NAME
+            ) as s3:
+                try:
+                    # Auto create bucket if needed (simplified check)
+                    try:
+                        await s3.head_bucket(Bucket=bucket_name)
+                    except Exception:
+                        try:
+                            await s3.create_bucket(Bucket=bucket_name)
+                            await cls._set_bucket_public(s3, bucket_name)
+                        except:
+                            pass
+
+                    async with aiofiles.open(local_path, 'rb') as f:
+                        data = await f.read()
+                        
+                    await s3.put_object(
+                        Bucket=bucket_name,
+                        Key=object_name,
+                        Body=data,
+                        ContentType=content_type or "application/octet-stream",
+                        ACL='public-read'
+                    )
+                    
+                    if settings.S3_PUBLIC_DOMAIN:
+                        return f"{settings.S3_PUBLIC_DOMAIN}/{object_name}"
+                    else:
+                        return f"{settings.S3_ENDPOINT_URL}/{bucket_name}/{object_name}"
+                except Exception as e:
+                    logger.error(f"S3上传失败: {e}")
+                    raise e
+        else:
+            # Local Copy
+            # object_name might be "tools/gif/..."
+            # target: static/uploads/tools/gif/...
+            # Remove leading slash if present to ensure proper joining
+            clean_object_name = object_name.lstrip('/')
+            target_path = cls.BASE_UPLOAD_DIR / clean_object_name
+            
+            if not target_path.parent.exists():
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            shutil.copy2(local_path, target_path)
+            return f"/static/uploads/{clean_object_name}"
+
+    @classmethod
     async def save_from_bytes(cls, data: bytes, filename: str, module: str = "common", content_type: str = None) -> Tuple[str, str, int]:
         """
         保存字节数据 (本地或S3)

@@ -130,6 +130,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_12_0845
+- **新功能(media)**: 完善视频转GIF功能, 增加 `tool_usage_logs` 数据库记录与 S3 存储支持.
+- **通知(media)**: 升级飞书通知为交互式卡片, 支持 GIF 预览图自动上传与展示, 提供源文件下载链接.
+- **优化**: 限制视频上传大小 (50MB), 规范化路由中文注释与文档.
+
 ### 🛠️ 后端_2026_02_11_1540
 - **新功能(image)**: 新增图片转 ICO 工具 (`image2ico`), 支持多尺寸生成、S3 存储及飞书预览通知.
 - **优化**: 异步处理 ICO 转换后的数据库记录与通知推送, 提升接口响应速度.
