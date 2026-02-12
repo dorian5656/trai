@@ -16,6 +16,9 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 ## 📹 AI 视频生成 (Wan2.1)
 请参考 [backend/README.md](backend/README.md#ai-视频生成-wan21)
 
+## 🎵 AI 音乐生成 (ACE-Step)
+请参考 [backend/README.md](backend/README.md#ai-音乐生成-ace-step)
+
 ## 🕷️ 网络爬虫 (Crawler)
 请参考 [backend/README.md](backend/README.md#网络爬虫-crawler)
 
@@ -33,6 +36,11 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 - [前端规范索引](.trae/rules/frontend_zcl.md)
 
 ## 📝 更新日志 (Changelog)
+
+### 🛠️ 后端_2026_02_12_2001
+- **新功能(music)**: 集成 ACE-Step 1.5 音乐生成模型, 支持文生音乐/歌词生成/时长控制.
+- **优化**: 增加 ACE-Step 本地推理运行时支持 (`model_runtimes/ACE-Step-1.5-main`), 实现权重路径自动识别.
+- **文档**: 更新项目文档, 增加 AI 音乐生成模块说明.
 
 ### 🛠️ 后端_2026_02_12_0845
 - **新功能(media)**: 完善视频转GIF功能, 增加 `tool_usage_logs` 数据库记录与 S3 存储支持.
