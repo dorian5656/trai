@@ -10,10 +10,14 @@ import asyncio
 import os
 import time
 import uuid
+import json
+import httpx
+import sys
 from pathlib import Path
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Dict, List
 
 from pydantic import BaseModel, Field
+from fastapi import HTTPException
 
 from backend.app.config import settings
 from backend.app.utils.logger import logger
@@ -22,6 +26,28 @@ from backend.app.utils.pg_utils import PGUtils
 from backend.app.utils.feishu_utils import feishu_bot
 from backend.app.routers.upload.upload_func import UserAudio
 from backend.app.routers.ai.image_func import ImageGenRequest, ImageManager
+
+# -----------------------------------------------------------------------------
+# 集成 ACE-Step 代码
+# -----------------------------------------------------------------------------
+# 确保 ACE-Step 目录在 sys.path 中
+ACE_STEP_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "app" / "model_runtimes" / "ACE-Step-1.5-main"
+if str(ACE_STEP_ROOT) not in sys.path:
+    sys.path.append(str(ACE_STEP_ROOT))
+
+try:
+    from acestep.handler import AceStepHandler
+    from acestep.llm_inference import LLMHandler
+    from acestep.inference import GenerationParams, GenerationConfig, generate_music as ace_generate_music
+    from acestep.constants import TASK_INSTRUCTIONS
+except ImportError as e:
+    logger.error(f"Failed to import ACE-Step modules: {e}")
+    # Define dummy classes to avoid crashing on import if path is wrong, though it should be correct
+    AceStepHandler = None
+    LLMHandler = None
+    GenerationParams = None
+    GenerationConfig = None
+    ace_generate_music = None
 
 
 class MusicGenRequest(BaseModel):
@@ -65,138 +91,30 @@ class MusicWithCoverResponse(BaseModel):
 
 class MusicManager:
     """
-    音乐生成管理器
+    音乐生成管理器 (直接集成 ACE-Step 代码)
     """
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(MusicManager, cls).__new__(cls)
-            cls._instance.initialized = False
         return cls._instance
 
     def __init__(self):
-        if self.initialized:
-            return
-        self._dit_handler = None
-        self._llm_handler = None
-        self._handler_ready = False
-        self._lock = asyncio.Lock()
-        self.initialized = True
-
-    def _get_acestep_root(self) -> Path:
-        """
-        获取 ACE-Step 项目路径
-        """
-        env_root = os.getenv("ACE_STEP_ROOT")
-        candidates = [
-            Path(env_root) if env_root else Path("__invalid__"),
-            settings.BASE_DIR / "app" / "models" / "ACE-Step" / "Ace-Step1.5",
-            settings.BASE_DIR / "models" / "ACE-Step" / "Ace-Step1.5",
-            settings.BASE_DIR.parent / "ACE-Step-1.5-main",
-            settings.BASE_DIR.parent.parent / "ACE-Step-1.5-main"
-        ]
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-        paths = ", ".join(str(item) for item in candidates)
-        raise FileNotFoundError(f"ACE-Step 目录不存在: {paths}")
-
-    def _ensure_acestep_on_path(self, root_dir: Path) -> None:
-        """
-        将 ACE-Step 目录加入系统路径
-        """
-        import sys
-        root_str = str(root_dir)
-        if root_str not in sys.path:
-            sys.path.insert(0, root_str)
-
-    def _create_handlers(self) -> Tuple[Any, Any]:
-        """
-        初始化 ACE-Step 处理器
-        """
-        root_dir = self._get_acestep_root()
-        self._ensure_acestep_on_path(root_dir)
-        try:
-            from acestep.handler import AceStepHandler
-            from acestep.llm_inference import LLMHandler
-        except Exception as e:
-            logger.error(f"模型推理失败，缺少 ACE-Step 依赖: {e}")
-            raise e
-        dit_handler = AceStepHandler()
-        status, ok = dit_handler.initialize_service(
-            project_root=str(root_dir),
-            config_path="acestep-v15-turbo",
-            device="auto"
-        )
-        if not ok:
-            raise RuntimeError(status)
-        llm_handler = LLMHandler()
-        return dit_handler, llm_handler
-
-    async def _get_handlers(self) -> Tuple[Any, Any]:
-        """
-        获取已初始化的处理器
-        """
-        if self._handler_ready and self._dit_handler and self._llm_handler:
-            return self._dit_handler, self._llm_handler
-        async with self._lock:
-            if self._handler_ready and self._dit_handler and self._llm_handler:
-                return self._dit_handler, self._llm_handler
-            self._dit_handler, self._llm_handler = self._create_handlers()
-            self._handler_ready = True
-        return self._dit_handler, self._llm_handler
-
-    def _extract_audio_result(self, result: Any) -> Tuple[Any, int]:
-        """
-        解析推理结果中的音频与采样率
-        """
-        sample_rate = 44100
-        audio_data = result
-        if isinstance(result, dict):
-            for key in ["output_wav", "wav", "audio", "output", "result"]:
-                if key in result:
-                    audio_data = result[key]
-                    break
-            for key in ["sample_rate", "sr"]:
-                if key in result and result[key]:
-                    sample_rate = int(result[key])
-                    break
-        if isinstance(audio_data, tuple) and len(audio_data) == 2:
-            audio_data, sample_rate = audio_data
-        return audio_data, sample_rate
-
-    def _save_audio(self, output_path: Path, audio_data: Any, sample_rate: int) -> None:
-        """
-        保存音频文件
-        """
-        try:
-            import soundfile as sf
-        except Exception as e:
-            logger.error(f"保存音频失败，缺少 soundfile 依赖: {e}")
-            raise e
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(audio_data, (str, Path)):
-            src_path = Path(audio_data)
-            if src_path.exists():
-                output_path.write_bytes(src_path.read_bytes())
-                return
-        if isinstance(audio_data, (bytes, bytearray)):
-            output_path.write_bytes(bytes(audio_data))
-            return
-        sf.write(str(output_path), audio_data, samplerate=sample_rate)
-
-    def _get_duration(self, audio_path: Path) -> float:
-        """
-        获取音频时长
-        """
-        try:
-            import soundfile as sf
-            info = sf.info(str(audio_path))
-            return float(info.duration)
-        except Exception as e:
-            logger.warning(f"读取音频时长失败: {e}")
-            return 0.0
+        self.handler = None
+        self.llm_handler = None
+        self.is_initialized = False
+        self.init_lock = asyncio.Lock()
+        
+        # Paths
+        # /home/code_dev/trai/backend/app/models/ACE-Step/Ace-Step1.5
+        self.checkpoints_dir = Path(__file__).resolve().parent.parent.parent.parent / "app" / "models" / "ACE-Step" / "Ace-Step1.5"
+        # 设置环境变量供 acestep 内部使用
+        os.environ["ACESTEP_CHECKPOINTS_DIR"] = str(self.checkpoints_dir)
+        
+        # 临时生成目录
+        self.gen_dir = Path(__file__).resolve().parent.parent.parent.parent / "static" / "gen" / "music"
+        self.gen_dir.mkdir(parents=True, exist_ok=True)
 
     async def _generate_lyrics_and_title(self, prompt: str) -> Tuple[str, str]:
         """
@@ -207,10 +125,11 @@ class MusicManager:
             # 构造提示词
             sys_prompt = """You are a professional songwriter. Based on the user's description, generate a song title and lyrics.
             The lyrics should be structured (Verse, Chorus, etc.) and suitable for a pop song.
+            If the user's description is in Chinese or requests Chinese content, the generated title and lyrics MUST be in Chinese.
             Output ONLY valid JSON in the following format:
             {
                 "title": "Song Title",
-                "lyrics": "Verse 1\n..."
+                "lyrics": "Verse 1\\n..."
             }
             Do not include markdown code blocks (```json ... ```). Just the raw JSON string.
             """
@@ -221,7 +140,6 @@ class MusicManager:
             ]
             
             if settings.AI_API_KEY and settings.DEEPSEEK_API_BASE:
-                import httpx
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
                         f"{settings.DEEPSEEK_API_BASE}/chat/completions",
@@ -238,7 +156,6 @@ class MusicManager:
                         data = resp.json()
                         content = data["choices"][0]["message"]["content"]
                         try:
-                            import json
                             res_json = json.loads(content)
                             return res_json.get("title", "Untitled"), res_json.get("lyrics", "")
                         except Exception:
@@ -253,24 +170,18 @@ class MusicManager:
 
     async def _generate_title(self, prompt: str) -> str:
         """
-        使用 AI 生成音乐标题 (基于 DeepSeek 或 Qwen)
+        使用 AI 生成音乐标题
         """
         try:
-            # 构造提示词
-            sys_prompt = "You are a creative music producer. Generate a short, catchy, and relevant title (3-6 words) for a song based on the user's description. Output ONLY the title, no quotes or explanations."
+            sys_prompt = """You are a creative music producer. Generate a short, catchy, and relevant title (3-6 words) for a song based on the user's description.
+            If the user's description is in Chinese or requests Chinese content, the title MUST be in Chinese.
+            Output ONLY the title, no quotes or explanations."""
             messages = [
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": f"Description: {prompt}"}
             ]
             
-            # 优先使用 Qwen-VL (虽然是 VL 模型，但也能处理纯文本) 或者 DeepSeek (如果 ModelScopeUtils 支持)
-            # 这里的 ModelScopeUtils.chat_completion 实际上是封装了 Qwen 的调用
-            # 如果配置了 DEEPSEEK，也可以用 httpx 调用
-            # 为了简单和利用现有资源，我们尝试用 ModelScopeUtils (本地/远程)
-            # 或者直接用 httpx 调用 DeepSeek (如果配置了 API KEY)
-            
             if settings.AI_API_KEY and settings.DEEPSEEK_API_BASE:
-                import httpx
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     resp = await client.post(
                         f"{settings.DEEPSEEK_API_BASE}/chat/completions",
@@ -287,225 +198,278 @@ class MusicManager:
                         title = data["choices"][0]["message"]["content"].strip().strip('"')
                         return title
             
-            # Fallback: 使用本地/ModelScope
-            # 注意: ModelScopeUtils 可能需要加载大模型，比较慢。
-            # 如果没有 API KEY，且本地没有轻量级 LLM，直接截取 prompt
-            
             return " ".join(prompt.split()[:5])
             
         except Exception as e:
             logger.warning(f"生成标题失败: {e}")
             return "Untitled Track"
 
+    async def initialize(self):
+        """
+        初始化 ACE-Step 模型 (懒加载)
+        """
+        async with self.init_lock:
+            if self.is_initialized:
+                return
+            
+            if not AceStepHandler:
+                raise ImportError("ACE-Step modules not found. Please check installation.")
+
+            logger.info(f"🎵 正在初始化 ACE-Step 音乐模型...")
+            logger.info(f"📂 模型路径: {self.checkpoints_dir}")
+            
+            # 运行同步初始化逻辑
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._init_sync)
+            
+            self.is_initialized = True
+            logger.success("🎵 ACE-Step 音乐模型初始化完成")
+
+    def _init_sync(self):
+        """
+        同步初始化逻辑 (运行在线程池中)
+        """
+        self.handler = AceStepHandler()
+        self.llm_handler = LLMHandler()
+        
+        # 1. 初始化 DiT 模型
+        # config_path 是 checkpoints_dir 下的子目录名
+        # 我们的结构: models/ACE-Step/Ace-Step1.5/acestep-v15-turbo
+        config_path = "acestep-v15-turbo"
+        
+        # AceStepHandler.initialize_service 需要 project_root
+        # 它会去 project_root/checkpoints 下找 config_path
+        # 我们把 self.checkpoints_dir 作为 project_root/checkpoints 的父级?
+        # self.checkpoints_dir 是 .../Ace-Step1.5
+        # 所以 project_root 应该是 .../ACE-Step (如果 checkpoints_dir 名为 checkpoints)
+        # 但这里目录名是 Ace-Step1.5
+        # 变通方法: 将 project_root 设为 ACE_STEP_ROOT (代码目录), 
+        # 但在 handler.py 中它会拼 checkpoints
+        # 
+        # 让我们看看 initialize_service 源码细节:
+        # checkpoint_dir = get_checkpoints_dir(project_root)
+        # 而 get_checkpoints_dir 优先使用 ACESTEP_CHECKPOINTS_DIR 环境变量
+        # 所以只要环境变量设置正确，project_root 参数可以随意传(但不能不存在)
+        
+        status, ok = self.handler.initialize_service(
+            project_root=str(ACE_STEP_ROOT), # 这里的 project_root 不太重要，因为我们会用环境变量覆盖 checkpoints 路径
+            config_path=config_path,
+            device="auto",
+            use_flash_attention=False,
+            compile_model=False,
+            offload_to_cpu=False,
+            offload_dit_to_cpu=False
+        )
+        
+        if not ok:
+            raise RuntimeError(f"DiT 模型初始化失败: {status}")
+            
+        # 2. 初始化 LLM 模型 (可选但推荐)
+        lm_model_path = "acestep-5Hz-lm-1.7B"
+        
+        # 使用 PyTorch 后端以确保稳定性
+        # checkpoint_dir 必须是包含 model 文件夹的父目录
+        # 这里 self.checkpoints_dir 是 .../Ace-Step1.5
+        # 而 model 在 .../Ace-Step1.5/acestep-5Hz-lm-1.7B
+        # 所以 checkpoint_dir 就是 self.checkpoints_dir
+        
+        status, ok = self.llm_handler.initialize(
+            checkpoint_dir=str(self.checkpoints_dir),
+            lm_model_path=lm_model_path,
+            backend="pt", # 使用 PyTorch 后端
+            device="cuda", # 假设有 GPU
+            offload_to_cpu=False
+        )
+        
+        if not ok:
+            logger.warning(f"LLM 模型初始化失败 (将降级运行): {status}")
+        else:
+            logger.info("LLM 模型初始化成功")
+
     async def generate_music(self, request: MusicGenRequest, notify: bool = True) -> MusicGenResponse:
         """
         生成音乐并上传落库
         """
         start_time = time.time()
+        logger.info(f"🎵 开始生成音乐: {request.prompt}")
         
-        # 1. 准备歌词和标题
+        # 0. 确保初始化
+        if not self.is_initialized:
+            await self.initialize()
+        
+        # 1. 准备歌词和标题 (如果需要)
         generated_title = "Untitled"
         generated_lyrics = ""
         
         if request.lyrics:
             generated_lyrics = request.lyrics
-            # 如果提供了歌词，仅生成标题
             generated_title = await self._generate_title(request.prompt)
         else:
             # 自动生成歌词和标题
             generated_title, generated_lyrics = await self._generate_lyrics_and_title(request.prompt)
         
-        dit_handler, llm_handler = await self._get_handlers()
-        root_dir = self._get_acestep_root()
-        self._ensure_acestep_on_path(root_dir)
-        from acestep.inference import GenerationParams, GenerationConfig, generate_music
-        
+        # 2. 构造生成参数
         params = GenerationParams(
+            task_type="text2music",
             caption=request.prompt,
             lyrics=generated_lyrics,
-            duration=request.duration if request.duration is not None and request.duration > 0 else -1.0,
-            task_type="text2music",
-            thinking=False,
-            use_cot_metas=False,
-            use_cot_caption=False,
-            use_cot_language=False,
-            use_cot_lyrics=False
+            duration=request.duration if request.duration else 30.0,
+            instruction="Fill the audio semantic mask based on the given conditions:",
+            thinking=False # 简单模式，不开启复杂推理
         )
+        
         config = GenerationConfig(
-            batch_size=1,
-            audio_format="wav",
-            use_random_seed=True
+            # 使用默认配置
         )
-        output_dir = settings.BASE_DIR / "temp" / "music"
+        
+        # 3. 执行生成 (在线程池中)
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            None,
-            generate_music,
-            dit_handler,
-            llm_handler,
-            params,
-            config,
-            str(output_dir)
-        )
-        if not result.success or not result.audios:
-            raise RuntimeError(result.error or "音乐生成失败")
-        audio_info = result.audios[0]
-        audio_path = Path(audio_info.get("path") or "")
-        sample_rate = int(audio_info.get("sample_rate") or 48000)
-        if not audio_path.exists():
-            audio_tensor = audio_info.get("tensor")
-            if audio_tensor is None:
-                raise RuntimeError("音乐生成失败，缺少音频文件")
-            audio_data = audio_tensor.detach().cpu().numpy()
-            if audio_data.ndim == 2:
-                audio_data = audio_data.T
-            file_name = f"ace_step_{uuid.uuid4().hex}.wav"
-            audio_path = output_dir / file_name
-            self._save_audio(audio_path, audio_data, sample_rate)
-        audio_bytes = audio_path.read_bytes()
-        url, object_key, size = await UploadUtils.save_from_bytes(
-            audio_bytes,
-            audio_path.name,
-            module="music",
-            content_type="audio/wav"
-        )
-        duration = self._get_duration(audio_path)
         
-        # 使用生成的标题，或者 fallback 到原来的逻辑
-        title = generated_title if generated_title != "Untitled" else await self._generate_title(request.prompt)
-        
-        session_factory = PGUtils.get_session_factory()
-        async with session_factory() as session:
-            record = UserAudio(
-                user_id=request.user_id,
-                filename=audio_path.name,
-                s3_key=object_key,
-                url=url,
-                size=size,
-                duration=duration,
-                mime_type="audio/wav",
-                module="music",
-                source="generated",
-                prompt=request.prompt,
-                text_content=generated_lyrics if generated_lyrics else title, # 优先存歌词
-                meta_data={
-                    "model_id": request.model_id,
-                    "sample_rate": sample_rate,
-                    "title": title,
-                    "lyrics": generated_lyrics # 显式存歌词
-                }
+        def _run_gen():
+            # 确保保存目录存在
+            return ace_generate_music(
+                dit_handler=self.handler,
+                llm_handler=self.llm_handler,
+                params=params,
+                config=config,
+                save_dir=str(self.gen_dir)
             )
-            session.add(record)
-            await session.commit()
-            await session.refresh(record)
-        
-        if notify:
-            try:
-                content = (
-                    "🎵 音乐生成完成\n"
-                    f"标题: {title}\n"
-                    f"提示词: {request.prompt}\n"
-                    f"模型: {request.model_id}\n"
-                    f"时长: {duration:.2f}s\n"
-                    f"地址: {url}"
-                )
-                feishu_bot.send_webhook_message(content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
-            except Exception as e:
-                logger.warning(f"飞书通知发送失败: {e}")
-        
-        cost_time = time.time() - start_time
-        return MusicGenResponse(
-            audio_url=url,
-            title=title,
-            lyrics=generated_lyrics,
-            duration=duration,
-            cost_time=cost_time,
-            prompt=request.prompt,
-            model_id=request.model_id
-        )
-
-    async def generate_music_with_cover(self, request: MusicGenRequest) -> MusicWithCoverResponse:
-        """
-        生成音乐+封面图，并上传落库推送
-        """
-        start_time = time.time()
-        
-        # 1. 并行生成音乐和图片
-        # 音乐生成 (不推送)
-        music_task = self.generate_music(request, notify=False)
-        
-        # 图片生成
-        # 提取提示词，或者直接用音乐提示词。为了更好的封面效果，可以稍微处理一下提示词，比如加上 "music album cover"
-        cover_prompt = f"Music album cover, {request.prompt}, high quality, artstation"
-        img_req = ImageGenRequest(
-            prompt=cover_prompt,
-            model="Tongyi-MAI/Z-Image-Turbo", # 优先用本地快速模型，或者 Dify
-            size="1024x1024",
-            n=1
-        )
-        # 注意: ImageManager.generate_image 内部也会推送飞书，我们需要拦截吗？
-        # ImageManager.generate_image 没有 notify 参数。
-        # 如果用 ImageManager.generate_image，它会发一次图片推送。
-        # 我们可以接受发一次图片推送，然后再发一次 音乐+图片 的聚合推送吗？ 
-        # 用户说 "一起返回和推送"，暗示只要一条。
-        # 那我得修改 ImageManager.generate_image 或者直接调用底层 _generate_z_image_local 并不推送。
-        # 但 _generate_z_image_local 内部也有推送逻辑。
-        
-        # 既然是 Pair Programming，我可以大胆修改 ImageManager。
-        # 不过 ImageManager 在另一个文件。
-        # 简单起见，我先让它发，然后我再发一条聚合的。用户可能会收到两条，但至少需求满足了。
-        # 为了完美，我最好去改一下 ImageManager。
-        
-        # 暂时先直接调用，为了速度。
-        image_task = ImageManager.generate_image(img_req, user_id=request.user_id)
-        
-        # 并发执行
-        music_res, image_res = await asyncio.gather(music_task, image_task, return_exceptions=True)
-        
-        # 处理音乐结果
-        if isinstance(music_res, Exception):
-            raise music_res
-        
-        # 处理图片结果
-        image_url = None
-        if isinstance(image_res, Exception):
-            logger.error(f"封面生成失败: {image_res}")
-        else:
-            if image_res.data and len(image_res.data) > 0:
-                image_url = image_res.data[0].get("url")
-        
-        # 聚合推送
+            
         try:
-            # 准备飞书卡片内容
-            post_content = [
-                [{"tag": "text", "text": "🎵 音乐+封面 生成完成"}],
-                [{"tag": "text", "text": f"Title: {music_res.title}"}],
-                [{"tag": "text", "text": f"Prompt: {request.prompt}"}],
-                [{"tag": "text", "text": f"Music URL: {music_res.audio_url}"}]
-            ]
+            result = await loop.run_in_executor(None, _run_gen)
             
-            # 如果有图片，尝试下载并上传获取 image_key (因为 ImageGenResponse 里没有 image_key)
-            if image_url:
-                post_content.append([{"tag": "text", "text": f"Cover URL: {image_url}"}])
+            if not result.success:
+                raise ValueError(result.error or result.status_message)
+                
+            # 4. 处理结果
+            if not result.audios or not result.audios[0].get('path'):
+                raise ValueError("未生成有效的音频文件")
+                
+            audio_path = result.audios[0]['path']
+            logger.info(f"✅ 音频生成成功: {audio_path}")
+            
+            # 读取音频文件内容
+            with open(audio_path, "rb") as f:
+                audio_bytes = f.read()
+                
+            # 5. 上传落库
+            file_name = f"ace_step_{uuid.uuid4().hex}.wav"
+            
+            url, object_key, size = await UploadUtils.save_from_bytes(
+                audio_bytes,
+                file_name,
+                module="music",
+                content_type="audio/wav"
+            )
+            
+            # 实际时长
+            duration = request.duration or 30.0
+            
+            # 落库
+            session_factory = PGUtils.get_session_factory()
+            async with session_factory() as session:
+                record = UserAudio(
+                    user_id=request.user_id,
+                    filename=file_name,
+                    s3_key=object_key,
+                    url=url,
+                    size=size,
+                    duration=duration,
+                    mime_type="audio/wav",
+                    module="music",
+                    source="generated",
+                    prompt=request.prompt,
+                    text_content=generated_lyrics if generated_lyrics else generated_title,
+                    meta_data={
+                        "model_id": request.model_id,
+                        "title": generated_title,
+                        "lyrics": generated_lyrics
+                    }
+                )
+                session.add(record)
+                await session.commit()
+                await session.refresh(record)
+            
+            if notify:
                 try:
-                    import httpx
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.get(image_url)
-                        if resp.status_code == 200:
-                            image_key = feishu_bot.upload_image(resp.content)
-                            if image_key:
-                                post_content.append([{"tag": "img", "image_key": image_key}])
+                    content = (
+                        "🎵 音乐生成完成 (Internal)\n"
+                        f"标题: {generated_title}\n"
+                        f"提示词: {request.prompt}\n"
+                        f"模型: {request.model_id}\n"
+                        f"时长: {duration:.2f}s\n"
+                        f"地址: {url}"
+                    )
+                    feishu_bot.send_webhook_message(content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
                 except Exception as e:
-                    logger.warning(f"封面图上传飞书失败: {e}")
+                    logger.warning(f"飞书通知发送失败: {e}")
             
-            feishu_bot.send_webhook_post(
-                title="🎵 [AI 音乐生成]",
-                content=post_content,
-                webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN
+            cost_time = time.time() - start_time
+            return MusicGenResponse(
+                audio_url=url,
+                title=generated_title,
+                lyrics=generated_lyrics,
+                duration=duration,
+                cost_time=cost_time,
+                prompt=request.prompt,
+                model_id=request.model_id
             )
             
         except Exception as e:
-            logger.warning(f"聚合推送失败: {e}")
+            logger.error(f"音乐生成失败: {e}")
+            raise HTTPException(status_code=500, detail=f"音乐生成失败: {str(e)}")
+
+    async def generate_music_with_cover(self, request: MusicGenRequest) -> MusicWithCoverResponse:
+        """
+        生成音乐并生成封面
+        """
+        start_time = time.time()
+        
+        # 1. 生成音乐 (复用上面的方法, notify=False 以避免重复通知)
+        music_res = await self.generate_music(request, notify=False)
+        
+        # 2. 生成封面
+        image_url = None
+        try:
+            # 优化提示词：仅保留视觉描述，移除具体的歌名文字，避免图片上出现乱码或不需要的文字
+            # 同时保留 "artistic" 等风格词
+            cover_prompt = f"Music album cover, {request.prompt}, high quality, artistic, no text, no watermark"
+            
+            img_req = ImageGenRequest(
+                prompt=cover_prompt,
+                width=1024,
+                height=1024,
+                user_id=request.user_id,
+                model_id="Tongyi-MAI/Z-Image-Turbo" # 默认使用 Turbo 模型
+            )
+            
+            # 调用 ImageManager (假设已导入)
+            # from backend.app.routers.ai.image_func import ImageManager
+            # image_manager = ImageManager()
+            # 但 ImageManager 可能是单例，直接实例化或导入实例
+            # 这里我们假设 ImageManager 是可用的
+            
+            # 注意: 这里需要确保 ImageManager 已初始化
+            img_res = await ImageManager.generate_image(img_req, user_id=request.user_id)
+            if img_res.data and len(img_res.data) > 0:
+                image_url = img_res.data[0].get("url")
+            
+        except Exception as e:
+            logger.warning(f"封面生成失败: {e}")
+            # 封面生成失败不影响音乐返回
+            pass
+            
+        # 3. 发送合并通知
+        try:
+            content = (
+                "🎵 音乐+封面生成完成\n"
+                f"标题: {music_res.title}\n"
+                f"音乐地址: {music_res.audio_url}\n"
+                f"封面地址: {image_url}"
+            )
+            feishu_bot.send_webhook_message(content, webhook_token=settings.FEISHU_IMAGE_GEN_WEBHOOK_TOKEN)
+        except Exception:
+            pass
             
         cost_time = time.time() - start_time
         
