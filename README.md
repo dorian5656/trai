@@ -37,6 +37,11 @@ TRAI 全栈项目仓库，包含后端 (FastAPI+AI)、前端 (Vue3+TS) 及客户
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_13_1450
+- **修复(music)**: 修复 ACE-Step 音乐生成时的 NaN/Inf 报错问题.
+- **优化(music)**: 调整推理配置, 强制使用 Float32 精度并禁用 Flash Attention (降级为 SDPA) 以确保稳定性.
+- **测试**: 验证并跑通文生音乐接口 (`/generations`).
+
 ### 🛠️ 后端_2026_02_12_2001
 - **新功能(music)**: 集成 ACE-Step 1.5 音乐生成模型, 支持文生音乐/歌词生成/时长控制.
 - **优化**: 增加 ACE-Step 本地推理运行时支持 (`model_runtimes/ACE-Step-1.5-main`), 实现权重路径自动识别.
