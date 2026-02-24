@@ -152,3 +152,6 @@ dist2/
 frontend/dist/
 frontend/dist1/
 frontend/dist2/
+
+# vscode
+.vscode/

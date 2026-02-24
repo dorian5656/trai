@@ -4,7 +4,7 @@
 # 文件名：settings_page.py
 # 作者：liuhd
 # 日期：2026-02-10 17:30:00
-# 描述：系统设置页面，提供配置修改、版本信息和更新检测
+# 描述：系统设置页面，提供配置修改、版本信息和更新检测功能。
 
 import os
 import datetime
@@ -19,8 +19,8 @@ import json
 import copy
 import requests
 
-# 当前版本号
-CURRENT_VERSION = "1.2.2"
+# 当前版本号，更新时手动更改。
+CURRENT_VERSION = "1.3.0"
 
 def _is_timestamp(v: str) -> bool:
     """判断是否为时间戳格式 (纯数字且长度>=8)"""
