@@ -75,6 +75,26 @@ scrapy crawl keyword_news -a keyword=Huawei
 - **本地文档**: [http://localhost:5689/api/v1/docs](http://localhost:5689/api/v1/docs)
 - **OpenAPI JSON**: [http://localhost:5689/api/v1/openapi.json](http://localhost:5689/api/v1/openapi.json)
 
+## 🎵 AI 音乐生成 (ACE-Step)
+
+项目集成了 ACE-Step 1.5 模型，支持高质量的文生音乐功能。
+
+### 特性
+- **文生音乐**: 支持根据提示词生成音乐
+- **自定义歌词**: 支持自动生成或用户指定歌词
+- **灵活配置**: 支持时长、模型选择等参数配置
+- **本地部署**: 模型权重本地部署，支持断网运行
+- **飞书通知**: 任务完成自动推送音乐文件及元数据
+
+### 接口
+`POST /api_trai/v1/ai/music/generations`
+
+### 依赖
+- `torch`: 深度学习框架
+- `transformers`: 模型加载与推理
+- `diffusers`: 扩散模型支持
+- GPU 显存: 建议 12GB+ (ACE-Step-1.5)
+
 ## 🔧 环境依赖 (GPU 版)
 
 本项目深度依赖 GPU 加速 (CUDA)，请根据您的操作系统选择合适的依赖安装方式。
@@ -130,7 +150,24 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
-### 🛡️ 安全_2026_02_12_1140
+### 🛠️ 后端_2026_02_25_1555
+- **安全(image)**: 修复图片上传路径穿越漏洞, 迁移至 `aiofiles` 异步 IO 写入, 避免阻塞主线程.
+- **性能(music)**: 优化 ACE-Step 词典加载策略, 引入 `lru_cache` 缓存避免重复 IO.
+- **优化(llm)**: 规范化 Qwen 模型推理代码, 支持环境变量配置模型路径; 补充核心方法文档.
+- **维护**: 清理 `static/exe` 下冗余的版本信息文件, 统一版本管理入口.
+- **代码规范**: 修复魔法值硬编码 (`FFT_SIZE`), 提升代码可维护性.
+
+### 🛠️ 后端_2026_02_25_1533
+- **优化(llm)**: 重构 Qwen2.5-0.5B-CyberSec 模型目录结构, 将训练/推理脚本迁移至 `backend/app/llm_study` 目录, 实现代码与模型权重分离.
+- **修复(image)**: 修复图片工具 (`image2ico`/`convert`) 临时文件残留问题, 完善 S3 上传逻辑 (自动上传并返回 URL).
+- **维护**: 清理根目录冗余文件, 更新 `.gitignore` 规则以正确管理模型与临时文件.
+
+### 🛠️ 后端_2026_02_12_2001
+- **新功能(music)**: 集成 ACE-Step 1.5 音乐生成模型, 支持文生音乐/歌词生成/时长控制.
+- **优化**: 增加 ACE-Step 本地推理运行时支持 (`model_runtimes/ACE-Step-1.5-main`), 实现权重路径自动识别.
+- **文档**: 更新项目文档, 增加 AI 音乐生成模块说明.
+
+### �️ 安全_2026_02_12_1140
 - **安全(media)**: 修复视频转GIF功能中的潜在 RCE 风险, 移除 moviepy 依赖, 改用 subprocess 安全调用 ffmpeg.
 - **安全(upload)**: 修复文件下载功能 (save_file_from_url) 中的 SSRF 与任意文件写入风险, 增加协议/大小/路径校验.
 
