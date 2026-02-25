@@ -88,8 +88,26 @@ class ConfigLoader(QObject):
                 logger.error(f"读取配置文件失败: {e}, 配置为空")
         else:
             logger.warning(f"未找到配置文件: {CONFIG_FILE}, 配置为空")
+            
+        # 如果读取的是用户配置，尝试与开发环境配置合并 (防止缺字段)
+        if self.config_path == user_data_path and os.path.exists(dev_config_path):
+            try:
+                with open(dev_config_path, 'r', encoding='utf-8') as f:
+                    dev_config = json.load(f)
+                    # 深度合并：将 dev_config 中有但 config 中没有的字段补全
+                    self._deep_update_missing(config, dev_config)
+            except Exception:
+                pass
         
         return config
+
+    def _deep_update_missing(self, target_dict, source_dict):
+        """递归补充缺失的字段 (只增不改)"""
+        for key, value in source_dict.items():
+            if key not in target_dict:
+                target_dict[key] = value
+            elif isinstance(value, dict) and isinstance(target_dict[key], dict):
+                self._deep_update_missing(target_dict[key], value)
 
     def save_config(self, new_config_str):
         """保存配置字符串到文件"""

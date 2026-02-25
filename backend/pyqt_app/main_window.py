@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction
 
-from pages import LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, RrdsppgPage, SystemMonitorPage, DocToolsPage, SettingsPage
+from pages import (LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, 
+                    RrdsppgPage, SystemMonitorPage, DocToolsPage, ImageToolsPage, SettingsPage)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
         self.add_sidebar_item("登录/注册", "👤")
         self.add_sidebar_item("ModelScope 工具", "🛠️")
         self.add_sidebar_item("文档工具箱", "📚")
+        self.add_sidebar_item("图像工具箱", "🖼️")
         self.add_sidebar_item("DeepSeek 对话", "💬")
         self.add_sidebar_item("AI 文生图", "🎨")
         self.add_sidebar_item("图片内容解析", "👁️")
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow):
         self.login_page.login_success.connect(self.on_login_success) # 连接登录成功信号
         self.modelscope_page = ModelScopePage()
         self.doc_tools_page = DocToolsPage()
+        self.image_tools_page = ImageToolsPage()
         self.deepseek_page = DeepSeekPage()
         self.image_gen_page = ImageGenPage()
         self.image_parse_page = ImageParsePage()
@@ -131,6 +134,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.login_page)
         self.stacked_widget.addWidget(self.modelscope_page)
         self.stacked_widget.addWidget(self.doc_tools_page)
+        self.stacked_widget.addWidget(self.image_tools_page)
         self.stacked_widget.addWidget(self.deepseek_page)
         self.stacked_widget.addWidget(self.image_gen_page)
         self.stacked_widget.addWidget(self.image_parse_page)
@@ -307,6 +311,10 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.doc_tools_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.image_tools_page.set_auth_token(self.user_token)
         except Exception:
             pass
         try:

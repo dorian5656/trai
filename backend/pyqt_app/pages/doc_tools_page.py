@@ -203,6 +203,8 @@ class DocToolsPage(QWidget):
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(50, 20, 50, 20)
         content_layout.setSpacing(20)
+        content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        content_widget.setMaximumWidth(1100)
         
         # --- 功能分组 ---
         
@@ -233,13 +235,22 @@ class DocToolsPage(QWidget):
             ("ofd2img", "OFD 转图片", "🖼️", "将 OFD 文档转换为图片"),
             ("img_convert", "图片格式转换", "🔄", "支持多种图片格式互转 (jpg, png, webp 等)"),
             ("ebook_convert", "电子书格式转换", "📚", "支持 epub, mobi, azw3, pdf 等格式互转"),
-        ])
+        ], center=False)
         
         content_layout.addStretch() # 底部弹簧
-        scroll_area.setWidget(content_widget)
+
+        wrapper = QWidget()
+        wrapper_layout = QHBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
+        wrapper_layout.addStretch()
+        wrapper_layout.addWidget(content_widget)
+        wrapper_layout.addStretch()
+
+        scroll_area.setWidget(wrapper)
         main_layout.addWidget(scroll_area)
 
-    def add_section(self, parent_layout, title, tools):
+    def add_section(self, parent_layout, title, tools, center=True):
         """添加一个功能分组"""
         # 分组标题
         section_label = QLabel(title)
@@ -251,7 +262,10 @@ class DocToolsPage(QWidget):
         grid_layout = QGridLayout(grid_widget)
         grid_layout.setContentsMargins(0, 0, 0, 0)
         grid_layout.setSpacing(24)
-        grid_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        if center:
+            grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        else:
+            grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
         # 添加卡片
         col_count = 4 # 每行4列

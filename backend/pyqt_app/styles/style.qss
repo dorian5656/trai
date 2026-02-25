@@ -65,4 +65,5 @@ QStackedWidget#contentArea {
 /* 页面通用样式 */
 QLabel {
     color: #2c3e50;
+    border: none;
 }
