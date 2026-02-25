@@ -150,6 +150,18 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_25_1555
+- **安全(image)**: 修复图片上传路径穿越漏洞, 迁移至 `aiofiles` 异步 IO 写入, 避免阻塞主线程.
+- **性能(music)**: 优化 ACE-Step 词典加载策略, 引入 `lru_cache` 缓存避免重复 IO.
+- **优化(llm)**: 规范化 Qwen 模型推理代码, 支持环境变量配置模型路径; 补充核心方法文档.
+- **维护**: 清理 `static/exe` 下冗余的版本信息文件, 统一版本管理入口.
+- **代码规范**: 修复魔法值硬编码 (`FFT_SIZE`), 提升代码可维护性.
+
+### 🛠️ 后端_2026_02_25_1533
+- **优化(llm)**: 重构 Qwen2.5-0.5B-CyberSec 模型目录结构, 将训练/推理脚本迁移至 `backend/app/llm_study` 目录, 实现代码与模型权重分离.
+- **修复(image)**: 修复图片工具 (`image2ico`/`convert`) 临时文件残留问题, 完善 S3 上传逻辑 (自动上传并返回 URL).
+- **维护**: 清理根目录冗余文件, 更新 `.gitignore` 规则以正确管理模型与临时文件.
+
 ### 🛠️ 后端_2026_02_12_2001
 - **新功能(music)**: 集成 ACE-Step 1.5 音乐生成模型, 支持文生音乐/歌词生成/时长控制.
 - **优化**: 增加 ACE-Step 本地推理运行时支持 (`model_runtimes/ACE-Step-1.5-main`), 实现权重路径自动识别.

@@ -15,6 +15,7 @@ from PIL import Image
 from fastapi import UploadFile, HTTPException
 from backend.app.utils.logger import logger
 from backend.app.utils.image_utils import ImageUtils
+from backend.app.utils.upload_utils import UploadUtils
 
 # 临时文件存储路径
 TEMP_DIR = Path(os.getenv("IMAGE_TEMP_DIR", "backend/temp/images"))
@@ -122,15 +123,27 @@ class ImageFunc:
             # 获取输出文件信息
             info = ImageUtils.get_image_info(str(output_path))
             
-            relative_path = f"images/{output_filename}"
+            # 上传到 S3
+            file_bytes = Path(output_path).read_bytes()
+            url, key, size = await UploadUtils.save_from_bytes(
+                file_bytes, 
+                output_filename, 
+                module="image_tool", 
+                content_type=f"image/{info.get('format', 'jpeg').lower()}"
+            )
+            
+            # 删除本地输出文件
+            if output_path.exists():
+                os.remove(output_path)
             
             return {
                 "original_name": file.filename,
-                "output_path": str(output_path),
-                "relative_path": relative_path,
+                "output_path": url,
+                "url": url,
+                "relative_path": key,
                 "width": info.get("width"),
                 "height": info.get("height"),
-                "size": info.get("size"),
+                "size": size,
                 "format": info.get("format")
             }
             
@@ -171,8 +184,9 @@ class ImageFunc:
         output_path = TEMP_DIR / output_filename
 
         try:
-            with open(input_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            async with aiofiles.open(input_path, "wb") as buffer:
+                while content := await file.read(1024 * 1024):
+                    await buffer.write(content)
             
             ImageFunc._verify_image_format(input_path)
 
@@ -189,15 +203,28 @@ class ImageFunc:
                 raise HTTPException(status_code=500, detail="Image compression failed (cannot reach target size)")
                 
             info = ImageUtils.get_image_info(str(output_path))
-            relative_path = f"images/{output_filename}"
+            
+            # 上传到 S3
+            file_bytes = Path(output_path).read_bytes()
+            url, key, size = await UploadUtils.save_from_bytes(
+                file_bytes, 
+                output_filename, 
+                module="image_tool", 
+                content_type=f"image/{info.get('format', 'jpeg').lower()}"
+            )
+            
+            # 删除本地输出文件
+            if output_path.exists():
+                os.remove(output_path)
             
             return {
                 "original_name": file.filename,
-                "output_path": str(output_path),
-                "relative_path": relative_path,
+                "output_path": url,
+                "url": url,
+                "relative_path": key,
                 "width": info.get("width"),
                 "height": info.get("height"),
-                "size": info.get("size"),
+                "size": size,
                 "format": info.get("format")
             }
             
@@ -265,16 +292,27 @@ class ImageFunc:
             # 获取输出文件信息
             info = ImageUtils.get_image_info(str(output_path))
             
-            # 返回相对路径供前端访问
-            relative_path = f"images/{output_filename}"
+            # 上传到 S3
+            file_bytes = Path(output_path).read_bytes()
+            url, key, size = await UploadUtils.save_from_bytes(
+                file_bytes, 
+                output_filename, 
+                module="image_tool", 
+                content_type=f"image/{info.get('format', 'jpeg').lower()}"
+            )
+            
+            # 删除本地输出文件
+            if output_path.exists():
+                os.remove(output_path)
             
             return {
                 "original_name": file.filename,
-                "output_path": str(output_path),
-                "relative_path": relative_path,
+                "output_path": url,
+                "url": url,
+                "relative_path": key,
                 "width": info.get("width"),
                 "height": info.get("height"),
-                "size": info.get("size")
+                "size": size
             }
             
         except HTTPException:

@@ -98,15 +98,10 @@ frontend/.env.*
 
 # Temporary Files
 backend/temp/
-backend/static/
-backend/logs/
-backend/app/models/._____temp/
-backend/app/models/.lock/
-nohup.out
 
-# Gitkeep
-.gitkeep
-**/temp/
+# LLM Models (Avoid committing large files)
+# Ignore all models in the main models directory
+backend/app/models/
 
 # Large AI Models
 backend/app/models/Wan-AI/
@@ -155,3 +150,5 @@ frontend/dist2/
 
 # vscode
 .vscode/
+# But allow llm_study to be committed (it only contains code now)
+!backend/app/llm_study/
