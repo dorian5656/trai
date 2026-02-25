@@ -25,6 +25,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QPixmap, QDesktopServices
 import requests
 import os
+from loguru import logger
 from .config_loader import config
 
 
@@ -119,10 +120,17 @@ class ImageIcoWorker(QThread):
         try:
             f = open(self.file_path, "rb")
             files = {"file": f}
+            # 注意：requests 的 data 参数如果包含 list，需要使用 correct key 格式或 json
+            # 根据 API 定义，sizes 应该是一个 integer 列表或逗号分隔的字符串
+            # 这里前端传入的是字符串，例如 "256"
             data = {"sizes": self.sizes}
             headers = {"accept": "application/json"}
             if self.token:
                 headers["Authorization"] = f"Bearer {self.token}"
+            
+            # 调试打印
+            logger.info(f"ICO Request: url={self.api_url}, sizes={self.sizes}")
+                
             response = requests.post(
                 self.api_url,
                 files=files,
@@ -130,18 +138,25 @@ class ImageIcoWorker(QThread):
                 headers=headers,
                 timeout=120,
             )
+            
             if response.status_code != 200:
                 self.finished_signal.emit(False, f"服务器返回错误: {response.status_code}", {})
                 return
+                
             res_json = response.json()
+            # 调试打印
+            logger.info(f"ICO Response: {res_json}")
+            
             if res_json.get("code") != 200:
                 msg = res_json.get("msg", "图片转 ICO 失败")
                 self.finished_signal.emit(False, msg, {})
                 return
+                
             data_json = res_json.get("data") or {}
             msg = res_json.get("msg", "图片转 ICO 成功")
             self.finished_signal.emit(True, msg, data_json)
         except Exception as e:
+            logger.error(f"ICO Worker Exception: {e}")
             self.finished_signal.emit(False, f"发生异常: {str(e)}", {})
         finally:
             if f is not None:
@@ -266,6 +281,10 @@ class ImageToolsPage(QWidget):
         self.token = token or ""
 
     def _init_ui(self) -> None:
+        self.original_width = 0
+        self.original_height = 0
+        self.aspect_ratio = 0.0
+        
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -309,26 +328,62 @@ class ImageToolsPage(QWidget):
         self.path_edit = QLineEdit()
         self.path_edit.setReadOnly(True)
         self.path_edit.setPlaceholderText("请选择本地图片文件")
+        self.path_edit.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px;
+                background-color: #f9f9f9;
+                color: #555555;
+            }
+        """)
         select_row.addWidget(self.path_edit)
 
         select_btn = QPushButton("选择图片")
+        select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        select_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
         select_btn.clicked.connect(self._choose_image)
         select_row.addWidget(select_btn)
         left_layout.addLayout(select_row)
 
         self.preview_label = QLabel("预览区")
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setMinimumHeight(220)
+        self.preview_label.setMinimumHeight(300)
         self.preview_label.setStyleSheet(
-            "background-color: #f5f7fa; border-radius: 6px; border: 1px dashed #cccccc; color: #aaaaaa;"
+            "background-color: #f5f7fa; border-radius: 8px; border: 1px dashed #cccccc; color: #aaaaaa;"
         )
         left_layout.addWidget(self.preview_label)
+
+        # 图片信息展示区域
+        self.image_info_label = QLabel("")
+        self.image_info_label.setStyleSheet("""
+            background-color: #f0f2f5; 
+            border-radius: 6px; 
+            padding: 8px; 
+            color: #555555; 
+            font-family: Consolas, monospace;
+        """)
+        self.image_info_label.setWordWrap(True)
+        self.image_info_label.hide() # 默认隐藏，有图片时显示
+        left_layout.addWidget(self.image_info_label)
+
         left_layout.addStretch()
 
         right_panel = QWidget()
         right_layout = QGridLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(16)
+        right_layout.setSpacing(20) # 增加卡片间距
 
         format_card = self._create_format_convert_card()
         ico_card = self._create_ico_convert_card()
@@ -351,25 +406,29 @@ class ImageToolsPage(QWidget):
             """
 QFrame {
     background-color: #ffffff;
-    border-radius: 10px;
-    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    border: 1px solid #eaeaea;
 }
 QFrame:hover {
     border: 1px solid #2196F3;
+    background-color: #fcfcfc;
 }
 """
         )
+        # 添加阴影效果 (通过代码实现，因为 QSS 阴影支持有限)
+        # 这里仅通过边框和背景色优化视觉，不做复杂的阴影绘制以保持性能
+        
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #333333; border: none;")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333333; border: none;")
         layout.addWidget(title_label)
 
         subtitle_label = QLabel(subtitle)
         subtitle_label.setWordWrap(True)
-        subtitle_label.setStyleSheet("font-size: 12px; color: #888888; border: none;")
+        subtitle_label.setStyleSheet("font-size: 12px; color: #999999; border: none; margin-bottom: 8px;")
         layout.addWidget(subtitle_label)
 
         return card
@@ -382,7 +441,7 @@ QFrame:hover {
         row.setSpacing(10)
 
         label = QLabel("目标格式")
-        label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         row.addWidget(label)
 
         self.format_combo = QComboBox()
@@ -395,7 +454,7 @@ QFrame:hover {
         row2.setSpacing(10)
 
         quality_label = QLabel("图片质量")
-        quality_label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        quality_label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         row2.addWidget(quality_label)
 
         self.quality_spin = QSpinBox()
@@ -423,7 +482,7 @@ QFrame:hover {
         size_row.setSpacing(10)
 
         size_label = QLabel("图标尺寸")
-        size_label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        size_label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         size_row.addWidget(size_label)
 
         self.ico_size_spin = QSpinBox()
@@ -451,7 +510,7 @@ QFrame:hover {
         row.setSpacing(10)
 
         label = QLabel("目标大小")
-        label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         row.addWidget(label)
 
         self.size_spin = QSpinBox()
@@ -483,7 +542,7 @@ QFrame:hover {
         row1.setSpacing(10)
 
         width_label = QLabel("宽度")
-        width_label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        width_label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         row1.addWidget(width_label)
 
         self.width_spin = QSpinBox()
@@ -493,7 +552,7 @@ QFrame:hover {
         row1.addWidget(self.width_spin, stretch=1)
 
         height_label = QLabel("高度")
-        height_label.setStyleSheet("font-size: 12px; color: #555555; border: none;")
+        height_label.setStyleSheet("font-size: 12px; color: #555555; border: none; font-weight: bold;")
         row1.addWidget(height_label)
 
         self.height_spin = QSpinBox()
@@ -513,6 +572,10 @@ QFrame:hover {
 
         row2.addStretch()
         layout.addLayout(row2)
+
+        # 绑定尺寸变化信号
+        self.width_spin.valueChanged.connect(self._on_width_changed)
+        self.height_spin.valueChanged.connect(self._on_height_changed)
 
         btn = QPushButton("调整尺寸")
         btn.clicked.connect(self._on_resize_clicked)
@@ -547,7 +610,10 @@ QFrame:hover {
         if pixmap.isNull():
             self.preview_label.setText("无法加载图片预览")
             self.preview_label.setPixmap(QPixmap())
+            self.image_info_label.hide()
             return
+            
+        # 更新预览图
         scaled = pixmap.scaled(
             self.preview_label.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
@@ -555,6 +621,63 @@ QFrame:hover {
         )
         self.preview_label.setPixmap(scaled)
         self.preview_label.setText("")
+        
+        # 更新图片信息
+        try:
+            size_bytes = os.path.getsize(path)
+            # 转换为合适的单位
+            if size_bytes < 1024:
+                size_str = f"{size_bytes} B"
+            elif size_bytes < 1024 * 1024:
+                size_str = f"{size_bytes / 1024:.2f} KB"
+            else:
+                size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
+                
+            width = pixmap.width()
+            height = pixmap.height()
+            
+            # 记录原始尺寸和宽高比
+            self.original_width = width
+            self.original_height = height
+            self.aspect_ratio = width / height if height > 0 else 0.0
+            
+            info_text = f"尺寸: {width} x {height} px\n大小: {size_str}"
+            self.image_info_label.setText(info_text)
+            self.image_info_label.show()
+            
+            # 自动填入调整尺寸的输入框 (暂时断开信号，避免触发递归计算)
+            if hasattr(self, "width_spin") and hasattr(self, "height_spin"):
+                self.width_spin.blockSignals(True)
+                self.height_spin.blockSignals(True)
+                self.width_spin.setValue(width)
+                self.height_spin.setValue(height)
+                self.width_spin.blockSignals(False)
+                self.height_spin.blockSignals(False)
+                
+        except Exception:
+            self.image_info_label.hide()
+
+    def _on_width_changed(self, value: int) -> None:
+        """当宽度改变时，如果保持比例被勾选，自动更新高度"""
+        if not self.keep_ratio_check.isChecked() or self.aspect_ratio == 0:
+            return
+            
+        new_height = int(value / self.aspect_ratio)
+        if new_height > 0:
+            self.height_spin.blockSignals(True)
+            self.height_spin.setValue(new_height)
+            self.height_spin.blockSignals(False)
+
+    def _on_height_changed(self, value: int) -> None:
+        """当高度改变时，如果保持比例被勾选，自动更新宽度"""
+        if not self.keep_ratio_check.isChecked() or self.aspect_ratio == 0:
+            return
+            
+        new_width = int(value * self.aspect_ratio)
+        if new_width > 0:
+            self.width_spin.blockSignals(True)
+            self.width_spin.setValue(new_width)
+            self.width_spin.blockSignals(False)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -568,17 +691,20 @@ QFrame:hover {
             f"{feature_name} 将通过服务端 API 实现，当前为界面预览。",
         )
 
+    def _get_api_url(self, key: str) -> str:
+        """获取 API 地址"""
+        url = config.get("image_tools", {}).get(key, "")
+        return url
+
     def _on_format_convert_clicked(self) -> None:
         if not self._ensure_image_selected():
             return
-        api_url = ""
-        try:
-            api_url = config.get("image_tools", {}).get("convert_url", "")
-        except Exception:
-            api_url = ""
+        
+        api_url = self._get_api_url("convert_url")
         if not api_url:
             QMessageBox.warning(self, "错误", "配置错误: 未找到图像格式转换接口地址")
             return
+            
         target_format = self.format_combo.currentText()
         quality = self.quality_spin.value()
         if hasattr(self, "format_convert_btn"):
@@ -626,14 +752,12 @@ QFrame:hover {
     def _on_ico_convert_clicked(self) -> None:
         if not self._ensure_image_selected():
             return
-        api_url = ""
-        try:
-            api_url = config.get("image_tools", {}).get("image2ico_url", "")
-        except Exception:
-            api_url = ""
+            
+        api_url = self._get_api_url("image2ico_url")
         if not api_url:
             QMessageBox.warning(self, "错误", "配置错误: 未找到图片转 ICO 接口地址")
             return
+            
         size_value = self.ico_size_spin.value()
         sizes = str(size_value)
         if hasattr(self, "ico_convert_btn"):
@@ -676,14 +800,12 @@ QFrame:hover {
     def _on_compress_clicked(self) -> None:
         if not self._ensure_image_selected():
             return
-        api_url = ""
-        try:
-            api_url = config.get("image_tools", {}).get("compress_url", "")
-        except Exception:
-            api_url = ""
+            
+        api_url = self._get_api_url("compress_url")
         if not api_url:
             QMessageBox.warning(self, "错误", "配置错误: 未找到图片压缩接口地址")
             return
+            
         target_mb = self.size_spin.value()
         if target_mb <= 0:
             QMessageBox.warning(self, "提示", "目标大小必须大于 0 MB")
@@ -732,11 +854,8 @@ QFrame:hover {
     def _on_resize_clicked(self) -> None:
         if not self._ensure_image_selected():
             return
-        api_url = ""
-        try:
-            api_url = config.get("image_tools", {}).get("resize_url", "")
-        except Exception:
-            api_url = ""
+            
+        api_url = self._get_api_url("resize_url")
         if not api_url:
             QMessageBox.warning(self, "错误", "配置错误: 未找到图片尺寸调整接口地址")
             return
@@ -798,26 +917,66 @@ QFrame:hover {
         if not isinstance(data, dict):
             return
             
-        rel_path = data.get("relative_path")
-        if not rel_path:
+        # 兼容两种返回格式:
+        # 1. 通用格式: {"relative_path": "images/xxx.jpg"}
+        # 2. ICO 格式: {"url": "http://.../xxx.ico", "filename": "xxx.ico"}
+        
+        download_url = ""
+        default_name = ""
+        
+        # 优先检查完整 URL
+        if data.get("url"):
+            download_url = data.get("url")
+            default_name = data.get("filename") or os.path.basename(download_url)
+        # 其次检查相对路径
+        elif data.get("relative_path"):
+            rel_path = data.get("relative_path")
+            default_name = os.path.basename(rel_path)
+            
+            # 拼凑下载 URL
+            base_url = ""
+            # 尝试从 API URL 提取 base (http://ip:port)
+            if api_url and "/api_trai" in api_url:
+                base_url = api_url.split("/api_trai")[0]
+            
+            # 如果 api_url 解析失败，尝试从全局配置获取 base
+            if not base_url:
+                login_url = config.get("login", {}).get("api_url", "")
+                if login_url and "/api_trai" in login_url:
+                    base_url = login_url.split("/api_trai")[0]
+                    
+            if not base_url:
+                QMessageBox.warning(self, "下载失败", "无法解析服务器基础地址，无法下载文件。")
+                return
+                
+            download_url = f"{base_url}/{rel_path.lstrip('/')}"
+            
+        if not download_url:
+            logger.warning("Download triggered but no valid path found in data")
+            return
+
+        logger.info(f"Download URL: {download_url}")
+        
+        # 2. 弹出保存对话框
+        ext = os.path.splitext(default_name)[1]
+        # 如果扩展名为空，尝试从 url 推断
+        if not ext:
+             ext = os.path.splitext(download_url)[1]
+             if ext:
+                 default_name += ext
+
+        file_filter = f"Image Files (*{ext});;All Files (*)"
+        
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "保存图片", 
+            default_name, 
+            file_filter
+        )
+        
+        if not save_path:
             return
             
-        # 1. 拼凑下载 URL
-        base_url = ""
-        if api_url:
-            parts = api_url.split("/api_trai", 1)
-            base_url = parts[0]
-        if not base_url:
-            return
-            
-        download_url = f"{base_url}/{rel_path.lstrip('/')}"
-        
-        # 2. 确定保存路径 (当前程序同级目录下的 downloads/image_tools 文件夹)
-        current_dir = os.getcwd()
-        save_dir = os.path.join(current_dir, "downloads", "image_tools")
-        filename = os.path.basename(rel_path)
-        save_path = os.path.join(save_dir, filename)
-        
         # 3. 启动下载线程
         self.download_worker = ImageDownloadWorker(download_url, save_path)
         self.download_worker.finished_signal.connect(self._on_download_finished)
@@ -826,17 +985,23 @@ QFrame:hover {
     def _on_download_finished(self, success: bool, path_or_error: str) -> None:
         """下载完成回调"""
         if success:
-            reply = QMessageBox.question(
-                self,
-                "下载完成",
-                f"处理后的图片已自动下载至：\n{path_or_error}\n\n是否立即打开文件夹查看？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                # 打开文件夹并选中文件 (Windows)
-                import subprocess
-                norm_path = os.path.normpath(path_or_error)
-                subprocess.Popen(f'explorer /select,"{norm_path}"')
+            # 下载成功，提示打开
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("下载成功")
+            msg_box.setText(f"文件已保存至：\n{path_or_error}")
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            
+            open_file_btn = msg_box.addButton("打开文件", QMessageBox.ButtonRole.ActionRole)
+            open_dir_btn = msg_box.addButton("打开所在目录", QMessageBox.ButtonRole.ActionRole)
+            msg_box.addButton("关闭", QMessageBox.ButtonRole.RejectRole)
+            
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == open_file_btn:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path_or_error))
+            elif msg_box.clickedButton() == open_dir_btn:
+                folder = os.path.dirname(path_or_error)
+                QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
         else:
             QMessageBox.warning(self, "下载失败", path_or_error)
 
