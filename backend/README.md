@@ -36,7 +36,20 @@ python backend/run.py
 - `opencv-python-headless`: 用于视频帧提取
 - GPU 显存: 建议 12GB+ (Wan2.1-T2V-1.3B)
 
-## �️ 图片工具 (Image Tools)
+## 📷 图片工具 (Image Tools)
+
+### 图片压缩 (Image Compression)
+
+智能压缩图片到指定文件大小 (MB)，支持自动调整质量和尺寸。
+
+**特性**:
+- **智能压缩**: 优先降低质量，若不满足则自动缩小尺寸
+- **目标大小**: 支持指定目标文件大小 (如 3.0MB)
+- **格式统一**: 输出格式默认为 JPEG 以获得最佳压缩比
+- **S3 存储**: 压缩后的图片自动上传至 S3 对象存储
+
+**接口**:
+`POST /api_trai/v1/tools/image/compress`
 
 ### 图片转 ICO (Image to ICO)
 
@@ -149,6 +162,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 2026_02_25_1729 _后端
+- **后端**: 修复图片压缩功能 (`compress_image`) 中的 `aiofiles` 未定义错误.
+- **后端**: 优化 `video_func.py` 中的模块引用路径, 移除硬编码.
+- **后端**: 优化 `router.py` 中的路由注册, 暂时注释掉 `video_router` 以避免启动冲突.
 
 ### 🛠️ 后端_2026_02_25_1555
 - **安全(image)**: 修复图片上传路径穿越漏洞, 迁移至 `aiofiles` 异步 IO 写入, 避免阻塞主线程.

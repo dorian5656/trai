@@ -10,6 +10,7 @@ import os
 import uuid
 import shutil
 import asyncio
+import aiofiles
 from pathlib import Path
 from PIL import Image
 from fastapi import UploadFile, HTTPException
