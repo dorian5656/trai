@@ -98,57 +98,10 @@ frontend/.env.*
 
 # Temporary Files
 backend/temp/
-backend/static/
-backend/logs/
-backend/app/models/._____temp/
-backend/app/models/.lock/
-nohup.out
 
-# Gitkeep
-.gitkeep
-**/temp/
+# LLM Models (Avoid committing large files)
+# Ignore all models in the main models directory
+backend/app/models/
 
-# Large AI Models
-backend/app/models/Wan-AI/
-backend/app/models/Qwen/
-backend/app/models/Robbyant/
-backend/app/models/ACE-Step/
-backend/app/model_runtimes/
-
-# Model Weights extensions
-*.safetensors
-*.bin
-*.pth
-*.pt
-*.ckpt
-*.onnx
-
-# Test Files
-test_audio.wav
-scripts/
-*.wav
-*.mp3
-*.m4a
-*.mp4
-*.gif
-*.pdf
-*.xlsx
-*.doc
-*.docx
-*.log
-
-scripts/
-frontend/nignx.txt
-frontend/src/auto-imports.d.ts
-frontend/src/components.d.ts
-backend/app/models/Tongyi-MAI/
-backend/app/models/iic/
-node_modules
-
-# Frontend Artifacts
-dist/
-dist1/
-dist2/
-frontend/dist/
-frontend/dist1/
-frontend/dist2/
+# But allow llm_study to be committed (it only contains code now)
+!backend/app/llm_study/
