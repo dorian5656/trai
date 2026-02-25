@@ -3,6 +3,9 @@ Constants for ACE-Step
 Centralized constants used across the codebase
 """
 
+# FFT size for audio processing
+FFT_SIZE = 256
+
 # ==============================================================================
 # Language Constants
 # ==============================================================================

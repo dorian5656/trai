@@ -6,7 +6,8 @@ import os
 # 获取当前脚本所在目录
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 默认模型路径指向 backend/app/models 下的对应目录
-DEFAULT_MODEL_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "../../models/Qwen/Qwen2.5-0.5B-CyberSec"))
+# 支持通过环境变量覆盖默认路径
+DEFAULT_MODEL_PATH = os.getenv("MODEL_PATH", os.path.abspath(os.path.join(CURRENT_DIR, "../../models/Qwen/Qwen2.5-0.5B-CyberSec")))
 
 def main():
     parser = argparse.ArgumentParser(description="Qwen2.5-0.5B-CyberSec 推理脚本")

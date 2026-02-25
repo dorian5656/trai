@@ -1,9 +1,0 @@
-{
-    "version": "202602111710",
-    "latest_version": "202602111710",
-    "release_date": "2026-02-11 17:11:42",
-    "download_url": "/static/exe/TraiClient_202602111710.exe",
-    "update_log": "1. 自动构建更新 (202602111710)\n2. 修复若干已知问题\n3. 提升稳定性",
-    "description": "最新版本客户端 202602111710，建议更新。",
-    "force_update": false
-}

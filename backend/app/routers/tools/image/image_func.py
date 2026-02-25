@@ -184,8 +184,9 @@ class ImageFunc:
         output_path = TEMP_DIR / output_filename
 
         try:
-            with open(input_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            async with aiofiles.open(input_path, "wb") as buffer:
+                while content := await file.read(1024 * 1024):
+                    await buffer.write(content)
             
             ImageFunc._verify_image_format(input_path)
 

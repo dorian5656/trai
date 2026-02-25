@@ -54,6 +54,14 @@ class LLMEngine:
             p.join()
 
     def add_request(self, prompt: str | list[int], sampling_params: SamplingParams, unconditional_prompt: str | list[int] | None = None):
+        """
+        Add a request to the engine queue.
+
+        Args:
+            prompt: The input prompt (text or token IDs).
+            sampling_params: Parameters for sampling (temperature, top_p, etc.).
+            unconditional_prompt: Optional unconditional prompt for classifier-free guidance.
+        """
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
         # For CFG: if cfg_scale > 1.0, create both conditional and unconditional sequences
