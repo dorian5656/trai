@@ -70,58 +70,43 @@ def retrieve_timesteps(
 
 class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
     """
-    `FlowDPMSolverMultistepScheduler` is a fast dedicated high-order solver for diffusion ODEs.
-    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
-    methods the library implements for all schedulers such as loading and saving.
+    `FlowDPMSolverMultistepScheduler` 是一个用于扩散 ODE 的快速专用高阶求解器。
+    该模型继承自 [`SchedulerMixin`] 和 [`ConfigMixin`]。请查看超类文档以了解库为所有调度器实现的通用方法，如加载和保存。
     Args:
         num_train_timesteps (`int`, defaults to 1000):
-            The number of diffusion steps to train the model. This determines the resolution of the diffusion process.
+            训练模型的扩散步数。这决定了扩散过程的分辨率。
         solver_order (`int`, defaults to 2):
-            The DPMSolver order which can be `1`, `2`, or `3`. It is recommended to use `solver_order=2` for guided
-            sampling, and `solver_order=3` for unconditional sampling. This affects the number of model outputs stored
-            and used in multistep updates.
+            DPMSolver 的阶数，可以是 `1`、`2` 或 `3`。建议对于引导采样使用 `solver_order=2`，对于无条件采样使用 `solver_order=3`。
+            这会影响多步更新中存储和使用的模型输出数量。
         prediction_type (`str`, defaults to "flow_prediction"):
-            Prediction type of the scheduler function; must be `flow_prediction` for this scheduler, which predicts
-            the flow of the diffusion process.
+            调度器函数的预测类型；对于此调度器必须是 `flow_prediction`，它预测扩散过程的流。
         shift (`float`, *optional*, defaults to 1.0):
-            A factor used to adjust the sigmas in the noise schedule. It modifies the step sizes during the sampling
-            process.
+            用于调整噪声计划中 sigmas 的因子。它在采样过程中修改步长。
         use_dynamic_shifting (`bool`, defaults to `False`):
-            Whether to apply dynamic shifting to the timesteps based on image resolution. If `True`, the shifting is
-            applied on the fly.
+            是否根据图像分辨率动态调整时间步。如果为 `True`，则实时应用调整。
         thresholding (`bool`, defaults to `False`):
-            Whether to use the "dynamic thresholding" method. This method adjusts the predicted sample to prevent
-            saturation and improve photorealism.
+            是否使用 "动态阈值" 方法。此方法调整预测样本以防止饱和并提高真实感。
         dynamic_thresholding_ratio (`float`, defaults to 0.995):
-            The ratio for the dynamic thresholding method. Valid only when `thresholding=True`.
+            动态阈值方法的比率。仅当 `thresholding=True` 时有效。
         sample_max_value (`float`, defaults to 1.0):
-            The threshold value for dynamic thresholding. Valid only when `thresholding=True` and
-            `algorithm_type="dpmsolver++"`.
+            动态阈值的阈值。仅当 `thresholding=True` 且 `algorithm_type="dpmsolver++"` 时有效。
         algorithm_type (`str`, defaults to `dpmsolver++`):
-            Algorithm type for the solver; can be `dpmsolver`, `dpmsolver++`, `sde-dpmsolver` or `sde-dpmsolver++`. The
-            `dpmsolver` type implements the algorithms in the [DPMSolver](https://huggingface.co/papers/2206.00927)
-            paper, and the `dpmsolver++` type implements the algorithms in the
-            [DPMSolver++](https://huggingface.co/papers/2211.01095) paper. It is recommended to use `dpmsolver++` or
-            `sde-dpmsolver++` with `solver_order=2` for guided sampling like in Stable Diffusion.
+            求解器的算法类型；可以是 `dpmsolver`、`dpmsolver++`、`sde-dpmsolver` 或 `sde-dpmsolver++`。
+            `dpmsolver` 类型实现了 [DPMSolver](https://huggingface.co/papers/2206.00927) 论文中的算法，
+            `dpmsolver++` 类型实现了 [DPMSolver++](https://huggingface.co/papers/2211.01095) 论文中的算法。
+            建议使用 `dpmsolver++` 或 `sde-dpmsolver++` 并设置 `solver_order=2` 用于引导采样，如 Stable Diffusion 中所示。
         solver_type (`str`, defaults to `midpoint`):
-            Solver type for the second-order solver; can be `midpoint` or `heun`. The solver type slightly affects the
-            sample quality, especially for a small number of steps. It is recommended to use `midpoint` solvers.
+            二阶求解器的求解器类型；可以是 `midpoint` 或 `heun`。求解器类型稍微影响样本质量，特别是对于少量步数。建议使用 `midpoint` 求解器。
         lower_order_final (`bool`, defaults to `True`):
-            Whether to use lower-order solvers in the final steps. Only valid for < 15 inference steps. This can
-            stabilize the sampling of DPMSolver for steps < 15, especially for steps <= 10.
+            是否在最后几步使用低阶求解器。仅对 < 15 推理步数有效。这可以稳定 DPMSolver 在步数 < 15 时的采样，特别是对于步数 <= 10 的情况。
         euler_at_final (`bool`, defaults to `False`):
-            Whether to use Euler's method in the final step. It is a trade-off between numerical stability and detail
-            richness. This can stabilize the sampling of the SDE variant of DPMSolver for small number of inference
-            steps, but sometimes may result in blurring.
+            是否在最后一步使用 Euler 方法。这是数值稳定性和细节丰富度之间的权衡。这可以稳定 SDE 变体 DPMSolver 在少量推理步数下的采样，但有时可能会导致模糊。
         final_sigmas_type (`str`, *optional*, defaults to "zero"):
-            The final `sigma` value for the noise schedule during the sampling process. If `"sigma_min"`, the final
-            sigma is the same as the last sigma in the training schedule. If `zero`, the final sigma is set to 0.
+            采样过程中噪声计划的最终 `sigma` 值。如果为 `"sigma_min"`，最终 sigma 与训练计划中的最后一个 sigma 相同。如果为 `zero`，最终 sigma 设置为 0。
         lambda_min_clipped (`float`, defaults to `-inf`):
-            Clipping threshold for the minimum value of `lambda(t)` for numerical stability. This is critical for the
-            cosine (`squaredcos_cap_v2`) noise schedule.
+            `lambda(t)` 最小值的裁剪阈值，用于数值稳定性。这对于余弦 (`squaredcos_cap_v2`) 噪声计划至关重要。
         variance_type (`str`, *optional*):
-            Set to "learned" or "learned_range" for diffusion models that predict variance. If set, the model's output
-            contains the predicted Gaussian variance.
+            对于预测方差的扩散模型，设置为 "learned" 或 "learned_range"。如果设置，模型的输出包含预测的高斯方差。
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -203,24 +188,24 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
     @property
     def step_index(self):
         """
-        The index counter for current timestep. It will increase 1 after each scheduler step.
+        当前时间步的索引计数器。每次调度器步进后增加 1。
         """
         return self._step_index
 
     @property
     def begin_index(self):
         """
-        The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
+        第一个时间步的索引。应使用 `set_begin_index` 方法从管道设置。
         """
         return self._begin_index
 
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler.set_begin_index
     def set_begin_index(self, begin_index: int = 0):
         """
-        Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
+        设置调度器的起始索引。此函数应在推理前从管道运行。
         Args:
             begin_index (`int`):
-                The begin index for the scheduler.
+                调度器的起始索引。
         """
         self._begin_index = begin_index
 
@@ -234,12 +219,12 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         shift: Optional[Union[float, None]] = None,
     ):
         """
-        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+        设置用于扩散链的离散时间步（在推理前运行）。
         Args:
             num_inference_steps (`int`):
-                Total number of the spacing of the time steps.
+                时间步的总数。
             device (`str` or `torch.device`, *optional*):
-                The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
+                时间步应移动到的设备。如果为 `None`，则不移动时间步。
         """
 
         if self.config.use_dynamic_shifting and mu is None:
@@ -348,21 +333,19 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        Convert the model output to the corresponding type the DPMSolver/DPMSolver++ algorithm needs. DPM-Solver is
-        designed to discretize an integral of the noise prediction model, and DPM-Solver++ is designed to discretize an
-        integral of the data prediction model.
+        将模型输出转换为 DPMSolver/DPMSolver++ 算法所需的相应类型。DPM-Solver 旨在离散化噪声预测模型的积分，
+        而 DPM-Solver++ 旨在离散化数据预测模型的积分。
         <Tip>
-        The algorithm and model type are decoupled. You can use either DPMSolver or DPMSolver++ for both noise
-        prediction and data prediction models.
+        算法和模型类型是解耦的。您可以为噪声预测和数据预测模型使用 DPMSolver 或 DPMSolver++。
         </Tip>
         Args:
             model_output (`torch.Tensor`):
-                The direct output from the learned diffusion model.
+                学习到的扩散模型的直接输出。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
         Returns:
             `torch.Tensor`:
-                The converted model output.
+                转换后的模型输出。
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         if sample is None:
@@ -423,15 +406,15 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        One step for the first-order DPMSolver (equivalent to DDIM).
+        一阶 DPMSolver 的一步（相当于 DDIM）。
         Args:
             model_output (`torch.Tensor`):
-                The direct output from the learned diffusion model.
+                学习到的扩散模型的直接输出。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
         Returns:
             `torch.Tensor`:
-                The sample tensor at the previous timestep.
+                上一个时间步的样本张量。
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         prev_timestep = args[1] if len(args) > 1 else kwargs.pop(
@@ -494,15 +477,15 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        One step for the second-order multistep DPMSolver.
+        二阶多步 DPMSolver 的一步。
         Args:
             model_output_list (`List[torch.Tensor]`):
-                The direct outputs from learned diffusion model at current and latter timesteps.
+                当前和后续时间步学习到的扩散模型的直接输出。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
         Returns:
             `torch.Tensor`:
-                The sample tensor at the previous timestep.
+                上一个时间步的样本张量。
         """
         timestep_list = args[0] if len(args) > 0 else kwargs.pop(
             "timestep_list", None)
@@ -603,15 +586,15 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        One step for the third-order multistep DPMSolver.
+        三阶多步 DPMSolver 的一步。
         Args:
             model_output_list (`List[torch.Tensor]`):
-                The direct outputs from learned diffusion model at current and latter timesteps.
+                当前和后续时间步学习到的扩散模型的直接输出。
             sample (`torch.Tensor`):
-                A current instance of a sample created by diffusion process.
+                扩散过程创建的当前样本实例。
         Returns:
             `torch.Tensor`:
-                The sample tensor at the previous timestep.
+                上一个时间步的样本张量。
         """
 
         timestep_list = args[0] if len(args) > 0 else kwargs.pop(
@@ -694,7 +677,7 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     def _init_step_index(self, timestep):
         """
-        Initialize the step_index counter for the scheduler.
+        初始化调度器的 step_index 计数器。
         """
 
         if self.begin_index is None:
@@ -715,26 +698,23 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[SchedulerOutput, Tuple]:
         """
-        Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
-        the multistep DPMSolver.
+        通过反转 SDE 预测上一个时间步的样本。此函数使用多步 DPMSolver 传播样本。
         Args:
             model_output (`torch.Tensor`):
-                The direct output from learned diffusion model.
+                学习到的扩散模型的直接输出。
             timestep (`int`):
-                The current discrete timestep in the diffusion chain.
+                扩散链中的当前离散时间步。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
             generator (`torch.Generator`, *optional*):
-                A random number generator.
+                随机数生成器。
             variance_noise (`torch.Tensor`):
-                Alternative to generating noise with `generator` by directly providing the noise for the variance
-                itself. Useful for methods such as [`LEdits++`].
+                替代使用 `generator` 生成噪声，直接提供用于方差本身的噪声。对 [`LEdits++`] 等方法有用。
             return_dict (`bool`):
-                Whether or not to return a [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`.
+                是否返回 [`~schedulers.scheduling_utils.SchedulerOutput`] 或 `tuple`。
         Returns:
             [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`:
-                If return_dict is `True`, [`~schedulers.scheduling_utils.SchedulerOutput`] is returned, otherwise a
-                tuple is returned where the first element is the sample tensor.
+                如果 return_dict 为 `True`，则返回 [`~schedulers.scheduling_utils.SchedulerOutput`]，否则返回一个元组，其中第一个元素是样本张量。
         """
         if self.num_inference_steps is None:
             raise ValueError(
@@ -802,14 +782,13 @@ class FlowDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
     def scale_model_input(self, sample: torch.Tensor, *args,
                           **kwargs) -> torch.Tensor:
         """
-        Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
-        current timestep.
+        确保与需要根据当前时间步缩放去噪模型输入的调度器可互换。
         Args:
             sample (`torch.Tensor`):
-                The input sample.
+                输入样本。
         Returns:
             `torch.Tensor`:
-                A scaled input sample.
+                缩放后的输入样本。
         """
         return sample
 

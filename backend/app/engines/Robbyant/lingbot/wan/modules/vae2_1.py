@@ -15,7 +15,7 @@ CACHE_T = 2
 
 class CausalConv3d(nn.Conv3d):
     """
-    Causal 3d convolusion.
+    因果 3D 卷积。
     """
 
     def __init__(self, *args, **kwargs):
@@ -57,7 +57,7 @@ class Upsample(nn.Upsample):
 
     def forward(self, x):
         """
-        Fix bfloat16 support for nearest neighbor interpolation.
+        修复最近邻插值对 bfloat16 的支持。
         """
         return super().forward(x.float()).type_as(x)
 

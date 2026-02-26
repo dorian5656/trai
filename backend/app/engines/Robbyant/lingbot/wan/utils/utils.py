@@ -25,17 +25,17 @@ def rand_name(length=8, suffix=''):
 
 def merge_video_audio(video_path: str, audio_path: str):
     """
-    Merge the video and audio into a new video, with the duration set to the shorter of the two,
-    and overwrite the original video file.
+    将视频和音频合并为一个新视频，时长设置为两者中较短的一个，
+    并覆盖原始视频文件。
 
     Parameters:
-    video_path (str): Path to the original video file
-    audio_path (str): Path to the audio file
+    video_path (str): 原始视频文件的路径
+    audio_path (str): 音频文件的路径
     """
-    # set logging
+    # 设置日志
     logging.basicConfig(level=logging.INFO)
 
-    # check
+    # 检查
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"video file {video_path} does not exist")
     if not os.path.exists(audio_path):
@@ -45,7 +45,7 @@ def merge_video_audio(video_path: str, audio_path: str):
     temp_output = f"{base}_temp{ext}"
 
     try:
-        # create ffmpeg command
+        # 创建ffmpeg命令
         command = [
             'ffmpeg',
             '-y',  # overwrite
@@ -67,12 +67,12 @@ def merge_video_audio(video_path: str, audio_path: str):
             temp_output
         ]
 
-        # execute the command
+        # 执行命令
         logging.info("Start merging video and audio...")
         result = subprocess.run(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # check result
+        # 检查结果
         if result.returncode != 0:
             error_msg = f"FFmpeg execute failed: {result.stderr}"
             logging.error(error_msg)
@@ -94,13 +94,13 @@ def save_video(tensor,
                nrow=8,
                normalize=True,
                value_range=(-1, 1)):
-    # cache file
+    # 缓存文件
     cache_file = osp.join('/tmp', rand_name(
         suffix=suffix)) if save_file is None else save_file
 
-    # save to cache
+    # 保存到缓存
     try:
-        # preprocess
+        # 预处理
         tensor = tensor.clamp(min(value_range), max(value_range))
         tensor = torch.stack([
             torchvision.utils.make_grid(
@@ -110,7 +110,7 @@ def save_video(tensor,
                              dim=1).permute(1, 2, 3, 0)
         tensor = (tensor * 255).type(torch.uint8).cpu()
 
-        # write video
+        # 写入视频
         writer = imageio.get_writer(
             cache_file, fps=fps, codec='libx264', quality=8)
         for frame in tensor.numpy():
@@ -121,14 +121,14 @@ def save_video(tensor,
 
 
 def save_image(tensor, save_file, nrow=8, normalize=True, value_range=(-1, 1)):
-    # cache file
+    # 缓存文件
     suffix = osp.splitext(save_file)[1]
     if suffix.lower() not in [
             '.jpg', '.jpeg', '.png', '.tiff', '.gif', '.webp'
     ]:
         suffix = '.png'
 
-    # save to cache
+    # 保存到缓存
     try:
         tensor = tensor.clamp(min(value_range), max(value_range))
         torchvision.utils.save_image(
@@ -144,7 +144,7 @@ def save_image(tensor, save_file, nrow=8, normalize=True, value_range=(-1, 1)):
 
 def str2bool(v):
     """
-    Convert a string to a boolean.
+    将字符串转换为布尔值。
 
     Supported true values: 'yes', 'true', 't', 'y', '1'
     Supported false values: 'no', 'false', 'f', 'n', '0'
@@ -200,24 +200,24 @@ def masks_like(tensor, zero=False, generator=None, p=0.2):
 
 
 def best_output_size(w, h, dw, dh, expected_area):
-    # float output size
+    # 浮点输出尺寸
     ratio = w / h
     ow = (expected_area * ratio)**0.5
     oh = expected_area / ow
 
-    # process width first
+    # 优先处理宽度
     ow1 = int(ow // dw * dw)
     oh1 = int(expected_area / ow1 // dh * dh)
     assert ow1 % dw == 0 and oh1 % dh == 0 and ow1 * oh1 <= expected_area
     ratio1 = ow1 / oh1
 
-    # process height first
+    # 优先处理高度
     oh2 = int(oh // dh * dh)
     ow2 = int(expected_area / oh2 // dw * dw)
     assert oh2 % dh == 0 and ow2 % dw == 0 and ow2 * oh2 <= expected_area
     ratio2 = ow2 / oh2
 
-    # compare ratios
+    # 比较比例
     if max(ratio / ratio1, ratio1 / ratio) < max(ratio / ratio2,
                                                  ratio2 / ratio):
         return ow1, oh1

@@ -49,6 +49,10 @@ class GELU(nn.Module):
 
 
 class T5LayerNorm(nn.Module):
+    """
+    T5 LayerNorm 层。
+    不使用偏差项，仅缩放。
+    """
 
     def __init__(self, dim, eps=1e-6):
         super(T5LayerNorm, self).__init__()
@@ -65,6 +69,9 @@ class T5LayerNorm(nn.Module):
 
 
 class T5Attention(nn.Module):
+    """
+    T5 注意力层。
+    """
 
     def __init__(self, dim, dim_attn, num_heads, dropout=0.1):
         assert dim_attn % num_heads == 0
@@ -74,7 +81,7 @@ class T5Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim_attn // num_heads
 
-        # layers
+        # 层
         self.q = nn.Linear(dim, dim_attn, bias=False)
         self.k = nn.Linear(dim, dim_attn, bias=False)
         self.v = nn.Linear(dim, dim_attn, bias=False)
@@ -83,20 +90,24 @@ class T5Attention(nn.Module):
 
     def forward(self, x, context=None, mask=None, pos_bias=None):
         """
-        x:          [B, L1, C].
-        context:    [B, L2, C] or None.
-        mask:       [B, L2] or [B, L1, L2] or None.
+        前向传播。
+
+        Args:
+            x (Tensor): 输入张量，形状为 [B, L1, C]
+            context (Tensor, optional): 上下文张量，形状为 [B, L2, C]
+            mask (Tensor, optional): 掩码张量，形状为 [B, L2] 或 [B, L1, L2]
+            pos_bias (Tensor, optional): 位置偏置
         """
-        # check inputs
+        # 检查输入
         context = x if context is None else context
         b, n, c = x.size(0), self.num_heads, self.head_dim
 
-        # compute query, key, value
+        # 计算Query, Key, Value
         q = self.q(x).view(b, -1, n, c)
         k = self.k(context).view(b, -1, n, c)
         v = self.v(context).view(b, -1, n, c)
 
-        # attention bias
+        # 注意力偏置
         attn_bias = x.new_zeros(b, n, q.size(1), k.size(1))
         if pos_bias is not None:
             attn_bias += pos_bias
@@ -106,12 +117,12 @@ class T5Attention(nn.Module):
                              -1) if mask.ndim == 2 else mask.unsqueeze(1)
             attn_bias.masked_fill_(mask == 0, torch.finfo(x.dtype).min)
 
-        # compute attention (T5 does not use scaling)
+        # 计算注意力 (T5不使用缩放)
         attn = torch.einsum('binc,bjnc->bnij', q, k) + attn_bias
         attn = F.softmax(attn.float(), dim=-1).type_as(attn)
         x = torch.einsum('bnij,bjnc->binc', attn, v)
 
-        # output
+        # 输出
         x = x.reshape(b, -1, n * c)
         x = self.o(x)
         x = self.dropout(x)
@@ -119,13 +130,17 @@ class T5Attention(nn.Module):
 
 
 class T5FeedForward(nn.Module):
+    """
+    T5 前馈网络层 (FFN)。
+    使用 Gated GELU 激活函数。
+    """
 
     def __init__(self, dim, dim_ffn, dropout=0.1):
         super(T5FeedForward, self).__init__()
         self.dim = dim
         self.dim_ffn = dim_ffn
 
-        # layers
+        # 层
         self.gate = nn.Sequential(nn.Linear(dim, dim_ffn, bias=False), GELU())
         self.fc1 = nn.Linear(dim, dim_ffn, bias=False)
         self.fc2 = nn.Linear(dim_ffn, dim, bias=False)
@@ -157,7 +172,7 @@ class T5SelfAttention(nn.Module):
         self.num_buckets = num_buckets
         self.shared_pos = shared_pos
 
-        # layers
+        # 层
         self.norm1 = T5LayerNorm(dim)
         self.attn = T5Attention(dim, dim_attn, num_heads, dropout)
         self.norm2 = T5LayerNorm(dim)
@@ -191,7 +206,7 @@ class T5CrossAttention(nn.Module):
         self.num_buckets = num_buckets
         self.shared_pos = shared_pos
 
-        # layers
+        # 层
         self.norm1 = T5LayerNorm(dim)
         self.self_attn = T5Attention(dim, dim_attn, num_heads, dropout)
         self.norm2 = T5LayerNorm(dim)
@@ -217,6 +232,9 @@ class T5CrossAttention(nn.Module):
 
 
 class T5RelativeEmbedding(nn.Module):
+    """
+    T5 相对位置嵌入层。
+    """
 
     def __init__(self, num_buckets, num_heads, bidirectional, max_dist=128):
         super(T5RelativeEmbedding, self).__init__()
@@ -225,7 +243,7 @@ class T5RelativeEmbedding(nn.Module):
         self.bidirectional = bidirectional
         self.max_dist = max_dist
 
-        # layers
+        # 层
         self.embedding = nn.Embedding(num_buckets, num_heads)
 
     def forward(self, lq, lk):
@@ -241,7 +259,7 @@ class T5RelativeEmbedding(nn.Module):
         return rel_pos_embeds.contiguous()
 
     def _relative_position_bucket(self, rel_pos):
-        # preprocess
+        # 预处理
         if self.bidirectional:
             num_buckets = self.num_buckets // 2
             rel_buckets = (rel_pos > 0).long() * num_buckets
@@ -251,7 +269,7 @@ class T5RelativeEmbedding(nn.Module):
             rel_buckets = 0
             rel_pos = -torch.min(rel_pos, torch.zeros_like(rel_pos))
 
-        # embeddings for small and large positions
+        # 小位置和大位置的嵌入
         max_exact = num_buckets // 2
         rel_pos_large = max_exact + (torch.log(rel_pos.float() / max_exact) /
                                      math.log(self.max_dist / max_exact) *
@@ -283,7 +301,7 @@ class T5Encoder(nn.Module):
         self.num_buckets = num_buckets
         self.shared_pos = shared_pos
 
-        # layers
+        # 层
         self.token_embedding = vocab if isinstance(vocab, nn.Embedding) \
             else nn.Embedding(vocab, dim)
         self.pos_embedding = T5RelativeEmbedding(
@@ -295,7 +313,7 @@ class T5Encoder(nn.Module):
         ])
         self.norm = T5LayerNorm(dim)
 
-        # initialize weights
+        # 初始化权重
         self.apply(init_weights)
 
     def forward(self, ids, mask=None):
@@ -331,7 +349,7 @@ class T5Decoder(nn.Module):
         self.num_buckets = num_buckets
         self.shared_pos = shared_pos
 
-        # layers
+        # 层
         self.token_embedding = vocab if isinstance(vocab, nn.Embedding) \
             else nn.Embedding(vocab, dim)
         self.pos_embedding = T5RelativeEmbedding(
@@ -343,19 +361,19 @@ class T5Decoder(nn.Module):
         ])
         self.norm = T5LayerNorm(dim)
 
-        # initialize weights
+        # 初始化权重
         self.apply(init_weights)
 
     def forward(self, ids, mask=None, encoder_states=None, encoder_mask=None):
         b, s = ids.size()
 
-        # causal mask
+        # 因果掩码
         if mask is None:
             mask = torch.tril(torch.ones(1, s, s).to(ids.device))
         elif mask.ndim == 2:
             mask = torch.tril(mask.unsqueeze(1).expand(-1, s, -1))
 
-        # layers
+        # 层
         x = self.token_embedding(ids)
         x = self.dropout(x)
         e = self.pos_embedding(x.size(1),
@@ -390,7 +408,7 @@ class T5Model(nn.Module):
         self.decoder_layers = decoder_layers
         self.num_buckets = num_buckets
 
-        # layers
+        # 层
         self.token_embedding = nn.Embedding(vocab_size, dim)
         self.encoder = T5Encoder(self.token_embedding, dim, dim_attn, dim_ffn,
                                  num_heads, encoder_layers, num_buckets,
@@ -400,7 +418,7 @@ class T5Model(nn.Module):
                                  shared_pos, dropout)
         self.head = nn.Linear(dim, vocab_size, bias=False)
 
-        # initialize weights
+        # 初始化权重
         self.apply(init_weights)
 
     def forward(self, encoder_ids, encoder_mask, decoder_ids, decoder_mask):
@@ -418,10 +436,10 @@ def _t5(name,
         dtype=torch.float32,
         device='cpu',
         **kwargs):
-    # sanity check
+    # 完整性检查
     assert not (encoder_only and decoder_only)
 
-    # params
+    # 参数
     if encoder_only:
         model_cls = T5Encoder
         kwargs['vocab'] = kwargs.pop('vocab_size')
@@ -435,14 +453,14 @@ def _t5(name,
     else:
         model_cls = T5Model
 
-    # init model
+    # 初始化模型
     with torch.device(device):
         model = model_cls(**kwargs)
 
-    # set device
+    # 设置设备
     model = model.to(dtype=dtype, device=device)
 
-    # init tokenizer
+    # 初始化分词器
     if return_tokenizer:
         from .tokenizers import HuggingfaceTokenizer
         tokenizer = HuggingfaceTokenizer(f'google/{name}', **tokenizer_kwargs)
@@ -486,7 +504,7 @@ class T5EncoderModel:
         self.checkpoint_path = checkpoint_path
         self.tokenizer_path = tokenizer_path
 
-        # init model
+        # 初始化模型
         model = umt5_xxl(
             encoder_only=True,
             return_tokenizer=False,
@@ -499,7 +517,7 @@ class T5EncoderModel:
             self.model = shard_fn(self.model, sync_module_states=False)
         else:
             self.model.to(self.device)
-        # init tokenizer
+        # 初始化分词器
         self.tokenizer = HuggingfaceTokenizer(
             name=tokenizer_path, seq_len=text_len, clean='whitespace')
 
