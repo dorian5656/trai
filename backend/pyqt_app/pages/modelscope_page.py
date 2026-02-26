@@ -70,12 +70,13 @@ class UploadWorker(QThread):
     """
     finished_signal = pyqtSignal(bool, str)
 
-    def __init__(self, model_id, local_dir, access_token, commit_message):
+    def __init__(self, model_id, local_dir, access_token, commit_message, log=None):
         super().__init__()
         self.model_id = model_id
         self.local_dir = local_dir
         self.access_token = access_token
         self.commit_message = commit_message
+        self.log = log or logger.bind(page="modelscope")
 
     def cleanup_temp_dir(self, model_dir):
         """清理 SDK 可能残留的临时 Git 目录"""
@@ -95,12 +96,12 @@ class UploadWorker(QThread):
         try:
             # 1. 验证目录和文件
             if not os.path.isdir(self.local_dir):
-                logger.error(f"错误: 模型目录不存在 → {self.local_dir}")
+                self.log.error(f"错误: 模型目录不存在 → {self.local_dir}")
                 self.finished_signal.emit(False, "模型目录不存在")
                 return
 
             if not os.listdir(self.local_dir):
-                logger.error(f"错误: 模型目录为空 → {self.local_dir}")
+                self.log.error(f"错误: 模型目录为空 → {self.local_dir}")
                 self.finished_signal.emit(False, "模型目录为空")
                 return
             
@@ -111,16 +112,16 @@ class UploadWorker(QThread):
             api = HubApi()
             try:
                 api.login(self.access_token)
-                logger.success("ModelScope 账号登录成功")
+                self.log.success("ModelScope 账号登录成功")
             except Exception as e:
-                logger.error(f"登录失败: {e}")
-                logger.info("请访问: https://modelscope.cn/my/access/token 获取有效Token")
+                self.log.error(f"登录失败: {e}")
+                self.log.info("请访问: https://modelscope.cn/my/access/token 获取有效Token")
                 self.finished_signal.emit(False, f"登录失败: {e}")
                 return
             
             # 4. 上传
-            logger.info(f"开始上传模型至 ModelScope: {self.model_id}")
-            logger.info(f"本地目录: {self.local_dir}")
+            self.log.info(f"开始上传模型至 ModelScope: {self.model_id}")
+            self.log.info(f"本地目录: {self.local_dir}")
             
             api.upload_folder(
                 folder_path=self.local_dir,
@@ -129,17 +130,17 @@ class UploadWorker(QThread):
                 commit_message=self.commit_message
             )
             
-            logger.success("上传成功！")
-            logger.info(f"模型主页: https://www.modelscope.cn/models/{self.model_id}")
-            logger.info(f"文件列表: https://www.modelscope.cn/models/{self.model_id}/files")
+            self.log.success("上传成功！")
+            self.log.info(f"模型主页: https://www.modelscope.cn/models/{self.model_id}")
+            self.log.info(f"文件列表: https://www.modelscope.cn/models/{self.model_id}/files")
             self.finished_signal.emit(True, "上传成功")
 
         except Exception as e:
-            logger.error(f"上传失败: {type(e).__name__}: {e}")
-            logger.info("排查建议:")
-            logger.info("1. 确认 ACCESS_TOKEN 有效")
-            logger.info("2. 确认 MODEL_ID 中的用户名与你的账号完全一致（区分大小写）")
-            logger.info("3. 检查网络是否可访问 ModelScope")
+            self.log.error(f"上传失败: {type(e).__name__}: {e}")
+            self.log.info("排查建议:")
+            self.log.info("1. 确认 ACCESS_TOKEN 有效")
+            self.log.info("2. 确认 MODEL_ID 中的用户名与你的账号完全一致（区分大小写）")
+            self.log.info("3. 检查网络是否可访问 ModelScope")
             self.finished_signal.emit(False, str(e))
 
 class DownloadWorker(QThread):
@@ -148,27 +149,28 @@ class DownloadWorker(QThread):
     """
     finished_signal = pyqtSignal(bool, str)
 
-    def __init__(self, model_id, local_dir):
+    def __init__(self, model_id, local_dir, log=None):
         super().__init__()
         self.model_id = model_id
         self.local_dir = local_dir
+        self.log = log or logger.bind(page="modelscope")
 
     def run(self):
         try:
-            logger.info(f"模型: {self.model_id}")
-            logger.info(f"目标路径: {self.local_dir}")
+            self.log.info(f"模型: {self.model_id}")
+            self.log.info(f"目标路径: {self.local_dir}")
             os.makedirs(self.local_dir, exist_ok=True)
 
-            logger.info("开始下载（自动断点续传）...")
+            self.log.info("开始下载（自动断点续传）...")
             final_path = snapshot_download(
                 model_id=self.model_id,
                 revision="master",
                 local_dir=self.local_dir,    # 关键：直接指定完整路径
             )
-            logger.info(f"下载成功！路径: {os.path.abspath(final_path)}")
+            self.log.info(f"下载成功！路径: {os.path.abspath(final_path)}")
             self.finished_signal.emit(True, "下载成功")
         except Exception as e:
-            logger.error(f"下载失败: {e}")
+            self.log.error(f"下载失败: {e}")
             self.finished_signal.emit(False, str(e))
 
 class UploadTab(QWidget):
@@ -254,7 +256,7 @@ class UploadTab(QWidget):
         
         # 通知主窗口清空日志（如果需要）
         # 这里为了简单，我们假设主窗口会处理日志显示
-        self.worker = UploadWorker(model_id, local_dir, token, commit_msg)
+        self.worker = UploadWorker(model_id, local_dir, token, commit_msg, log=logger.bind(page="modelscope"))
         self.worker.finished_signal.connect(self.on_upload_finished)
         self.worker.start()
 
@@ -360,7 +362,7 @@ class DownloadTab(QWidget):
         self.start_btn.setEnabled(False)
         self.start_btn.setText("正在下载...")
         
-        self.worker = DownloadWorker(model_id, local_dir)
+        self.worker = DownloadWorker(model_id, local_dir, log=logger.bind(page="modelscope"))
         self.worker.finished_signal.connect(self.on_download_finished)
         self.worker.start()
 
@@ -428,9 +430,6 @@ class ModelScopePage(QWidget):
         main_layout.addWidget(log_group, 1)
 
     def setup_logging(self):
-        # 移除 loguru 默认 handler
-        logger.remove()
-        
         # 定义日志格式 (添加换行符以适配 insertText)
         log_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>\n"
         
@@ -438,8 +437,8 @@ class ModelScopePage(QWidget):
         self.log_signal_emitter = LogSignal()
         self.log_signal_emitter.log_signal.connect(self.append_log)
         
-        # loguru 输出到 sink
-        logger.add(self.log_signal_emitter.write, format=log_format, level="INFO")
+        # 仅接收本页面绑定的日志
+        logger.add(self.log_signal_emitter.write, format=log_format, level="INFO", filter=lambda r: r["extra"].get("page") == "modelscope")
 
         # 创建流式日志捕获器
         self.stream_logger = StreamLogger(self.log_signal_emitter.log_signal)
@@ -447,17 +446,7 @@ class ModelScopePage(QWidget):
         # 保存原始 stderr 以便发生错误时恢复或打印
         self.original_stderr = sys.__stderr__ if sys.__stderr__ else sys.stderr
 
-        # 重定向 stderr 到 sink (捕获 tqdm 进度条)
-        # 注意：不再重定向 stdout，避免捕获其他模块的 print 输出
-        # sys.stdout = self.stream_logger
-        sys.stderr = self.stream_logger
-        
-        # 尝试覆盖原始流，防止某些库直接使用 sys.__stderr__
-        try:
-            # sys.__stdout__ = self.stream_logger
-            sys.__stderr__ = self.stream_logger
-        except AttributeError:
-            pass # 某些环境可能不允许修改 __stderr__
+        # 不重定向全局 stderr，避免其他模块日志混入
 
         # 配置 modelscope 的 stdlib 日志，使其输出到 GUI
         def setup_stdlib_logger(logger_name):
@@ -510,4 +499,3 @@ class ModelScopePage(QWidget):
             # 如果日志处理出错，必须写回原始 stderr，否则会无限递归
             if self.original_stderr:
                 self.original_stderr.write(f"Log Error: {e}\n")
-

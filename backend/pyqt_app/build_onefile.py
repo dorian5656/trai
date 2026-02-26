@@ -66,7 +66,7 @@ def upload_to_server(local_file_path, exe_name, version):
         logger.success(f"EXE 上传成功: {remote_file_path}")
         
         # 2. 更新 version.json
-        # 手动更改 update_log 内容
+        # 手动更改更新日志：update_log 的内容
         version_file = f"{remote_dir}/version.json"
         version_data = {
             "version": version,
