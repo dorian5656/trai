@@ -163,6 +163,10 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_26_1716
+- **安全**: 升级 `xhtml2pdf` 至 `>=0.2.17` 以修复高危 ReDoS 漏洞 (CVE-2024-25885).
+- **依赖**: 更新 `backend/requirements.txt` 锁定 `xhtml2pdf` 最低安全版本.
+
 ### 🛠️ 后端_2026_02_26_1659
 
 - **优化(speech)**: 增强语音服务健康检查逻辑, 实现服务启动时后台预加载模型 (`speech_service.initialize()`), 消除首次调用延迟.
