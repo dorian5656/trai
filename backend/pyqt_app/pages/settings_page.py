@@ -21,7 +21,7 @@ import requests
 
 # 当前版本号，更新时手动更改。格式改为时间戳格式 (YYYYMMDDHHMM)，以匹配服务端版本号
 # 202602251730 表示 2026年2月25日 17时30分
-CURRENT_VERSION = "202602260945"
+CURRENT_VERSION = "202602261725"
 
 def _is_timestamp(v: str) -> bool:
     """判断是否为时间戳格式 (纯数字且长度>=8)"""
