@@ -16,7 +16,19 @@ import paramiko
 from loguru import logger
 from dotenv import load_dotenv
 
-def upload_to_server(local_file_path, exe_name, timestamp):
+import re
+
+def get_current_version():
+    """从 settings_page.py 读取 CURRENT_VERSION"""
+    settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pages', 'settings_page.py')
+    with open(settings_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+        match = re.search(r'CURRENT_VERSION\s*=\s*"(\d+)"', content)
+        if match:
+            return match.group(1)
+    return datetime.datetime.now().strftime('%Y%m%d%H%M')
+
+def upload_to_server(local_file_path, exe_name, version):
     """上传文件到服务器并更新 version.json"""
     # 加载 .env 配置
     # 假设 .env 在 backend 目录下
@@ -54,14 +66,15 @@ def upload_to_server(local_file_path, exe_name, timestamp):
         logger.success(f"EXE 上传成功: {remote_file_path}")
         
         # 2. 更新 version.json
+        # 手动更改 update_log 内容
         version_file = f"{remote_dir}/version.json"
         version_data = {
-            "version": timestamp,
-            "latest_version": timestamp,
+            "version": version,
+            "latest_version": version,
             "release_date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "download_url": f"/static/exe/{exe_name}.exe",
-            "update_log": f"1. 自动构建更新 ({timestamp})\n2. 修复若干已知问题\n3. 提升稳定性",
-            "description": f"最新版本客户端 {timestamp}，建议更新。",
+            "download_url": f"/static/{exe_name}.exe",
+            "update_log": f"1.优化文档工具箱\n2. 优化检查更新\n3. 新增图片工具箱",
+            "description": f"最新版本客户端 {version}，建议更新。",
             "force_update": False
         }
         
@@ -86,9 +99,11 @@ def build():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     
-    # 生成带时间戳的文件名
-    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
-    exe_name = f'TraiClient_{timestamp}'
+    # 获取版本号 (从 settings_page.py 读取，确保一致性)
+    version = get_current_version()
+    logger.info(f"当前构建版本: {version}")
+    
+    exe_name = f'TraiClient_{version}'
     
     # 使用绝对路径以避免 PyInstaller 路径解析错误
     config_path = os.path.join(script_dir, 'pages', 'config.json')
@@ -155,12 +170,24 @@ def build():
         sys.exit(1)
     logger.success(f"\n构建完成！可执行文件位于:\n{built_exe_path}")
     
+    # 复制一份exe到指定目录
+    # 使用相对路径: 当前脚本目录下的 exe 文件夹
+    target_dir = os.path.join(script_dir, "exe")
+    try:
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+        
+        target_file = os.path.join(target_dir, f"{exe_name}.exe")
+        shutil.copy2(built_exe_path, target_file)
+        logger.success(f"EXE 已复制到: {target_file}")
+    except Exception as e:
+        logger.error(f"复制 EXE 失败: {e}")
+
     # 自动上传到服务器
     try:
-        upload_to_server(built_exe_path, exe_name, timestamp)
+        upload_to_server(built_exe_path, exe_name, version)
     except Exception as e:
-        logger.error(f"自动化部署流程失败: {e}")
-        # 这里可以选择是否退出，或者仅记录错误
+        logger.error(f"上传失败: {e}")
 
 if __name__ == "__main__":
     build()
