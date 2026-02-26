@@ -164,6 +164,9 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ## 📝 更新日志 (Changelog)
 
 ### 🛠️ 后端_2026_02_26_1716
+- **安全**: 升级 `langchain-core` 至 `>=0.2.43` 以修复任意文件读取漏洞 (CVE-2024-10940).
+- **安全**: 升级 `langchain-text-splitters` 至 `>=0.3.9` 以修复 XXE 漏洞 (CVE-2025-6985).
+- **安全**: 确认 `langchain>=0.2.9` 已包含对 FAISS pickle 反序列化漏洞 (CVE-2024-5998) 的修复.
 - **安全**: 升级 `langchain` 至 `>=0.2.9` (及相关组件) 以修复 Web Research Retriever 中的高危 SSRF 漏洞 (CVE-2024-3095).
 - **安全**: 经排查 `PyTorch` 当前版本为 `2.10.0` (>=2.7.1), 确认不受 CVE-2025-2953 漏洞影响.
 - **安全**: 升级 `xhtml2pdf` 至 `>=0.2.17` 以修复高危 ReDoS 漏洞 (CVE-2024-25885).
