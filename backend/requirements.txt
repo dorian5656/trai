@@ -90,7 +90,7 @@ jsonpatch==1.33
 jsonpointer==3.0.0
 kaldiio==2.18.1
 kiwisolver==1.4.9
-langchain>=0.2.9
+langchain>=0.3.27
 langchain-classic==1.0.1
 langchain-community>=0.2.4
 langchain-core>=0.2.43
@@ -224,7 +224,7 @@ torch==2.10.0
 torch-complex==0.4.4
 torchaudio==2.10.0
 torchvision==0.25.0
-tqdm>=4.66.0
+tqdm>=4.66.3
 transformers==5.0.0
 triton==3.6.0
 typer==0.21.1
