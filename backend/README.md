@@ -163,6 +163,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_26_1659
+
+- **优化(speech)**: 增强语音服务健康检查逻辑, 实现服务启动时后台预加载模型 (`speech_service.initialize()`), 消除首次调用延迟.
+- **修复(speech)**: 修复语音转写接口的测试脚本 Mock 问题, 验证了 S3 上传、模型推理及数据库记录的全流程可用性.
+- **环境**: 补充 `funasr` 依赖至 `backend/requirements.txt`.
+
 ### 🛠️ 后端_2026_02_26_1635
 - **优化(video)**: 增强视频生成模块 (`video_func.py`) 的健壮性, 增加对底层引擎文件 (`wan`) 的导入容错与运行时检查.
 - **文档**: 全量翻译 Wan I2V 核心模块 (`image2video.py`, `t5.py`, `vae*.py`) 的文档字符串为中文, 提升代码可读性.

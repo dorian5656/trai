@@ -16,12 +16,12 @@ router = APIRouter()
 @router.on_event("startup")
 async def startup_event():
     """
-    启动时异步初始化模型 (避免阻塞主进程太久，但会占用后台资源)
+    启动时异步初始化模型 (后台预加载)
     """
-    # 可以在这里触发下载，或者等第一次请求时触发
-    # 考虑到下载可能耗时，建议第一次请求触发或通过专门的管理接口触发
-    # 这里我们打印一条日志引导
-    logger.info("ℹ️ [Speech] 语音模块已加载，模型将在首次调用时自动检查并下载")
+    import asyncio
+    logger.info("ℹ️ [Speech] 触发语音模型后台预加载...")
+    # 使用 create_task 在后台加载，不阻塞服务启动
+    asyncio.create_task(speech_service.initialize())
 
 @router.post("/transcribe", summary="上传音频文件转写")
 async def transcribe(

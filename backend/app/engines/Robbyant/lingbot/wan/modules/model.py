@@ -13,12 +13,12 @@ __all__ = ['WanModel']
 
 
 def sinusoidal_embedding_1d(dim, position):
-    # preprocess
+    # 预处理
     assert dim % 2 == 0
     half = dim // 2
     position = position.type(torch.float64)
 
-    # calculation
+    # 计算
     sinusoid = torch.outer(
         position, torch.pow(10000, -torch.arange(half).to(position).div(half)))
     x = torch.cat([torch.cos(sinusoid), torch.sin(sinusoid)], dim=1)
@@ -40,15 +40,15 @@ def rope_params(max_seq_len, dim, theta=10000):
 def rope_apply(x, grid_sizes, freqs):
     n, c = x.size(2), x.size(3) // 2
 
-    # split freqs
+    # 分割频率
     freqs = freqs.split([c - 2 * (c // 3), c // 3, c // 3], dim=1)
 
-    # loop over samples
+    # 遍历样本
     output = []
     for i, (f, h, w) in enumerate(grid_sizes.tolist()):
         seq_len = f * h * w
 
-        # precompute multipliers
+        # 预计算乘数
         x_i = torch.view_as_complex(x[i, :seq_len].to(torch.float64).reshape(
             seq_len, n, -1, 2))
         freqs_i = torch.cat([
@@ -58,11 +58,11 @@ def rope_apply(x, grid_sizes, freqs):
         ],
                             dim=-1).reshape(seq_len, 1, -1)
 
-        # apply rotary embedding
+        # 应用旋转位置编码 (RoPE)
         x_i = torch.view_as_real(x_i * freqs_i).flatten(2)
         x_i = torch.cat([x_i, x[i, seq_len:]])
 
-        # append to collection
+        # 添加到集合
         output.append(x_i)
     return torch.stack(output).float()
 
@@ -78,7 +78,7 @@ class WanRMSNorm(nn.Module):
     def forward(self, x):
         r"""
         Args:
-            x(Tensor): Shape [B, L, C]
+            x(Tensor): 形状 [B, L, C]
         """
         return self._norm(x.float()).type_as(x) * self.weight
 
@@ -94,7 +94,7 @@ class WanLayerNorm(nn.LayerNorm):
     def forward(self, x):
         r"""
         Args:
-            x(Tensor): Shape [B, L, C]
+            x(Tensor): 形状 [B, L, C]
         """
         return super().forward(x.float()).type_as(x)
 
@@ -116,7 +116,7 @@ class WanSelfAttention(nn.Module):
         self.qk_norm = qk_norm
         self.eps = eps
 
-        # layers
+        # 层
         self.q = nn.Linear(dim, dim)
         self.k = nn.Linear(dim, dim)
         self.v = nn.Linear(dim, dim)
@@ -127,14 +127,14 @@ class WanSelfAttention(nn.Module):
     def forward(self, x, seq_lens, grid_sizes, freqs):
         r"""
         Args:
-            x(Tensor): Shape [B, L, num_heads, C / num_heads]
-            seq_lens(Tensor): Shape [B]
-            grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
-            freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+            x(Tensor): 形状 [B, L, num_heads, C / num_heads]
+            seq_lens(Tensor): 形状 [B]
+            grid_sizes(Tensor): 形状 [B, 3], 第二维包含 (F, H, W)
+            freqs(Tensor): Rope 频率, 形状 [1024, C / num_heads / 2]
         """
         b, s, n, d = *x.shape[:2], self.num_heads, self.head_dim
 
-        # query, key, value function
+        # QKV计算函数
         def qkv_fn(x):
             q = self.norm_q(self.q(x)).view(b, s, n, d)
             k = self.norm_k(self.k(x)).view(b, s, n, d)
@@ -150,7 +150,7 @@ class WanSelfAttention(nn.Module):
             k_lens=seq_lens,
             window_size=self.window_size)
 
-        # output
+        # 输出
         x = x.flatten(2)
         x = self.o(x)
         return x
@@ -161,21 +161,21 @@ class WanCrossAttention(WanSelfAttention):
     def forward(self, x, context, context_lens):
         r"""
         Args:
-            x(Tensor): Shape [B, L1, C]
-            context(Tensor): Shape [B, L2, C]
-            context_lens(Tensor): Shape [B]
+            x(Tensor): 形状 [B, L1, C]
+            context(Tensor): 形状 [B, L2, C]
+            context_lens(Tensor): 形状 [B]
         """
         b, n, d = x.size(0), self.num_heads, self.head_dim
 
-        # compute query, key, value
+        # 计算Query, Key, Value
         q = self.norm_q(self.q(x)).view(b, -1, n, d)
         k = self.norm_k(self.k(context)).view(b, -1, n, d)
         v = self.v(context).view(b, -1, n, d)
 
-        # compute attention
+        # 计算注意力
         x = attention(q, k, v, k_lens=context_lens)
 
-        # output
+        # 输出
         x = x.flatten(2)
         x = self.o(x)
         return x
@@ -200,7 +200,7 @@ class WanAttentionBlock(nn.Module):
         self.cross_attn_norm = cross_attn_norm
         self.eps = eps
 
-        # layers
+        # 层
         self.norm1 = WanLayerNorm(dim, eps)
         self.self_attn = WanSelfAttention(dim, num_heads, window_size, qk_norm,
                                           eps)
@@ -214,7 +214,7 @@ class WanAttentionBlock(nn.Module):
             nn.Linear(dim, ffn_dim), nn.GELU(approximate='tanh'),
             nn.Linear(ffn_dim, dim))
 
-        # modulation
+        # 调制
         self.modulation = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
 
         self.cam_injector_layer1 = nn.Linear(dim, dim)
@@ -235,25 +235,25 @@ class WanAttentionBlock(nn.Module):
     ):
         r"""
         Args:
-            x(Tensor): Shape [B, L, C]
-            e(Tensor): Shape [B, L1, 6, C]
-            seq_lens(Tensor): Shape [B], length of each sequence in batch
-            grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
-            freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+            x(Tensor): 形状 [B, L, C]
+            e(Tensor): 形状 [B, L1, 6, C]
+            seq_lens(Tensor): 形状 [B], 批次中每个序列的长度
+            grid_sizes(Tensor): 形状 [B, 3], 第二维包含 (F, H, W)
+            freqs(Tensor): Rope 频率, 形状 [1024, C / num_heads / 2]
         """
         assert e.dtype == torch.float32
         with torch.amp.autocast('cuda', dtype=torch.float32):
             e = (self.modulation.unsqueeze(0) + e).chunk(6, dim=2)
         assert e[0].dtype == torch.float32
 
-        # self-attention
+        # 自注意力
         y = self.self_attn(
             self.norm1(x).float() * (1 + e[1].squeeze(2)) + e[0].squeeze(2),
             seq_lens, grid_sizes, freqs)
         with torch.amp.autocast('cuda', dtype=torch.float32):
             x = x + y * e[2].squeeze(2)
 
-        # cam injection (only if dit_cond_dict is provided and contains c2ws_plucker_emb)
+        # CAM注入 (仅当提供dit_cond_dict且包含c2ws_plucker_emb时)
         if dit_cond_dict is not None and "c2ws_plucker_emb" in dit_cond_dict:
             c2ws_plucker_emb = dit_cond_dict["c2ws_plucker_emb"]
             c2ws_hidden_states = self.cam_injector_layer2(torch_F.silu(self.cam_injector_layer1(c2ws_plucker_emb)))
@@ -262,7 +262,7 @@ class WanAttentionBlock(nn.Module):
             cam_shift = self.cam_shift_layer(c2ws_hidden_states)
             x = (1.0 + cam_scale) * x + cam_shift
 
-        # cross-attention & ffn function
+        # 交叉注意力与FFN函数
         def cross_attn_ffn(x, context, context_lens, e):
             x = x + self.cross_attn(self.norm3(x), context, context_lens)
             y = self.ffn(
@@ -284,19 +284,19 @@ class Head(nn.Module):
         self.patch_size = patch_size
         self.eps = eps
 
-        # layers
+        # 层
         out_dim = math.prod(patch_size) * out_dim
         self.norm = WanLayerNorm(dim, eps)
         self.head = nn.Linear(dim, out_dim)
 
-        # modulation
+        # 调制
         self.modulation = nn.Parameter(torch.randn(1, 2, dim) / dim**0.5)
 
     def forward(self, x, e):
         r"""
         Args:
-            x(Tensor): Shape [B, L1, C]
-            e(Tensor): Shape [B, L1, C]
+            x(Tensor): 形状 [B, L1, C]
+            e(Tensor): 形状 [B, L1, C]
         """
         assert e.dtype == torch.float32
         with torch.amp.autocast('cuda', dtype=torch.float32):
@@ -309,7 +309,7 @@ class Head(nn.Module):
 
 class WanModel(ModelMixin, ConfigMixin):
     r"""
-    Wan diffusion backbone supporting both text-to-video and image-to-video.
+    Wan扩散模型骨干网络，支持文生视频和图生视频。
     """
 
     ignore_for_config = [
@@ -335,39 +335,39 @@ class WanModel(ModelMixin, ConfigMixin):
                  cross_attn_norm=True,
                  eps=1e-6):
         r"""
-        Initialize the diffusion model backbone.
+        初始化扩散模型骨干网络。
 
         Args:
             model_type (`str`, *optional*, defaults to 't2v'):
-                Model variant - 't2v' (text-to-video) or 'i2v' (image-to-video)
+                模型变体 - 't2v' (文生视频) 或 'i2v' (图生视频)
             patch_size (`tuple`, *optional*, defaults to (1, 2, 2)):
-                3D patch dimensions for video embedding (t_patch, h_patch, w_patch)
+                视频嵌入的3D Patch维度 (t_patch, h_patch, w_patch)
             text_len (`int`, *optional*, defaults to 512):
-                Fixed length for text embeddings
+                文本嵌入的固定长度
             in_dim (`int`, *optional*, defaults to 16):
-                Input video channels (C_in)
+                输入视频通道数 (C_in)
             dim (`int`, *optional*, defaults to 2048):
-                Hidden dimension of the transformer
+                Transformer的隐藏层维度
             ffn_dim (`int`, *optional*, defaults to 8192):
-                Intermediate dimension in feed-forward network
+                前馈网络中的中间维度
             freq_dim (`int`, *optional*, defaults to 256):
-                Dimension for sinusoidal time embeddings
+                正弦时间嵌入的维度
             text_dim (`int`, *optional*, defaults to 4096):
-                Input dimension for text embeddings
+                文本嵌入的输入维度
             out_dim (`int`, *optional*, defaults to 16):
-                Output video channels (C_out)
+                输出视频通道数 (C_out)
             num_heads (`int`, *optional*, defaults to 16):
-                Number of attention heads
+                注意力头的数量
             num_layers (`int`, *optional*, defaults to 32):
-                Number of transformer blocks
+                Transformer块的数量
             window_size (`tuple`, *optional*, defaults to (-1, -1)):
-                Window size for local attention (-1 indicates global attention)
+                局部注意力的窗口大小 (-1 表示全局注意力)
             qk_norm (`bool`, *optional*, defaults to True):
-                Enable query/key normalization
+                是否启用Query/Key归一化
             cross_attn_norm (`bool`, *optional*, defaults to False):
-                Enable cross-attention normalization
+                是否启用交叉注意力归一化
             eps (`float`, *optional*, defaults to 1e-6):
-                Epsilon value for normalization layers
+                归一化层的epsilon值
         """
 
         super().__init__()
@@ -390,7 +390,7 @@ class WanModel(ModelMixin, ConfigMixin):
         self.cross_attn_norm = cross_attn_norm
         self.eps = eps
 
-        # embeddings
+        # 嵌入层
         self.patch_embedding = nn.Conv3d(
             in_dim, dim, kernel_size=patch_size, stride=patch_size)
         self.patch_embedding_wancamctrl = nn.Linear(
@@ -405,16 +405,16 @@ class WanModel(ModelMixin, ConfigMixin):
             nn.Linear(freq_dim, dim), nn.SiLU(), nn.Linear(dim, dim))
         self.time_projection = nn.Sequential(nn.SiLU(), nn.Linear(dim, dim * 6))
 
-        # blocks
+        # 模块块
         self.blocks = nn.ModuleList([
             WanAttentionBlock(dim, ffn_dim, num_heads, window_size, qk_norm,
                               cross_attn_norm, eps) for _ in range(num_layers)
         ])
 
-        # head
+        # 输出头
         self.head = Head(dim, out_dim, patch_size, eps)
 
-        # buffers (don't use register_buffer otherwise dtype will be changed in to())
+        # 缓冲区 (不要使用register_buffer，否则在to()时dtype会被改变)
         assert (dim % num_heads) == 0 and (dim // num_heads) % 2 == 0
         d = dim // num_heads
         self.freqs = torch.cat([
@@ -424,7 +424,7 @@ class WanModel(ModelMixin, ConfigMixin):
         ],
                                dim=1)
 
-        # initialize weights
+        # 初始化权重
         self.init_weights()
 
     def forward(
@@ -437,27 +437,27 @@ class WanModel(ModelMixin, ConfigMixin):
         dit_cond_dict=None,
     ):
         r"""
-        Forward pass through the diffusion model
+        扩散模型的前向传播
 
         Args:
             x (List[Tensor]):
-                List of input video tensors, each with shape [C_in, F, H, W]
+                输入视频张量列表，每个形状为 [C_in, F, H, W]
             t (Tensor):
-                Diffusion timesteps tensor of shape [B]
+                扩散时间步张量，形状为 [B]
             context (List[Tensor]):
-                List of text embeddings each with shape [L, C]
+                文本嵌入列表，每个形状为 [L, C]
             seq_len (`int`):
-                Maximum sequence length for positional encoding
+                位置编码的最大序列长度
             y (List[Tensor], *optional*):
-                Conditional video inputs for image-to-video mode, same shape as x
+                图生视频模式的条件视频输入，形状与 x 相同
 
         Returns:
             List[Tensor]:
-                List of denoised video tensors with original input shapes [C_out, F, H / 8, W / 8]
+                去噪后的视频张量列表，具有原始输入形状 [C_out, F, H / 8, W / 8]
         """
         if self.model_type == 'i2v':
             assert y is not None
-        # params
+        # 参数
         device = self.patch_embedding.weight.device
         if self.freqs.device != device:
             self.freqs = self.freqs.to(device)
@@ -465,7 +465,7 @@ class WanModel(ModelMixin, ConfigMixin):
         if y is not None:
             x = [torch.cat([u, v], dim=0) for u, v in zip(x, y)]
 
-        # embeddings
+        # 嵌入层
         x = [self.patch_embedding(u.unsqueeze(0)) for u in x]
         grid_sizes = torch.stack(
             [torch.tensor(u.shape[2:], dtype=torch.long) for u in x])
@@ -477,7 +477,7 @@ class WanModel(ModelMixin, ConfigMixin):
                       dim=1) for u in x
         ])
 
-        # time embeddings
+        # 时间嵌入
         if t.dim() == 1:
             t = t.expand(t.size(0), seq_len)
         with torch.amp.autocast('cuda', dtype=torch.float32):
@@ -489,7 +489,7 @@ class WanModel(ModelMixin, ConfigMixin):
             e0 = self.time_projection(e).unflatten(2, (6, self.dim))
             assert e.dtype == torch.float32 and e0.dtype == torch.float32
 
-        # context
+        # 上下文
         context_lens = None
         context = self.text_embedding(
             torch.stack([
@@ -498,7 +498,7 @@ class WanModel(ModelMixin, ConfigMixin):
                 for u in context
             ]))
         
-        # cam
+        # CAM (相机控制)
         if dit_cond_dict is not None and "c2ws_plucker_emb" in dit_cond_dict:
             c2ws_plucker_emb = dit_cond_dict["c2ws_plucker_emb"]
             c2ws_plucker_emb = [
@@ -520,7 +520,7 @@ class WanModel(ModelMixin, ConfigMixin):
             dit_cond_dict["c2ws_plucker_emb"] = (
                 c2ws_plucker_emb + c2ws_hidden_states)
 
-        # arguments
+        # 参数字典
         kwargs = dict(
             e=e0,
             seq_lens=seq_lens,
@@ -533,27 +533,27 @@ class WanModel(ModelMixin, ConfigMixin):
         for block in self.blocks:
             x = block(x, **kwargs)
 
-        # head
+        # 输出头
         x = self.head(x, e)
 
-        # unpatchify
+        # 反Patch化
         x = self.unpatchify(x, grid_sizes)
         return [u.float() for u in x]
 
     def unpatchify(self, x, grid_sizes):
         r"""
-        Reconstruct video tensors from patch embeddings.
+        从Patch嵌入重建视频张量。
 
         Args:
             x (List[Tensor]):
-                List of patchified features, each with shape [L, C_out * prod(patch_size)]
+                Patch化特征列表，每个形状为 [L, C_out * prod(patch_size)]
             grid_sizes (Tensor):
-                Original spatial-temporal grid dimensions before patching,
-                    shape [B, 3] (3 dimensions correspond to F_patches, H_patches, W_patches)
+                Patch化前的原始时空网格维度，
+                    形状 [B, 3] (3个维度分别对应 F_patches, H_patches, W_patches)
 
         Returns:
             List[Tensor]:
-                Reconstructed video tensors with shape [C_out, F, H / 8, W / 8]
+                重建的视频张量，形状 [C_out, F, H / 8, W / 8]
         """
 
         c = self.out_dim
@@ -567,17 +567,17 @@ class WanModel(ModelMixin, ConfigMixin):
 
     def init_weights(self):
         r"""
-        Initialize model parameters using Xavier initialization.
+        使用Xavier初始化模型参数。
         """
 
-        # basic init
+        # 基础初始化
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-        # init embeddings
+        # 初始化嵌入层
         nn.init.xavier_uniform_(self.patch_embedding.weight.flatten(1))
         for m in self.text_embedding.modules():
             if isinstance(m, nn.Linear):
@@ -586,10 +586,10 @@ class WanModel(ModelMixin, ConfigMixin):
             if isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, std=.02)
 
-        # init output layer
+        # 初始化输出层
         nn.init.zeros_(self.head.head.weight)
 
-        # init cam control layers
+        # 初始化CAM控制层
         nn.init.xavier_uniform_(self.patch_embedding_wancamctrl.weight)
         nn.init.zeros_(self.patch_embedding_wancamctrl.bias)
         nn.init.xavier_uniform_(self.c2ws_hidden_states_layer1.weight)
@@ -597,7 +597,7 @@ class WanModel(ModelMixin, ConfigMixin):
         nn.init.xavier_uniform_(self.c2ws_hidden_states_layer2.weight)
         nn.init.zeros_(self.c2ws_hidden_states_layer2.bias)
 
-        # init cam injector layers in blocks
+        # 初始化模块块中的CAM注入层
         for block in self.blocks:
             nn.init.xavier_uniform_(block.cam_injector_layer1.weight)
             nn.init.zeros_(block.cam_injector_layer1.bias)
