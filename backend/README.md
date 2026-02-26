@@ -164,6 +164,7 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 ## 📝 更新日志 (Changelog)
 
 ### 🛠️ 后端_2026_02_26_1716
+- **安全**: 实施针对 `python-future` 的 CVE-2025-50817 漏洞缓解措施 (在入口脚本中屏蔽 `test` 模块导入).
 - **安全**: 升级 `tqdm` 至 `>=4.66.3` 以修复 CLI 参数任意代码执行漏洞 (CVE-2024-34062).
 - **安全**: 升级 `langchain` 至 `>=0.3.27` 以修复 EverNoteLoader XXE 漏洞 (CVE-2025-6984) 及 SSRF 漏洞 (CVE-2024-3095).
 - **安全**: 升级 `langchain-core` 至 `>=0.2.43` 以修复任意文件读取漏洞 (CVE-2024-10940).
