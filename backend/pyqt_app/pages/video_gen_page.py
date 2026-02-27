@@ -6,13 +6,12 @@
 # 日期：2026-02-27 11:04:00
 # 描述：AI 文生视频功能页面
 
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, 
                              QLineEdit, QPushButton, QFrame, QMessageBox, QScrollArea, QTextEdit,
-                             QSizePolicy, QFileDialog, QStackedWidget, QStyle)
+                             QSizePolicy, QFileDialog, QStyle)
 from PyQt6.QtGui import QPixmap, QImage
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer, QStandardPaths
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer, QStandardPaths, QSize
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink
 from .config_loader import config
 import requests
 import os
@@ -202,13 +201,21 @@ class VideoGenPage(QWidget):
         
         main_layout.addLayout(control_layout)
 
-        # 视频展示区域
-        self.video_stack = QStackedWidget()
-        
-        # Page 0: 占位符/封面图
-        self.placeholder_label = QLabel("此处显示生成的视频")
-        self.placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.placeholder_label.setStyleSheet("""
+        # 视频展示区域（使用 QLabel 渲染视频帧，避免 QVideoWidget 在 Windows 下遮挡叠加控件）
+        video_container = QWidget()
+        video_layout = QVBoxLayout(video_container)
+        video_layout.setContentsMargins(0, 0, 0, 0)
+        video_layout.setSpacing(5)
+
+        # 视频展示框（播放按钮叠加在框内）
+        self.video_frame = QWidget()
+        frame_layout = QGridLayout(self.video_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        self.video_display = QLabel("此处显示生成的视频")
+        self.video_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video_display.setStyleSheet("""
             QLabel {
                 background-color: #f5f5f5;
                 border: 2px dashed #ccc;
@@ -217,37 +224,29 @@ class VideoGenPage(QWidget):
                 font-size: 16px;
             }
         """)
-        self.placeholder_label.setScaledContents(True) # 允许内容缩放
-        self.video_stack.addWidget(self.placeholder_label)
-        
-        # Page 1: 视频播放器
-        self.video_widget = QVideoWidget()
-        self.video_widget.setStyleSheet("background-color: black; border-radius: 10px;")
-        self.video_stack.addWidget(self.video_widget)
-        
-        # 视频容器
-        video_container = QWidget()
-        video_layout = QVBoxLayout(video_container)
-        video_layout.setContentsMargins(0, 0, 0, 0)
-        video_layout.setSpacing(5)
-        
-        self.video_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.video_stack.setMinimumHeight(360)
-        
-        video_layout.addWidget(self.video_stack)
-        
-        # 播放控制条
-        self.control_layout = QHBoxLayout()
+        # 禁止自动拉伸，保持比例（只在需要时缩小，不放大）
+        self.video_display.setScaledContents(False)
+        self.video_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.video_display.setMinimumHeight(360)
+
+        frame_layout.addWidget(self.video_display, 0, 0)
+
         self.play_btn = QPushButton()
         self.play_btn.setEnabled(False)
-        self.play_btn.setFixedSize(32, 32)
+        self.play_btn.setVisible(False)
+        self.play_btn.setFixedSize(48, 48)
+        self.play_btn.setIconSize(QSize(32, 32))
         self.play_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.play_btn.clicked.connect(self.toggle_video)
-        
-        self.control_layout.addWidget(self.play_btn)
-        self.control_layout.addStretch()
-        
-        video_layout.addLayout(self.control_layout)
+
+        frame_layout.addWidget(self.play_btn, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setHorizontalSpacing(0)
+        frame_layout.setVerticalSpacing(0)
+
+        self.play_btn.setStyleSheet("margin: 12px; border: none; background-color: transparent;")
+
+        video_layout.addWidget(self.video_frame)
         
         main_layout.addWidget(video_container, 1)
 
@@ -256,7 +255,10 @@ class VideoGenPage(QWidget):
         self.media_player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.media_player.setAudioOutput(self.audio_output)
-        self.media_player.setVideoOutput(self.video_widget)
+
+        self.video_sink = QVideoSink()
+        self.video_sink.videoFrameChanged.connect(self._on_video_frame_changed)
+        self.media_player.setVideoOutput(self.video_sink)
         
         self.media_player.playbackStateChanged.connect(self.media_state_changed)
         self.media_player.errorOccurred.connect(self.handle_media_error)
@@ -282,10 +284,10 @@ class VideoGenPage(QWidget):
 
         # 重置状态
         self.media_player.stop()
-        self.video_stack.setCurrentIndex(0)
         self.play_btn.setEnabled(False)
-        self.placeholder_label.setPixmap(QPixmap())
-        self.placeholder_label.setText("正在生成视频，请稍候...\n(可能需要几分钟)")
+        self.play_btn.setVisible(False)
+        self.video_display.setPixmap(QPixmap())
+        self.video_display.setText("正在生成视频，请稍候...\n(可能需要几分钟)")
         self.generated_video_url = ""
         self.local_video_path = ""
 
@@ -323,14 +325,14 @@ class VideoGenPage(QWidget):
                 logger.success(f"Video generated: {video_url}")
                 
                 # 无论是否有封面，都先下载视频到本地缓存，以便播放
-                self.placeholder_label.setText("视频生成成功，正在缓存...")
+                self.video_display.setText("视频生成成功，正在缓存，可以点击播放...")
                 self.cache_worker = VideoDownloader(video_url, self.cache_dir)
                 self.cache_worker.finished_signal.connect(lambda s, p, u: self._on_video_cached(s, p, u, cover_url))
                 self.cache_worker.start()
             else:
-                self.placeholder_label.setText("生成成功，但未返回视频地址。")
+                self.video_display.setText("生成成功，但未返回视频地址。")
         else:
-            self.placeholder_label.setText(f"生成失败: {msg}")
+            self.video_display.setText(f"生成失败: {msg}")
             QMessageBox.critical(self, "生成失败", f"错误信息: {msg}")
 
     def _on_video_cached(self, success, file_path, url, cover_url):
@@ -341,29 +343,26 @@ class VideoGenPage(QWidget):
             # 设置播放源为本地文件
             self.media_player.setSource(QUrl.fromLocalFile(file_path))
             self.play_btn.setEnabled(True)
+            self.play_btn.setVisible(True)
             
             # 尝试显示封面
             if cover_url:
                 self.load_cover(cover_url)
-                self.video_stack.setCurrentIndex(0) # 显示封面
             else:
                 # 尝试从本地视频提取第一帧
                 if HAS_CV2:
                     self.extract_frame_as_cover(file_path)
                 else:
-                    # 如果没有 CV2，则直接显示视频控件并暂停在第一帧
-                    # 注意：这依赖于播放器能否正确加载并显示首帧
-                    self.video_stack.setCurrentIndex(1)
+                    # 如果没有 CV2，则通过播放器获取首帧并暂停
                     self.media_player.setPosition(0)
-                    self.media_player.pause() 
-                    # 有些平台需要 play() 然后 pause() 才能显示
-                    QTimer.singleShot(100, self.media_player.play)
-                    QTimer.singleShot(300, self.media_player.pause)
+                    QTimer.singleShot(50, self.media_player.play)
+                    QTimer.singleShot(250, self.media_player.pause)
         else:
-            self.placeholder_label.setText("视频缓存失败，请尝试直接下载。")
+            self.video_display.setText("视频缓存失败，请尝试直接下载。")
             # 仍然允许播放远程 URL
             self.media_player.setSource(QUrl(url))
             self.play_btn.setEnabled(True)
+            self.play_btn.setVisible(True)
 
     def extract_frame_as_cover(self, file_path):
         try:
@@ -379,17 +378,13 @@ class VideoGenPage(QWidget):
                 
                 # 缩放并显示
                 if not pixmap.isNull():
-                    self.placeholder_label.setPixmap(pixmap.scaled(
-                        self.placeholder_label.size(),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    ))
-                    self.placeholder_label.setText("")
-                    self.video_stack.setCurrentIndex(0) # 确保显示封面页
+                    self._render_pixmap(pixmap)
+                    self.video_display.setText("")
             cap.release()
         except Exception as e:
             logger.error(f"Extract frame failed: {e}")
-            self.video_stack.setCurrentIndex(1) # 失败则显示播放器
+            if self.video_display.pixmap() is None or self.video_display.pixmap().isNull():
+                self.video_display.setText("视频已生成，点击播放开始观看。")
 
     def load_cover(self, cover_url):
         try:
@@ -398,12 +393,8 @@ class VideoGenPage(QWidget):
                 pixmap = QPixmap()
                 pixmap.loadFromData(response.content)
                 if not pixmap.isNull():
-                    self.placeholder_label.setPixmap(pixmap.scaled(
-                        self.placeholder_label.size(),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    ))
-                    self.placeholder_label.setText("")
+                    self._render_pixmap(pixmap)
+                    self.video_display.setText("")
         except Exception as e:
             logger.error(f"Failed to load cover: {e}")
 
@@ -482,17 +473,42 @@ class VideoGenPage(QWidget):
             logger.error(f"Failed to open folder: {e}")
 
     def toggle_video(self):
-        # 封面 -> 播放器
-        if self.video_stack.currentIndex() == 0:
-            if self.local_video_path or self.generated_video_url:
-                self.video_stack.setCurrentIndex(1)
-                self.media_player.play()
-            return
-            
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.media_player.pause()
         else:
             self.media_player.play()
+
+    def _render_pixmap(self, pixmap: QPixmap):
+        try:
+            # 当前显示区域大小
+            target_size = self.video_display.size()
+            src_size = pixmap.size()
+            # 只在源图比显示区域大时缩小；否则保持原始大小（防止被拉伸放大导致模糊）
+            if src_size.width() > target_size.width() or src_size.height() > target_size.height():
+                scaled = pixmap.scaled(
+                    target_size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.video_display.setPixmap(scaled)
+            else:
+                self.video_display.setPixmap(pixmap)
+        except Exception as e:
+            logger.error(f"Render pixmap failed: {e}")
+    def _on_video_frame_changed(self, frame):
+        try:
+            if frame is None or not frame.isValid():
+                return
+            image = frame.toImage()
+            if image is None or image.isNull():
+                return
+            pixmap = QPixmap.fromImage(image)
+            if pixmap.isNull():
+                return
+            self._render_pixmap(pixmap)
+            self.video_display.setText("")
+        except Exception as e:
+            logger.error(f"Render video frame failed: {e}")
 
     def media_state_changed(self, state):
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
