@@ -73,8 +73,8 @@ def upload_to_server(local_file_path, exe_name, version):
             "latest_version": version,
             "release_date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             "download_url": f"/static/{exe_name}.exe",
-            "update_log": f"1.新增语音服务模块，包括语音服务健康检查和音频转文字功能。\n2. 优化modelscope工具模块输出其他模块日志的问题。",
-            "description": f"最新版本客户端 {version}，建议更新。",
+            "update_log": f"1.新增AI 文生音乐服务。\n2.优化AI 文生视频的缓存机制。\n3.优化AI 文生图的页面布局。",
+            "description": f"最新版本 {version}，建议更新。",
             "force_update": False
         }
         

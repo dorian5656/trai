@@ -15,7 +15,7 @@ from PyQt6.QtCore import QSize, Qt, QPropertyAnimation, QEasingCurve, QParallelA
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction
 
 from pages import (LoginPage, ModelScopePage, DeepSeekPage, ImageGenPage, ImageParsePage, 
-                    RrdsppgPage, SystemMonitorPage, DocToolsPage, ImageToolsPage, VoiceToolsPage, SettingsPage)
+                    RrdsppgPage, SystemMonitorPage, DocToolsPage, ImageToolsPage, VoiceToolsPage, VideoGenPage, MusicGenPage, SettingsPage)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
         self.add_sidebar_item("语音服务", "🎙️")
         self.add_sidebar_item("DeepSeek 对话", "💬")
         self.add_sidebar_item("AI 文生图", "🎨")
+        self.add_sidebar_item("AI 文生视频", "🎬")
+        self.add_sidebar_item("AI 文生音乐", "🎵")
         self.add_sidebar_item("图片内容解析", "👁️")
         self.add_sidebar_item("人人都是品牌官", "📝")
         self.add_sidebar_item("系统监控", "📊")
@@ -93,7 +95,7 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.addWidget(self.sidebar)
         
         # 底部设置按钮
-        self.settings_btn = QPushButton("    设置")
+        self.settings_btn = QPushButton("      设置")
         self.settings_btn.setIcon(self.create_emoji_icon("⚙️"))
         self.settings_btn.setIconSize(QSize(24, 24))
         self.settings_btn.setObjectName("settingsBtn")
@@ -127,6 +129,8 @@ class MainWindow(QMainWindow):
         self.voice_tools_page = VoiceToolsPage()
         self.deepseek_page = DeepSeekPage()
         self.image_gen_page = ImageGenPage()
+        self.video_gen_page = VideoGenPage()
+        self.music_gen_page = MusicGenPage()
         self.image_parse_page = ImageParsePage()
         self.rrdsppg_page = RrdsppgPage()
         self.system_monitor_page = SystemMonitorPage()
@@ -140,6 +144,8 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.voice_tools_page)
         self.stacked_widget.addWidget(self.deepseek_page)
         self.stacked_widget.addWidget(self.image_gen_page)
+        self.stacked_widget.addWidget(self.video_gen_page)
+        self.stacked_widget.addWidget(self.music_gen_page)
         self.stacked_widget.addWidget(self.image_parse_page)
         self.stacked_widget.addWidget(self.rrdsppg_page)
         self.stacked_widget.addWidget(self.system_monitor_page)
@@ -330,6 +336,14 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.image_gen_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.video_gen_page.set_auth_token(self.user_token)
+        except Exception:
+            pass
+        try:
+            self.music_gen_page.set_auth_token(self.user_token)
         except Exception:
             pass
         try:

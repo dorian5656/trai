@@ -7,7 +7,7 @@
 # 描述：AI 文生图功能页面
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QFrame, QMessageBox, QScrollArea, QFileDialog)
+                             QPushButton, QFrame, QMessageBox, QScrollArea, QFileDialog, QTextEdit)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QByteArray
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor
 import requests
@@ -88,33 +88,35 @@ class ImageGenPage(QWidget):
         control_layout = QHBoxLayout()
         control_layout.setSpacing(15)
 
-        self.prompt_input = QLineEdit()
+        self.prompt_input = QTextEdit()
         self.prompt_input.setPlaceholderText("请输入画面描述 (Prompt)...")
-        self.prompt_input.setFixedHeight(45)
+        self.prompt_input.setFixedHeight(80)
         self.prompt_input.setStyleSheet("""
-            QLineEdit {
+            QTextEdit {
                 border: 1px solid #ddd;
                 border-radius: 8px;
-                padding: 0 15px;
+                padding: 10px;
                 font-size: 14px;
                 background-color: #fff;
             }
-            QLineEdit:focus {
+            QTextEdit:focus {
                 border: 1px solid #2196f3;
             }
         """)
-        self.prompt_input.returnPressed.connect(self.generate_image)
         
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(10)
+
         self.generate_btn = QPushButton("生成图片")
-        self.generate_btn.setFixedHeight(45)
-        self.generate_btn.setFixedWidth(120)
+        self.generate_btn.setFixedHeight(30)
+        self.generate_btn.setFixedWidth(100)
         self.generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.generate_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196f3;
                 color: white;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 6px;
+                font-size: 13px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -127,16 +129,16 @@ class ImageGenPage(QWidget):
         self.generate_btn.clicked.connect(self.generate_image)
 
         self.save_btn = QPushButton("下载图片")
-        self.save_btn.setFixedHeight(45)
-        self.save_btn.setFixedWidth(120)
+        self.save_btn.setFixedHeight(30)
+        self.save_btn.setFixedWidth(100)
         self.save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_btn.setEnabled(False) # 初始不可用
         self.save_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 6px;
+                font-size: 13px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -149,8 +151,9 @@ class ImageGenPage(QWidget):
         self.save_btn.clicked.connect(self.save_image)
 
         control_layout.addWidget(self.prompt_input)
-        control_layout.addWidget(self.generate_btn)
-        control_layout.addWidget(self.save_btn)
+        btn_layout.addWidget(self.generate_btn)
+        btn_layout.addWidget(self.save_btn)
+        control_layout.addLayout(btn_layout)
         
         main_layout.addLayout(control_layout)
 
@@ -183,7 +186,7 @@ class ImageGenPage(QWidget):
         self.auth_token = token or ""
 
     def generate_image(self):
-        prompt = self.prompt_input.text().strip()
+        prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "提示", "请输入画面描述")
             return
