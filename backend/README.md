@@ -163,6 +163,28 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_26_1716
+- **安全**: 实施针对 `python-future` 的 CVE-2025-50817 漏洞缓解措施 (在入口脚本中屏蔽 `test` 模块导入).
+- **安全**: 升级 `tqdm` 至 `>=4.66.3` 以修复 CLI 参数任意代码执行漏洞 (CVE-2024-34062).
+- **安全**: 升级 `langchain` 至 `>=0.3.27` 以修复 EverNoteLoader XXE 漏洞 (CVE-2025-6984) 及 SSRF 漏洞 (CVE-2024-3095).
+- **安全**: 升级 `langchain-core` 至 `>=0.2.43` 以修复任意文件读取漏洞 (CVE-2024-10940).
+- **安全**: 升级 `langchain-text-splitters` 至 `>=0.3.9` 以修复 XXE 漏洞 (CVE-2025-6985).
+- **安全**: 确认 `langchain>=0.2.9` 已包含对 FAISS pickle 反序列化漏洞 (CVE-2024-5998) 的修复.
+- **安全**: 经排查 `PyTorch` 当前版本为 `2.10.0` (>=2.7.1), 确认不受 CVE-2025-2953 及 CVE-2025-3730 (CTC Loss DoS) 漏洞影响.
+- **安全**: 升级 `xhtml2pdf` 至 `>=0.2.17` 以修复高危 ReDoS 漏洞 (CVE-2024-25885).
+- **依赖**: 更新 `backend/requirements.txt` 锁定 `xhtml2pdf` 最低安全版本.
+
+### 🛠️ 后端_2026_02_26_1659
+
+- **优化(speech)**: 增强语音服务健康检查逻辑, 实现服务启动时后台预加载模型 (`speech_service.initialize()`), 消除首次调用延迟.
+- **修复(speech)**: 修复语音转写接口的测试脚本 Mock 问题, 验证了 S3 上传、模型推理及数据库记录的全流程可用性.
+- **环境**: 补充 `funasr` 依赖至 `backend/requirements.txt`.
+
+### 🛠️ 后端_2026_02_26_1635
+- **优化(video)**: 增强视频生成模块 (`video_func.py`) 的健壮性, 增加对底层引擎文件 (`wan`) 的导入容错与运行时检查.
+- **文档**: 全量翻译 Wan I2V 核心模块 (`image2video.py`, `t5.py`, `vae*.py`) 的文档字符串为中文, 提升代码可读性.
+- **后端**: 修复 `video_func.py` 中 `_get_mask` 方法的英文注释, 并完善 `save_video` 的异常处理.
+
 ### 2026_02_25_1729 _后端
 - **后端**: 修复图片压缩功能 (`compress_image`) 中的 `aiofiles` 未定义错误.
 - **后端**: 优化 `video_func.py` 中的模块引用路径, 移除硬编码.

@@ -21,55 +21,45 @@ if is_scipy_available():
 
 class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
     """
-    `UniPCMultistepScheduler` is a training-free framework designed for the fast sampling of diffusion models.
+    `UniPCMultistepScheduler` 是一个专为扩散模型快速采样设计的免训练框架。
 
-    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
-    methods the library implements for all schedulers such as loading and saving.
+    该模型继承自 [`SchedulerMixin`] 和 [`ConfigMixin`]。请查看超类文档以了解库为所有调度器实现的通用方法，如加载和保存。
 
     Args:
         num_train_timesteps (`int`, defaults to 1000):
-            The number of diffusion steps to train the model.
+            训练模型的扩散步数。
         solver_order (`int`, default `2`):
-            The UniPC order which can be any positive integer. The effective order of accuracy is `solver_order + 1`
-            due to the UniC. It is recommended to use `solver_order=2` for guided sampling, and `solver_order=3` for
-            unconditional sampling.
+            UniPC 的阶数，可以是任何正整数。由于 UniC 的存在，有效精度阶数为 `solver_order + 1`。
+            建议对于引导采样使用 `solver_order=2`，对于无条件采样使用 `solver_order=3`。
         prediction_type (`str`, defaults to "flow_prediction"):
-            Prediction type of the scheduler function; must be `flow_prediction` for this scheduler, which predicts
-            the flow of the diffusion process.
+            调度器函数的预测类型；对于此调度器必须是 `flow_prediction`，它预测扩散过程的流。
         thresholding (`bool`, defaults to `False`):
-            Whether to use the "dynamic thresholding" method. This is unsuitable for latent-space diffusion models such
-            as Stable Diffusion.
+            是否使用 "动态阈值" 方法。这不适用于潜在空间扩散模型，如 Stable Diffusion。
         dynamic_thresholding_ratio (`float`, defaults to 0.995):
-            The ratio for the dynamic thresholding method. Valid only when `thresholding=True`.
+            动态阈值方法的比率。仅当 `thresholding=True` 时有效。
         sample_max_value (`float`, defaults to 1.0):
-            The threshold value for dynamic thresholding. Valid only when `thresholding=True` and `predict_x0=True`.
+            动态阈值的阈值。仅当 `thresholding=True` 且 `predict_x0=True` 时有效。
         predict_x0 (`bool`, defaults to `True`):
-            Whether to use the updating algorithm on the predicted x0.
+            是否在预测的 x0 上使用更新算法。
         solver_type (`str`, default `bh2`):
-            Solver type for UniPC. It is recommended to use `bh1` for unconditional sampling when steps < 10, and `bh2`
-            otherwise.
+            UniPC 的求解器类型。建议当步数 < 10 时对于无条件采样使用 `bh1`，否则使用 `bh2`。
         lower_order_final (`bool`, default `True`):
-            Whether to use lower-order solvers in the final steps. Only valid for < 15 inference steps. This can
-            stabilize the sampling of DPMSolver for steps < 15, especially for steps <= 10.
+            是否在最后几步使用低阶求解器。仅对 < 15 推理步数有效。这可以稳定 DPMSolver 在步数 < 15 时的采样，特别是对于步数 <= 10 的情况。
         disable_corrector (`list`, default `[]`):
-            Decides which step to disable the corrector to mitigate the misalignment between `epsilon_theta(x_t, c)`
-            and `epsilon_theta(x_t^c, c)` which can influence convergence for a large guidance scale. Corrector is
-            usually disabled during the first few steps.
+            决定在哪些步骤禁用校正器，以减轻 `epsilon_theta(x_t, c)` 和 `epsilon_theta(x_t^c, c)` 之间的不对齐，这可能会影响大引导比例下的收敛。
+            通常在最初的几步禁用校正器。
         solver_p (`SchedulerMixin`, default `None`):
-            Any other scheduler that if specified, the algorithm becomes `solver_p + UniC`.
+            任何其他调度器，如果指定，算法变为 `solver_p + UniC`。
         use_karras_sigmas (`bool`, *optional*, defaults to `False`):
-            Whether to use Karras sigmas for step sizes in the noise schedule during the sampling process. If `True`,
-            the sigmas are determined according to a sequence of noise levels {σi}.
+            是否在采样过程中使用 Karras sigmas 作为噪声计划的步长。如果为 `True`，sigmas 将根据噪声水平序列 {σi} 确定。
         use_exponential_sigmas (`bool`, *optional*, defaults to `False`):
-            Whether to use exponential sigmas for step sizes in the noise schedule during the sampling process.
+            是否在采样过程中使用指数 sigmas 作为噪声计划的步长。
         timestep_spacing (`str`, defaults to `"linspace"`):
-            The way the timesteps should be scaled. Refer to Table 2 of the [Common Diffusion Noise Schedules and
-            Sample Steps are Flawed](https://huggingface.co/papers/2305.08891) for more information.
+            时间步的缩放方式。有关更多信息，请参阅 [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://huggingface.co/papers/2305.08891) 的表 2。
         steps_offset (`int`, defaults to 0):
-            An offset added to the inference steps, as required by some model families.
+            添加到推理步骤的偏移量，某些模型系列需要。
         final_sigmas_type (`str`, defaults to `"zero"`):
-            The final `sigma` value for the noise schedule during the sampling process. If `"sigma_min"`, the final
-            sigma is the same as the last sigma in the training schedule. If `zero`, the final sigma is set to 0.
+            采样过程中噪声计划的最终 `sigma` 值。如果为 `"sigma_min"`，最终 sigma 与训练计划中的最后一个 sigma 相同。如果为 `zero`，最终 sigma 设置为 0。
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -112,7 +102,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         sigmas = torch.from_numpy(sigmas).to(dtype=torch.float32)
 
         if not use_dynamic_shifting:
-            # when use_dynamic_shifting is True, we apply the timestep shifting on the fly based on the image resolution
+            # 当 use_dynamic_shifting 为 True 时，我们根据图像分辨率动态应用时间步移位
             sigmas = shift * sigmas / (1 +
                                        (shift - 1) * sigmas)  # pyright: ignore
 
@@ -136,25 +126,25 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
     @property
     def step_index(self):
         """
-        The index counter for current timestep. It will increase 1 after each scheduler step.
+        当前时间步的索引计数器。每次调度器步进后增加 1。
         """
         return self._step_index
 
     @property
     def begin_index(self):
         """
-        The index for the first timestep. It should be set from pipeline with `set_begin_index` method.
+        第一个时间步的索引。应使用 `set_begin_index` 方法从管道设置。
         """
         return self._begin_index
 
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler.set_begin_index
     def set_begin_index(self, begin_index: int = 0):
         """
-        Sets the begin index for the scheduler. This function should be run from pipeline before the inference.
+        设置调度器的起始索引。此函数应在推理前从管道运行。
 
         Args:
             begin_index (`int`):
-                The begin index for the scheduler.
+                调度器的起始索引。
         """
         self._begin_index = begin_index
 
@@ -168,12 +158,12 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         shift: Optional[Union[float, None]] = None,
     ):
         """
-        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+        设置用于扩散链的离散时间步（在推理前运行）。
         Args:
             num_inference_steps (`int`):
-                Total number of the spacing of the time steps.
+                时间步的总数。
             device (`str` or `torch.device`, *optional*):
-                The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
+                时间步应移动到的设备。如果为 `None`，则不移动时间步。
         """
 
         if self.config.use_dynamic_shifting and mu is None:
@@ -222,7 +212,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         if self.solver_p:
             self.solver_p.set_timesteps(self.num_inference_steps, device=device)
 
-        # add an index counter for schedulers that allow duplicated timesteps
+        # 添加索引计数器，用于允许重复时间步的调度器
         self._step_index = None
         self._begin_index = None
         self.sigmas = self.sigmas.to(
@@ -286,19 +276,19 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         r"""
-        Convert the model output to the corresponding type the UniPC algorithm needs.
+        将模型输出转换为 UniPC 算法所需的相应类型。
 
         Args:
             model_output (`torch.Tensor`):
-                The direct output from the learned diffusion model.
+                学习到的扩散模型的直接输出。
             timestep (`int`):
-                The current discrete timestep in the diffusion chain.
+                扩散链中的当前离散时间步。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
 
         Returns:
             `torch.Tensor`:
-                The converted model output.
+                转换后的模型输出。
         """
         timestep = args[0] if len(args) > 0 else kwargs.pop("timestep", None)
         if sample is None:
@@ -358,21 +348,21 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        One step for the UniP (B(h) version). Alternatively, `self.solver_p` is used if is specified.
+        UniP (B(h) 版本) 的一步。如果指定了 `self.solver_p`，则使用它。
 
         Args:
             model_output (`torch.Tensor`):
-                The direct output from the learned diffusion model at the current timestep.
+                当前时间步学习到的扩散模型的直接输出。
             prev_timestep (`int`):
-                The previous discrete timestep in the diffusion chain.
+                扩散链中的上一个离散时间步。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
             order (`int`):
-                The order of UniP at this timestep (corresponds to the *p* in UniPC-p).
+                此时间步的 UniP 阶数 (对应于 UniPC-p 中的 *p*)。
 
         Returns:
             `torch.Tensor`:
-                The sample tensor at the previous timestep.
+                上一个时间步的样本张量。
         """
         prev_timestep = args[0] if len(args) > 0 else kwargs.pop(
             "prev_timestep", None)
@@ -495,23 +485,23 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         **kwargs,
     ) -> torch.Tensor:
         """
-        One step for the UniC (B(h) version).
+        UniC (B(h) 版本) 的一步。
 
         Args:
             this_model_output (`torch.Tensor`):
-                The model outputs at `x_t`.
+                `x_t` 处的模型输出。
             this_timestep (`int`):
-                The current timestep `t`.
+                当前时间步 `t`。
             last_sample (`torch.Tensor`):
-                The generated sample before the last predictor `x_{t-1}`.
+                上一个预测器 `x_{t-1}` 之前生成的样本。
             this_sample (`torch.Tensor`):
-                The generated sample after the last predictor `x_{t}`.
+                上一个预测器 `x_{t}` 之后生成的样本。
             order (`int`):
-                The `p` of UniC-p at this step. The effective order of accuracy should be `order + 1`.
+                此步骤的 UniC-p 的 `p`。有效精度阶数应为 `order + 1`。
 
         Returns:
             `torch.Tensor`:
-                The corrected sample tensor at the current timestep.
+                当前时间步的校正后样本张量。
         """
         this_timestep = args[0] if len(args) > 0 else kwargs.pop(
             "this_timestep", None)
@@ -644,7 +634,7 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
     # Copied from diffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler._init_step_index
     def _init_step_index(self, timestep):
         """
-        Initialize the step_index counter for the scheduler.
+        初始化调度器的 step_index 计数器。
         """
 
         if self.begin_index is None:
@@ -661,23 +651,21 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
              return_dict: bool = True,
              generator=None) -> Union[SchedulerOutput, Tuple]:
         """
-        Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
-        the multistep UniPC.
+        通过反转 SDE 预测上一个时间步的样本。此函数使用多步 UniPC 传播样本。
 
         Args:
             model_output (`torch.Tensor`):
-                The direct output from learned diffusion model.
+                学习到的扩散模型的直接输出。
             timestep (`int`):
-                The current discrete timestep in the diffusion chain.
+                扩散链中的当前离散时间步。
             sample (`torch.Tensor`):
-                A current instance of a sample created by the diffusion process.
+                扩散过程创建的当前样本实例。
             return_dict (`bool`):
-                Whether or not to return a [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`.
+                是否返回 [`~schedulers.scheduling_utils.SchedulerOutput`] 或 `tuple`。
 
         Returns:
             [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`:
-                If return_dict is `True`, [`~schedulers.scheduling_utils.SchedulerOutput`] is returned, otherwise a
-                tuple is returned where the first element is the sample tensor.
+                如果 return_dict 为 `True`，则返回 [`~schedulers.scheduling_utils.SchedulerOutput`]，否则返回一个元组，其中第一个元素是样本张量。
 
         """
         if self.num_inference_steps is None:
@@ -743,16 +731,15 @@ class FlowUniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
     def scale_model_input(self, sample: torch.Tensor, *args,
                           **kwargs) -> torch.Tensor:
         """
-        Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
-        current timestep.
+        确保与需要根据当前时间步缩放去噪模型输入的调度器可互换。
 
         Args:
             sample (`torch.Tensor`):
-                The input sample.
+                输入样本。
 
         Returns:
             `torch.Tensor`:
-                A scaled input sample.
+                缩放后的输入样本。
         """
         return sample
 

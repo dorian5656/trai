@@ -52,30 +52,30 @@ class WanI2V:
         convert_model_dtype=False,
     ):
         r"""
-        Initializes the image-to-video generation model components.
+        初始化图生视频生成模型组件。
 
         Args:
             config (EasyDict):
-                Object containing model parameters initialized from config.py
+                从 config.py 初始化得到的包含模型参数的对象
             checkpoint_dir (`str`):
-                Path to directory containing model checkpoints
+                包含模型权重的目录路径
             device_id (`int`,  *optional*, defaults to 0):
-                Id of target GPU device
+                目标 GPU 设备 ID
             rank (`int`,  *optional*, defaults to 0):
-                Process rank for distributed training
+                分布式训练的进程 rank
             t5_fsdp (`bool`, *optional*, defaults to False):
-                Enable FSDP sharding for T5 model
+                是否为 T5 模型启用 FSDP 分片
             dit_fsdp (`bool`, *optional*, defaults to False):
-                Enable FSDP sharding for DiT model
+                是否为 DiT 模型启用 FSDP 分片
             use_sp (`bool`, *optional*, defaults to False):
-                Enable distribution strategy of sequence parallel.
+                是否启用序列并行 (Sequence Parallel) 分布策略
             t5_cpu (`bool`, *optional*, defaults to False):
-                Whether to place T5 model on CPU. Only works without t5_fsdp.
+                是否将 T5 模型放置在 CPU 上。仅在 t5_fsdp 为 False 时有效。
             init_on_cpu (`bool`, *optional*, defaults to True):
-                Enable initializing Transformer Model on CPU. Only works without FSDP or USP.
+                是否在 CPU 上初始化 Transformer 模型。仅在禁用 FSDP 或 USP 时有效。
             convert_model_dtype (`bool`, *optional*, defaults to False):
-                Convert DiT model parameters dtype to 'config.param_dtype'.
-                Only works without FSDP.
+                将 DiT 模型参数类型转换为 'config.param_dtype'。
+                仅在禁用 FSDP 时有效。
         """
         self.device = torch.device(f"cuda:{device_id}")
         self.config = config
@@ -134,25 +134,24 @@ class WanI2V:
     def _configure_model(self, model, use_sp, dit_fsdp, shard_fn,
                          convert_model_dtype):
         """
-        Configures a model object. This includes setting evaluation modes,
-        applying distributed parallel strategy, and handling device placement.
+        配置模型对象。包括设置评估模式、应用分布式并行策略以及处理设备放置。
 
         Args:
             model (torch.nn.Module):
-                The model instance to configure.
+                要配置的模型实例。
             use_sp (`bool`):
-                Enable distribution strategy of sequence parallel.
+                启用序列并行 (Sequence Parallel) 分布策略。
             dit_fsdp (`bool`):
-                Enable FSDP sharding for DiT model.
+                为 DiT 模型启用 FSDP 分片。
             shard_fn (callable):
-                The function to apply FSDP sharding.
+                应用 FSDP 分片的函数。
             convert_model_dtype (`bool`):
-                Convert DiT model parameters dtype to 'config.param_dtype'.
-                Only works without FSDP.
+                将 DiT 模型参数类型转换为 'config.param_dtype'。
+                仅在禁用 FSDP 时有效。
 
         Returns:
             torch.nn.Module:
-                The configured model.
+                配置后的模型。
         """
         model.eval().requires_grad_(False)
 
@@ -177,20 +176,20 @@ class WanI2V:
 
     def _prepare_model_for_timestep(self, t, boundary, offload_model):
         r"""
-        Prepares and returns the required model for the current timestep.
+        为当前时间步准备并返回所需的模型。
 
         Args:
             t (torch.Tensor):
-                current timestep.
+                当前时间步。
             boundary (`int`):
-                The timestep threshold. If `t` is at or above this value,
-                the `high_noise_model` is considered as the required model.
+                时间步阈值。如果 `t` 大于或等于此值，
+                则认为 `high_noise_model` 是所需的模型。
             offload_model (`bool`):
-                A flag intended to control the offloading behavior.
+                用于控制卸载行为的标志。
 
         Returns:
             torch.nn.Module:
-                The active model on the target device for the current timestep.
+                当前时间步在目标设备上的活动模型。
         """
         if t.item() >= boundary:
             required_model_name = 'high_noise_model'
@@ -223,42 +222,31 @@ class WanI2V:
                  seed=-1,
                  offload_model=True):
         r"""
-        Generates video frames from input image and text prompt using diffusion process.
+        生成视频。
 
         Args:
             input_prompt (`str`):
-                Text prompt for content generation.
-            img (PIL.Image.Image):
-                Input image tensor. Shape: [3, H, W]
+                用于生成视频的文本提示词。
+            img (`Image`):
+                输入图像，作为视频生成的基础。
             max_area (`int`, *optional*, defaults to 720*1280):
-                Maximum pixel area for latent space calculation. Controls video resolution scaling
+                最大像素面积。生成视频的宽度和高度将根据该面积进行调整。
             frame_num (`int`, *optional*, defaults to 81):
-                How many frames to sample from a video. The number should be 4n+1
+                生成视频的帧数。
             shift (`float`, *optional*, defaults to 5.0):
-                Noise schedule shift parameter. Affects temporal dynamics
-                [NOTE]: If you want to generate a 480p video, it is recommended to set the shift value to 3.0.
+                噪声调度的偏移参数。
             sample_solver (`str`, *optional*, defaults to 'unipc'):
-                Solver used to sample the video.
+                采样求解器。
             sampling_steps (`int`, *optional*, defaults to 40):
-                Number of diffusion sampling steps. Higher values improve quality but slow generation
-            guide_scale (`float` or tuple[`float`], *optional*, defaults 5.0):
-                Classifier-free guidance scale. Controls prompt adherence vs. creativity.
-                If tuple, the first guide_scale will be used for low noise model and
-                the second guide_scale will be used for high noise model.
+                去噪步数。
+            guide_scale (`float`, *optional*, defaults to 5.0):
+                分类器无关引导 (CFG) 的缩放系数。
             n_prompt (`str`, *optional*, defaults to ""):
-                Negative prompt for content exclusion. If not given, use `config.sample_neg_prompt`
+                负面提示词。
             seed (`int`, *optional*, defaults to -1):
-                Random seed for noise generation. If -1, use random seed
+                随机种子。如果为 -1，则使用随机种子。
             offload_model (`bool`, *optional*, defaults to True):
-                If True, offloads models to CPU during generation to save VRAM
-
-        Returns:
-            torch.Tensor:
-                Generated video frames tensor. Dimensions: (C, N H, W) where:
-                - C: Color channels (3 for RGB)
-                - N: Number of frames (81)
-                - H: Frame height (from max_area)
-                - W: Frame width from max_area)
+                是否在生成后卸载模型以节省显存。
         """
         if action_path is not None:
             c2ws = np.load(os.path.join(action_path, "poses.npy")) # opencv coordinate

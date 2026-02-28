@@ -15,4 +15,7 @@ from .rrdsppg_page import RrdsppgPage
 from .system_monitor_page import SystemMonitorPage
 from .doc_tools_page import DocToolsPage
 from .image_tools_page import ImageToolsPage
+from .voice_tools_page import VoiceToolsPage
+from .video_gen_page import VideoGenPage
+from .music_gen_page import MusicGenPage
 from .settings_page import SettingsPage

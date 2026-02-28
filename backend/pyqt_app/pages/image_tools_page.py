@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
-from PyQt6.QtGui import QPixmap, QDesktopServices
+from PyQt6.QtGui import QPixmap, QDesktopServices, QImageReader
 import requests
 import os
 from loguru import logger
@@ -606,6 +606,9 @@ QFrame:hover {
         self._update_preview(file_path)
 
     def _update_preview(self, path: str) -> None:
+        # 允许加载大图片 (取消 128MB 的限制)
+        QImageReader.setAllocationLimit(0)
+        
         pixmap = QPixmap(path)
         if pixmap.isNull():
             self.preview_label.setText("无法加载图片预览")

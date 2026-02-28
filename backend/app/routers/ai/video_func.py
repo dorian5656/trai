@@ -46,6 +46,13 @@ try:
     from wan.utils.utils import save_video
 except ImportError as e:
     logger.error(f"Wan-AI module import failed: {e}")
+    # 定义占位符以避免 NameError
+    WanModel = None
+    T5EncoderModel = None
+    Wan2_1_VAE = None
+    Wan2_2_VAE = None
+    FlowUniPCMultistepScheduler = None
+    save_video = None
 
 # =============================================================================
 # Schema 定义
@@ -104,6 +111,10 @@ class WanT2VWrapper:
         self.text_encoder = None
         self.vae = None
         self.model = None
+        
+        # 检查依赖是否导入成功
+        if WanModel is None:
+            logger.warning("Wan-AI 模块未正确加载，视频生成功能将不可用。")
         
         self.initialized = True
         logger.info("WanT2VWrapper 配置初始化完成。")
@@ -188,9 +199,9 @@ class WanT2VWrapper:
 
         logger.info(f"正在加载 {model_name} 模型...")
         try:
-            # 1. T5 Encoder
-            # T5 and VAE are often shared or located in the 1.3B directory if not present in the current model dir
-            # Fallback to 1.3B directory for common components if file missing
+            # 1. T5 编码器
+            # T5 和 VAE 通常共享或位于 1.3B 目录中（如果当前模型目录中不存在）
+            # 如果文件丢失，回退到 1.3B 目录查找通用组件
             t5_ckpt_path = os.path.join(self.checkpoint_dir, self.config.t5_checkpoint)
             t5_tokenizer_path = os.path.join(self.checkpoint_dir, self.config.t5_tokenizer)
             
@@ -231,7 +242,7 @@ class WanT2VWrapper:
                     dtype=self.config.param_dtype)
 
             # 3. WanModel
-            # Determine model type from config or name
+            # 根据配置或名称确定模型类型
             model_type = 't2v'
             if 'TI2V' in self.current_model_name:
                 model_type = 'ti2v'
@@ -474,7 +485,7 @@ class WanT2VWrapper:
         try:
             # 1. 加载并预处理图片
             img = Image.open(image_path).convert('RGB')
-            # 简单 Resize (bicubic)
+            # 简单 Resize (双三次插值)
             img = img.resize((width, height), Image.BICUBIC)
             
             # 2. 转 Tensor 并归一化 [-1, 1]

@@ -19,53 +19,31 @@ import json
 import copy
 import requests
 
-# 当前版本号，更新时手动更改。
-CURRENT_VERSION = "1.3.0"
+# 当前版本号，更新时手动更改。格式改为时间戳格式 (YYYYMMDDHHMM)，以匹配服务端版本号
+CURRENT_VERSION = "202602271720"
 
 def _is_timestamp(v: str) -> bool:
     """判断是否为时间戳格式 (纯数字且长度>=8)"""
     s = v.strip().lstrip("vV")
     return s.isdigit() and len(s) >= 8
 
-def _parse_semver(v: str):
-    try:
-        parts = v.strip().lstrip("vV").split(".")
-        return tuple(int(p) for p in parts)
-    except Exception:
-        return None
-
 def _compare_versions(a: str, b: str) -> int:
     """
     比较版本号 a 和 b
     返回: 1 (a>b), -1 (a<b), 0 (a==b)
-    逻辑:
-    1. 如果都是时间戳，按数值比较
-    2. 如果一个是时间戳，一个是语义化版本，认为时间戳(新系统)永远更新
-    3. 如果都是语义化版本，按段比较
-    4. 兜底使用原始字符串比较
+    逻辑: 仅支持时间戳格式 (YYYYMMDDHHMM) 比较，移除语义化版本支持
     """
-    is_a_ts = _is_timestamp(a)
-    is_b_ts = _is_timestamp(b)
-
-    # 1. 都是时间戳
-    if is_a_ts and is_b_ts:
-        ta = int(a.strip().lstrip("vV"))
-        tb = int(b.strip().lstrip("vV"))
+    # 提取数字部分
+    sa = a.strip().lstrip("vV")
+    sb = b.strip().lstrip("vV")
+    
+    # 尝试转为整数比较
+    if sa.isdigit() and sb.isdigit():
+        ta = int(sa)
+        tb = int(sb)
         return (ta > tb) - (ta < tb)
-
-    # 2. 混合模式：时间戳(新) > 语义化(旧)
-    if is_a_ts and not is_b_ts:
-        return 1
-    if not is_a_ts and is_b_ts:
-        return -1
-
-    # 3. 都是语义化版本
-    sa = _parse_semver(a)
-    sb = _parse_semver(b)
-    if sa is not None and sb is not None:
-        return (sa > sb) - (sa < sb)
-
-    # 4. 兜底
+        
+    # 兜底：字符串比较
     return (a > b) - (a < b)
 
 class UpdateCheckThread(QThread):

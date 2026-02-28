@@ -32,6 +32,7 @@ MANIFEST
 
 # exe文件
 *.exe
+backend/pyqt_app/exe
 
 # 配置文件
 backend/pyqt_app/pages/config.json

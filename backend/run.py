@@ -7,6 +7,10 @@
 
 import ctypes
 import sys
+# 安全修复: CVE-2025-50817 (python-future)
+# 在导入任何其他模块前，强制屏蔽 test 模块，防止 malicious test.py 被自动导入
+sys.modules['test'] = None
+
 from pathlib import Path
 
 # -----------------------------------------------------------------------------
