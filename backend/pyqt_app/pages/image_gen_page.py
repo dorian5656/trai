@@ -80,8 +80,8 @@ class ImageGenPage(QWidget):
         main_layout.setSpacing(20)
 
         # 标题
-        title_label = QLabel("AI 文生图")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
+        title_label = QLabel("🎨 AI 文生图")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #333;")
         main_layout.addWidget(title_label)
 
         # 顶部控制区 (输入框 + 按钮)

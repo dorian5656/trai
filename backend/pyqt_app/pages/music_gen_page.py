@@ -70,8 +70,8 @@ class MusicGenPage(QWidget):
         main_layout.setSpacing(20)
 
         # 标题
-        title_label = QLabel("AI 文生音乐")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
+        title_label = QLabel("🎵 AI 文生音乐")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #333;")
         main_layout.addWidget(title_label)
 
         # 顶部控制区 (参数输入)
@@ -138,7 +138,7 @@ class MusicGenPage(QWidget):
         # 按钮
         self.generate_btn = QPushButton("生成音乐")
         self.generate_btn.setFixedHeight(30)
-        self.generate_btn.setFixedWidth(120)
+        self.generate_btn.setFixedWidth(100)
         self.generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.generate_btn.setStyleSheet("""
             QPushButton {
@@ -159,7 +159,7 @@ class MusicGenPage(QWidget):
 
         self.download_btn = QPushButton("下载音乐")
         self.download_btn.setFixedHeight(30)
-        self.download_btn.setFixedWidth(120)
+        self.download_btn.setFixedWidth(100)
         self.download_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.download_btn.setEnabled(False)
         self.download_btn.setStyleSheet("""

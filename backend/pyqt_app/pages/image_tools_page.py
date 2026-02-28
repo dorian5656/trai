@@ -290,7 +290,7 @@ class ImageToolsPage(QWidget):
         main_layout.setSpacing(0)
 
         header = QWidget()
-        header.setFixedHeight(60)
+        header.setFixedHeight(50)
         header.setStyleSheet(
             "background-color: #ffffff; border-bottom: 1px solid #e0e0e0;"
         )
@@ -308,8 +308,8 @@ class ImageToolsPage(QWidget):
 
         content = QWidget()
         content_layout = QHBoxLayout(content)
-        content_layout.setContentsMargins(30, 20, 30, 20)
-        content_layout.setSpacing(24)
+        content_layout.setContentsMargins(30, 15, 30, 15)
+        content_layout.setSpacing(20)
 
         left_panel = QFrame()
         left_panel.setMinimumWidth(320)
@@ -317,8 +317,8 @@ class ImageToolsPage(QWidget):
             "QFrame { background-color: #ffffff; border-radius: 8px; border: 1px solid #e0e0e0; }"
         )
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(20, 16, 20, 16)
-        left_layout.setSpacing(12)
+        left_layout.setContentsMargins(15, 12, 15, 12)
+        left_layout.setSpacing(10)
 
         source_title = QLabel("源图片")
         source_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #444444; border: none;")
@@ -332,7 +332,7 @@ class ImageToolsPage(QWidget):
             QLineEdit {
                 border: 1px solid #e0e0e0;
                 border-radius: 6px;
-                padding: 8px;
+                padding: 6px;
                 background-color: #f9f9f9;
                 color: #555555;
             }
@@ -346,7 +346,7 @@ class ImageToolsPage(QWidget):
                 background-color: #2196F3;
                 color: white;
                 border-radius: 6px;
-                padding: 8px 16px;
+                padding: 6px 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -359,7 +359,7 @@ class ImageToolsPage(QWidget):
 
         self.preview_label = QLabel("预览区")
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setMinimumHeight(300)
+        self.preview_label.setMinimumHeight(240)
         self.preview_label.setStyleSheet(
             "background-color: #f5f7fa; border-radius: 8px; border: 1px dashed #cccccc; color: #aaaaaa;"
         )
@@ -370,7 +370,7 @@ class ImageToolsPage(QWidget):
         self.image_info_label.setStyleSheet("""
             background-color: #f0f2f5; 
             border-radius: 6px; 
-            padding: 8px; 
+            padding: 6px; 
             color: #555555; 
             font-family: Consolas, monospace;
         """)
@@ -383,7 +383,7 @@ class ImageToolsPage(QWidget):
         right_panel = QWidget()
         right_layout = QGridLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(20) # 增加卡片间距
+        right_layout.setSpacing(15) # 增加卡片间距
 
         format_card = self._create_format_convert_card()
         ico_card = self._create_ico_convert_card()
