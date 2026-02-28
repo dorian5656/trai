@@ -65,6 +65,29 @@ python backend/run.py
 **接口**:
 `POST /api_trai/v1/tools/image/image2ico`
 
+## 🕷️ Dotown 像素风爬虫 (Dotown Crawler)
+
+本项目集成了 Scrapy 爬虫框架，专门用于采集 Dotown 网站的像素风素材，主要用于文生图模型的训练与测试。
+
+### 特性
+- **增量抓取**: 自动跳过已下载的图片
+- **自动存储**: 图片自动保存至 `backend/static/dotown` 目录
+- **S3 同步**: 支持将抓取的图片自动上传至 S3 对象存储
+- **飞书通知**: 任务完成后自动推送统计信息到飞书
+
+### 快速开始
+
+```bash
+# 激活环境
+conda activate trai_31014_whf_dev_20260227
+
+# 进入爬虫目录
+cd backend/app/crawler/dotown_crawler
+
+# 启动爬虫
+scrapy crawl dotown
+```
+
 ## �️ 网络爬虫 (Crawler)
 
 本项目集成了 Scrapy 爬虫框架，用于采集网络公开信息。
@@ -162,6 +185,11 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 
 ## 📝 更新日志 (Changelog)
+
+### 🛠️ 后端_2026_02_28_0907
+- **新功能(crawler)**: 新增 Dotown 像素风爬虫, 专门用于采集文生图测试素材.
+- **优化(crawler)**: 实现增量抓取、S3 自动上传及飞书任务通知.
+- **环境**: 更新 `backend/requirements.txt` 补充爬虫相关依赖.
 
 ### 🛠️ 后端_2026_02_26_1716
 - **安全**: 实施针对 `python-future` 的 CVE-2025-50817 漏洞缓解措施 (在入口脚本中屏蔽 `test` 模块导入).
