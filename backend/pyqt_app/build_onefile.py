@@ -73,7 +73,7 @@ def upload_to_server(local_file_path, exe_name, version):
             "latest_version": version,
             "release_date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             "download_url": f"/static/{exe_name}.exe",
-            "update_log": f"1.新增AI 文生音乐服务。\n2.优化AI 文生视频的缓存机制。\n3.优化AI 文生图的页面布局。",
+            "update_log": f"1.新增媒体工具箱模块，视频转 GIF。\n2.优化其他模块的页面布局。",
             "description": f"最新版本 {version}，建议更新。",
             "force_update": False
         }

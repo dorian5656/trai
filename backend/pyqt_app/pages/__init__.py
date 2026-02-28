@@ -18,4 +18,5 @@ from .image_tools_page import ImageToolsPage
 from .voice_tools_page import VoiceToolsPage
 from .video_gen_page import VideoGenPage
 from .music_gen_page import MusicGenPage
+from .media_tools_page import MediaToolsPage
 from .settings_page import SettingsPage
