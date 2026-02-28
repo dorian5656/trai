@@ -23,6 +23,8 @@ from backend.app.utils.logger import logger
 from backend.app.config import settings
 from backend.app.utils.security import get_password_hash
 
+from backend.app.crawler.dotown_crawler.dotown_crawler.models import DotownImage, CrawlerTask
+
 class DBInitializer:
     """
     数据库初始化器
@@ -1022,7 +1024,94 @@ class DBInitializer:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
 
+    async def init_dotown_crawler_tables(self, conn):
+        """
+        初始化 Dotown 爬虫相关表 (crawler_tasks, crawler_dotown_images)
+        """
+        # 由于我们已经在 dotown_crawler/models.py 中定义了模型，并且 SQLAlchemy Base 已经注册了它们
+        # 这里的 create_all 或者手动建表逻辑可以依赖 Base.metadata
+        # 但为了保持 db_init 的纯 SQL 风格，我们保留 SQL 定义作为一种"显式声明"
+        # 或者，更简单地，我们可以直接让 SQLAlchemy 创建表：
+        # DotownImage.__table__.create(bind=conn) # asyncpg 不支持这种直接绑定
+        
+        # 1. 爬虫任务表
+        task_table = "crawler_tasks"
+        task_ddl = """
+        CREATE TABLE IF NOT EXISTS crawler_tasks (
+            id BIGSERIAL PRIMARY KEY,
+            task_name VARCHAR(100) NOT NULL,
+            spider_name VARCHAR(100) NOT NULL,
+            target_count INTEGER DEFAULT 1000,
+            start_page INTEGER DEFAULT 1,
+            current_page INTEGER DEFAULT 1,
+            total_crawled INTEGER DEFAULT 0,
+            total_saved INTEGER DEFAULT 0,
+            status VARCHAR(50) DEFAULT 'pending',
+            error_msg TEXT,
+            created_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            started_at TIMESTAMP(0),
+            stopped_at TIMESTAMP(0)
+        );
+        COMMENT ON TABLE crawler_tasks IS '爬虫任务记录表';
+        COMMENT ON COLUMN crawler_tasks.id IS '主键ID';
+        COMMENT ON COLUMN crawler_tasks.task_name IS '任务名称';
+        COMMENT ON COLUMN crawler_tasks.spider_name IS '爬虫名称 (如 dotown)';
+        COMMENT ON COLUMN crawler_tasks.target_count IS '目标抓取数量';
+        COMMENT ON COLUMN crawler_tasks.start_page IS '起始页码';
+        COMMENT ON COLUMN crawler_tasks.current_page IS '当前页码';
+        COMMENT ON COLUMN crawler_tasks.total_crawled IS '本次抓取数量';
+        COMMENT ON COLUMN crawler_tasks.total_saved IS '本次入库数量';
+        COMMENT ON COLUMN crawler_tasks.status IS '状态: pending/running/stopped/completed/failed';
+        COMMENT ON COLUMN crawler_tasks.error_msg IS '错误信息';
+        COMMENT ON COLUMN crawler_tasks.created_at IS '任务创建时间';
+        COMMENT ON COLUMN crawler_tasks.updated_at IS '任务更新时间';
+        COMMENT ON COLUMN crawler_tasks.started_at IS '任务开始时间';
+        COMMENT ON COLUMN crawler_tasks.stopped_at IS '任务停止时间';
+        """
+        await conn.execute(task_ddl)
+        await self._update_table_registry(conn, task_table, "爬虫任务记录表")
+        logger.info(f"✅ [Table] {task_table} 初始化完成")
 
+        # 2. Dotown 图片表
+        image_table = "crawler_dotown_images"
+        image_ddl = """
+        CREATE TABLE IF NOT EXISTS crawler_dotown_images (
+            id BIGSERIAL PRIMARY KEY,
+            filename VARCHAR(255) NOT NULL UNIQUE,
+            source_url VARCHAR(1024) NOT NULL,
+            s3_key VARCHAR(1024),
+            s3_url VARCHAR(1024),
+            local_path VARCHAR(1024),
+            file_size INTEGER DEFAULT 0,
+            width INTEGER,
+            height INTEGER,
+            page_num INTEGER,
+            crawled_at TIMESTAMP(0) DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            uploaded_at TIMESTAMP(0),
+            is_uploaded BOOLEAN DEFAULT FALSE,
+            is_deleted BOOLEAN DEFAULT FALSE
+        );
+        CREATE INDEX IF NOT EXISTS idx_dotown_filename ON crawler_dotown_images(filename);
+        COMMENT ON TABLE crawler_dotown_images IS 'Dotown像素风图片素材库';
+        COMMENT ON COLUMN crawler_dotown_images.id IS '主键ID';
+        COMMENT ON COLUMN crawler_dotown_images.filename IS '文件名 (唯一)';
+        COMMENT ON COLUMN crawler_dotown_images.source_url IS '原始图片URL';
+        COMMENT ON COLUMN crawler_dotown_images.s3_key IS 'S3存储Key';
+        COMMENT ON COLUMN crawler_dotown_images.s3_url IS 'S3访问URL';
+        COMMENT ON COLUMN crawler_dotown_images.local_path IS '本地存储路径';
+        COMMENT ON COLUMN crawler_dotown_images.file_size IS '文件大小(字节)';
+        COMMENT ON COLUMN crawler_dotown_images.width IS '图片宽度';
+        COMMENT ON COLUMN crawler_dotown_images.height IS '图片高度';
+        COMMENT ON COLUMN crawler_dotown_images.page_num IS '来源页码';
+        COMMENT ON COLUMN crawler_dotown_images.crawled_at IS '爬取时间';
+        COMMENT ON COLUMN crawler_dotown_images.uploaded_at IS '上传S3时间';
+        COMMENT ON COLUMN crawler_dotown_images.is_uploaded IS '是否已上传S3';
+        COMMENT ON COLUMN crawler_dotown_images.is_deleted IS '是否已删除';
+        """
+        await conn.execute(image_ddl)
+        await self._update_table_registry(conn, image_table, "Dotown像素风图片素材库")
+        logger.info(f"✅ [Table] {image_table} 初始化完成")
 
     async def init_tables(self):
         """
@@ -1185,6 +1274,9 @@ class DBInitializer:
 
 
             
+            # 6.7 初始化 Dotown 爬虫相关表
+            await self.init_dotown_crawler_tables(conn)
+
             # 7. 初始化超级管理员
             await self.init_superuser(conn)
 
@@ -1195,6 +1287,8 @@ class DBInitializer:
         except Exception as e:
             logger.error(f"❌ 初始化表结构失败: {e}")
             return False
+
+
 
     async def run(self):
         """
