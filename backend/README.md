@@ -186,6 +186,12 @@ pip install -r requirements_centos.txt -i https://pypi.tuna.tsinghua.edu.cn/simp
 
 ## 📝 更新日志 (Changelog)
 
+### 🛠️ 后端_2026_02_28_1420
+- **修复(media)**: 修复视频转 GIF (`video2gif`) 功能中 FFmpeg 缺失 H.264 解码器的问题, 确保 MP4 格式正常转换.
+- **优化(media)**: 将视频转 GIF 接口的默认文件大小限制从 50MB 提升至 100MB, 增强大文件处理能力.
+- **测试(ai)**: 完成文生图模型 (Z-Image/SDXL) 的全流程测试, 验证复杂提示词 ("大雁塔 美女") 的生成效果.
+- **文档**: 更新后端与根目录文档, 同步最新的修复与优化记录.
+
 ### 🛠️ 后端_2026_02_28_1155
 - **修复(backend)**: 修复图像生成模块依赖 (paddlepaddle-gpu, paddleocr), 解决 CUDA 版本不匹配问题.
 - **优化(backend)**: 优化 Z-Image 和 SDXL 本地模型加载逻辑, 提升推理稳定性.
