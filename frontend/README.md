@@ -1,5 +1,104 @@
-# Vue 3 + TypeScript + Vite
+# TRAI 前端项目 (TRAI Frontend)
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+基于 Vue3 + TypeScript + Vite + Element Plus 构建的现代化前端应用。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## 🚀 快速启动
+
+### 1. 安装依赖
+```bash
+cd frontend
+npm install
+```
+
+### 2. 启动开发服务器
+```bash
+npm run dev
+```
+
+### 3. 打包构建
+```bash
+# 构建 Web 版本
+npm run build
+
+# 构建桌面版 (.exe) - 需先参考 ELECTRON_GUIDE.md 配置
+npm run build
+```
+
+## 📝 更新日志 (Changelog)
+
+### 2026_02_10_0812
+- **前端-内容**: 更新技能: 将 'AI 播客' 替换为 '发票识别'; 同步更换票据样式图标; 更新输入占位文案以提示抬头、金额、税率识别。
+
+### 2026_02_05_1704
+- **前端-内容**: 更新 `.gitignore` 忽略 `frontend/nignx.txt`、`frontend/src/auto-imports.d.ts`、`frontend/src/components.d.ts` 并从版本库移除已提交的生成文件。
+
+### 2026_02_05_1701
+- **前端-内容**: 同步前端代码到 zcl 分支.
+
+### 2026_02_05_1142
+- **前端-内容**: 新增目录索引文件 (api/index.ts, composables/index.ts, stores/index.ts, modules/*/index.ts)，统一按目录导入，便于工程化维护与拆分。
+- **前端-内容**: 保持 `frontend/nignx.txt`、自动生成的 d.ts 文件不纳入版本控制。
+
+### 2026_02_04_1648
+- **前端**: 增强会话列表交互, 支持右键菜单重命名与删除会话 (前端演示).
+- **前端**: 优化 Markdown 渲染, 支持聊天气泡内图片自适应显示.
+
+### 2026_02_04_1415
+- **前端**: 新增图片识别技能, 支持多模态流式对话与打字机效果.
+
+### 2026_02_04_1130
+- **前端**: 优化登录交互, 实现登录后自动刷新页面以确保状态同步.
+- **构建**: 更新 Vite 配置与通用组件 (`SimilarityDialog`).
+
+### 2026_02_04_0936
+- **前端**: 实现企业微信扫码/链接自动登录功能 (`Login.vue`).
+- **前端**: 修复图片预览功能, 使用 `Teleport` 实现全屏遮罩, 并引入 Element Plus 样式.
+- **前端**: 优化文件上传体验, 修复进度条卡顿问题, 新增音频文件图标支持.
+- **前端**: 修复 TypeScript 类型错误 (`TS2532`, `TS1294`).
+
+### 2026_02_03_1723
+- **前端**: 重构聊天模块, 移除 `useChatLogic`, 迁移至 Pinia Store (`chat.ts`).
+- **前端**: 新增全局错误处理机制 (`errorHandler`), 优化异常捕获体验.
+- **前端**: 适配新版 WebSocket 语音交互 (`useWebSocketSpeech`).
+
+### 2026_01_29_1353
+- **前端**: 优化官网助手对话框样式, 修复气泡宽度与换行问题, 统一使用 Flex 布局.
+
+### 2026_01_28_1618
+- **前端**: 重构代码架构, 提取业务逻辑至 `Composables` (如 `useChatLogic`, `useSkills`), 提升代码复用性.
+- **前端**: 重构聊天输入框组件 (`ChatInput`), 抽离 SVG 图标至独立资源文件.
+- **前端**: 新增 `SmartAssistant` 智能助手页面及 `ContactForm` 组件.
+- **前端**: 更新 API 模块及请求工具类, 优化类型定义与错误处理.
+
+### 2026_01_28_1529
+- **前端**: 修复 PC 端聊天界面输入框被遮挡的问题, 优化布局结构.
+- **前端**: 全面规范化 CSS 单位, 强制使用相对单位 (rem/vw/vh) 替换 px.
+- **文档**: 更新前端基础规范 (`11_frontend_base_zcl.md`), 明确样式单位强制要求.
+
+### 2026_01_27_1732
+- **前端**: 完成登录功能闭环与 UI 优化.
+  - 新增登录页面 (`Login.vue`) 与路由配置, 支持 OAuth2 登录接口对接.
+  - 新增用户状态管理 (`stores/user.ts`), 实现自动获取用户信息与状态持久化.
+  - 首页 (`PC` & `Mobile`) 集成登录/退出功能, 侧边栏同步显示用户信息.
+  - 优化 `SimilarityDialog` 组件, 支持图片拖拽上传与预览, 并修复大整数精度问题.
+  - 修正 Axios 拦截器以兼容非标准 OAuth2 响应格式 (`access_token`).
+
+### 2026_01_27_1049
+- **前端**: 新增相似度识别功能入口及弹窗组件.
+  - 首页技能列表增加 `相似度识别` 选项.
+  - 新增 `SimilarityDialog` 业务组件, 支持公众号/服务号类型选择及双图上传.
+  - 封装 `/rrdsppg/predict` 接口调用逻辑.
+
+### 2026_01_27_0957
+- **前端**: 所有源代码文件统一添加标准文件头注释 (文件名, 作者, 日期, 描述).
+- **文档**: 更新前端基础规范 (`11_frontend_base_zcl.md`), 强制要求添加文件头.
+
+### 2026_01_27_0804
+- **前端**: 提交 frontend 整个文件夹代码.
+
+### 2026_01_26_1732
+- **文档**: 拆分并优化前端工程化规范, 建立模块化规则体系.
+- **前端**: 初始化 Vue3+TS+Vite 项目架构, 配置路径别名与基础样式.
+- **前端**: 实现 PC/Mobile 端路由自动映射与设备检测.
+- **前端**: 完成 PC 端侧边栏交互（收起/展开）与聊天界面开发.
+- **前端**: 完成移动端抽屉式导航与自适应布局开发.

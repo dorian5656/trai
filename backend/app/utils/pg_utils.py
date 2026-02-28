@@ -118,6 +118,26 @@ class PGUtils:
         return None
 
     @classmethod
+    async def fetch_one_commit(cls, sql: str, params: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        """
+        执行 SQL 并提交事务，返回单条结果 (适用于 INSERT ... RETURNING)
+        :param sql: SQL 语句
+        :param params: 参数字典
+        :return: 结果字典或 None
+        """
+        session_factory = cls.get_session_factory()
+        async with session_factory() as session:
+            try:
+                async with session.begin():
+                    logger.debug(f"正在执行带事务的操作: {sql}, 参数: {params}")
+                    result = await session.execute(text(sql), params)
+                    first_row = result.mappings().first()
+                    return dict(first_row) if first_row else None
+            except Exception as e:
+                logger.error(f"操作失败: {e}")
+                raise e
+
+    @classmethod
     async def execute_update(cls, sql: str, params: Dict[str, Any] = None) -> int:
         """
         执行增删改操作

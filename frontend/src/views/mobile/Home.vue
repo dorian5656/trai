@@ -1,146 +1,69 @@
 <!--
 文件名：frontend/src/views/mobile/Home.vue
 作者：zcl
-日期：2026-01-28
-描述：移动端主页组件 (修复输入框显示问题)
+日期：2026-02-11
+描述：移动端主页组件
 -->
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAppStore } from '@/stores/app';
-import { useChatStore } from '@/stores/chat';
-import { useUserStore } from '@/stores/user';
+import { useHomeLogic } from '@/composables/useHomeLogic';
+import MobileSidebar from '@/components/business/home/mobile/Sidebar.vue';
 import { ElImageViewer } from 'element-plus';
-import { useSpeechRecognition } from '@/composables/useSpeechRecognition';
-import { useFileUpload } from '@/composables/useFileUpload';
-import { useSkills } from '@/composables/useSkills';
-import { useChatLogic } from '@/composables/useChatLogic';
-import ChatInput from '@/components/business/home/ChatInput.vue';
-import MessageList from '@/components/business/home/MessageList.vue';
+import { ChatInput, MessageList } from '@/modules/chat';
+import SimilarityDialog from '@/components/business/SimilarityDialog.vue';
+import MeetingRecorder from '@/components/business/MeetingRecorder.vue';
+import DocumentToolDialog from '@/components/business/DocumentToolDialog.vue';
+import ImageGenDialog from '@/components/business/ImageGenDialog.vue';
+import { MOBILE_TEXT } from '@/constants/texts';
 
-const router = useRouter();
-const appStore = useAppStore();
-const chatStore = useChatStore();
-const userStore = useUserStore();
-const { isListening, result, toggleListening } = useSpeechRecognition();
-const { uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles } = useFileUpload();
-const { allSkills, activeSkill, handleSkillClick, removeSkill } = useSkills();
-
-const inputMessage = ref('');
-const isSending = ref(false);
-const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
-const isDeepThinking = ref(false);
-
-const { handleSend, handleStop } = useChatLogic(
+const {
+  appStore,
   chatStore,
-  inputMessage,
-  activeSkill,
-  uploadedFiles,
-  isSending,
-  () => messageListRef.value?.scrollToBottom(),
-  clearFiles
-);
-
-const toggleDeepThinking = () => {
-  isDeepThinking.value = !isDeepThinking.value;
-};
-
-// 监听语音识别结果
-watch(result, (newVal) => {
-  if (newVal) {
-    inputMessage.value = newVal;
-  }
-});
-
-// 初始化用户信息
-onMounted(() => {
-  userStore.init();
-});
-
-const handleLogin = () => {
-  router.push('/login');
-};
-
-const handleLogout = () => {
-  userStore.logout();
-};
-
-const handleMobileSkillClick = (skill: any) => {
-  // 移动端简单处理，暂不弹窗
-  if (skill.label !== '相似度识别') {
-    handleSkillClick(skill);
-    // Focus input
-    nextTick(() => {
-      const input = document.querySelector('.input-box input') as HTMLInputElement;
-      if (input) input.focus();
-    });
-  }
-};
+  userStore,
+  messageListRef,
+  // 语音识别
+  isListening, result, toggleListening,
+  // 文件上传
+  uploadedFiles, showViewer, previewUrlList, initialIndex, handleFileSelect, removeFile, handlePreview, closeViewer, clearFiles,
+  // 技能
+  allSkills, activeSkill, removeSkill,
+  // 会话管理
+  isLoadingHistory, loadConversations, handleSwitchSession, handleNewChat, handleRenameConversation, handleDeleteConversation,
+  // 布局状态
+  inputMessage, isDeepThinking, showSimilarityDialog, showMeetingRecorder, showDocumentDialog, showImageGenDialog, toggleDeepThinking, handleLogin, handleLogout, handleStop,
+  // 操作
+  handleSend, handleRegenerate, handleSkillSelect, mixedRecentItems
+} = useHomeLogic();
 </script>
 
 <template>
   <div class="mobile-container">
-    <!-- 侧边栏遮罩 -->
-    <div v-if="appStore.isMobileSidebarOpen" class="sidebar-mask" @click="appStore.closeMobileSidebar"></div>
-
-    <!-- 侧边栏抽屉 -->
-    <aside class="mobile-sidebar" :class="{ 'open': appStore.isMobileSidebarOpen }">
-      <div class="sidebar-header">
-        <div class="user-info">
-          <div class="avatar" v-if="userStore.avatar">
-            <img :src="userStore.avatar" alt="Avatar" />
-          </div>
-          <div class="avatar" v-else>👩‍💻</div>
-          <span class="username">{{ userStore.isLoggedIn ? userStore.username : '驼人GPT' }}</span>
-        </div>
-        <button class="close-btn" @click="appStore.closeMobileSidebar">✕</button>
-      </div>
-      
-      <div class="action-area">
-        <button class="new-chat-btn" @click="chatStore.createSession()">📝 新对话</button>
-      </div>
-
-      <!-- <nav class="menu-list">
-        <div class="menu-item"><span class="icon">✍️</span> 帮我写作</div>
-        <div class="menu-item"><span class="icon">🎨</span> AI 创作</div>
-        <div class="menu-item"><span class="icon">🧩</span> 更多</div>
-      </nav> -->
-
-      <div class="recent-chats">
-        <div class="section-title">最近对话</div>
-        <div 
-          v-for="session in chatStore.sessions" 
-          :key="session.id" 
-          class="chat-item"
-          @click="chatStore.switchSession(session.id); appStore.closeMobileSidebar()"
-        >
-          {{ session.title }}
-        </div>
-      </div>
-      
-      <div class="sidebar-footer">
-        <button class="footer-btn">ℹ️ 关于驼人GPT</button>
-      </div>
-    </aside>
+    <!-- 侧边栏 -->
+    <MobileSidebar
+      :handle-new-chat="handleNewChat"
+      :handle-switch-session="handleSwitchSession"
+      :handle-rename-conversation="handleRenameConversation"
+      :handle-delete-conversation="handleDeleteConversation"
+      :recent-items="mixedRecentItems"
+    />
 
     <!-- 顶部导航 -->
     <header class="mobile-header">
       <div class="left">
         <button class="icon-btn" @click="appStore.toggleMobileSidebar">☰</button>
-        <button class="new-chat-pill" @click="chatStore.createSession()">📝 新对话</button>
+        <button class="new-chat-pill" @click="handleNewChat">{{ MOBILE_TEXT.header.newChatPill }}</button>
       </div>
       <div class="right">
         <div v-if="userStore.isLoggedIn" class="user-actions">
-          <button class="logout-btn" @click="handleLogout">退出</button>
+          <button class="logout-btn" @click="handleLogout">{{ MOBILE_TEXT.header.logout }}</button>
         </div>
-        <button v-else class="login-btn" @click="handleLogin">登录</button>
+        <button v-else class="login-btn" @click="handleLogin">{{ MOBILE_TEXT.header.login }}</button>
       </div>
     </header>
 
     <!-- 主内容 -->
     <main class="mobile-content">
       <!-- 聊天模式：有消息时显示 -->
-      <div v-if="chatStore.messages.length > 0" class="chat-layout">
+      <div v-if="chatStore.messages.length > 0 || isLoadingHistory" class="chat-layout">
         <!-- 消息列表 -->
         <MessageList 
           :messages="chatStore.messages" 
@@ -151,7 +74,7 @@ const handleMobileSkillClick = (skill: any) => {
         <div class="chat-footer">
           <ChatInput 
             v-model="inputMessage"
-            :is-sending="isSending"
+            :is-sending="chatStore.isSending"
             :is-deep-thinking="isDeepThinking"
             :active-skill="activeSkill"
             :uploaded-files="uploadedFiles"
@@ -170,12 +93,12 @@ const handleMobileSkillClick = (skill: any) => {
 
       <!-- 欢迎页：无消息时显示 -->
       <div v-else class="welcome-wrapper">
-        <h1 class="greeting">你好，我是驼人GPT</h1>
+        <h1 class="greeting">{{ MOBILE_TEXT.welcomeTitle }}</h1>
 
         <div class="input-area-wrapper">
           <ChatInput 
             v-model="inputMessage"
-            :is-sending="isSending"
+            :is-sending="chatStore.isSending"
             :is-deep-thinking="isDeepThinking"
             :active-skill="activeSkill"
             :uploaded-files="uploadedFiles"
@@ -197,7 +120,7 @@ const handleMobileSkillClick = (skill: any) => {
             v-for="skill in allSkills" 
             :key="skill.label" 
             class="skill-item"
-            @click="handleMobileSkillClick(skill)"
+            @click="handleSkillSelect(skill)"
           >
             <div class="skill-icon-wrapper" :style="{ color: skill.color }">
               <span class="skill-icon" v-html="skill.icon"></span>
@@ -214,6 +137,29 @@ const handleMobileSkillClick = (skill: any) => {
       :url-list="previewUrlList"
       :initial-index="initialIndex"
       @close="closeViewer"
+    />
+
+    <!-- 相似度识别弹窗 -->
+    <SimilarityDialog
+      v-if="showSimilarityDialog"
+      :visible="showSimilarityDialog"
+      @update:visible="(val: boolean) => showSimilarityDialog = val"
+    />
+
+    <!-- 会议记录组件 -->
+    <MeetingRecorder 
+      v-if="showMeetingRecorder" 
+      @close="showMeetingRecorder = false" 
+    />
+    <DocumentToolDialog
+      v-if="showDocumentDialog"
+      :visible="showDocumentDialog"
+      @update:visible="(val: boolean) => showDocumentDialog = val"
+    />
+    <ImageGenDialog
+      v-if="showImageGenDialog"
+      :visible="showImageGenDialog"
+      @update:visible="(val: boolean) => showImageGenDialog = val"
     />
   </div>
 </template>
@@ -242,116 +188,7 @@ const handleMobileSkillClick = (skill: any) => {
   overflow: hidden; // 防止滚动穿透
 }
 
-.sidebar-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 99;
-}
-
-.mobile-sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 17.5rem;
-  height: 100%;
-  background: #f7f8fa;
-  z-index: 100;
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  box-shadow: 0.125rem 0 0.5rem rgba(0,0,0,0.1);
-
-  &.open {
-    transform: translateX(0);
-  }
-
-  .sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    
-    .user-info {
-      display: flex;
-      align-items: center;
-      .avatar {
-        width: 2rem;
-        height: 2rem;
-        background: #ccc;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 0.5rem;
-      }
-      .username { font-weight: 600; font-size: 1rem; }
-    }
-    
-    .close-btn {
-      background: none;
-      border: none;
-      font-size: 1.25rem;
-      color: #86909c;
-    }
-  }
-
-  .new-chat-btn {
-    width: 100%;
-    padding: 0.625rem;
-    background: #e8f3ff;
-    color: #165dff;
-    border: none;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    margin-bottom: 1.5rem;
-  }
-
-  .menu-list {
-    .menu-item {
-      padding: 0.75rem 0;
-      font-size: 0.9375rem;
-      color: #4e5969;
-      display: flex;
-      align-items: center;
-      .icon { margin-right: 0.75rem; }
-    }
-  }
-
-  .recent-chats {
-    margin-top: 1.5rem;
-    flex: 1;
-    overflow-y: auto;
-    .section-title {
-      font-size: 0.75rem;
-      color: #86909c;
-      margin-bottom: 0.75rem;
-    }
-    .chat-item {
-      padding: 0.5rem 0;
-      font-size: 0.875rem;
-      cursor: pointer;
-    }
-  }
-
-  .sidebar-footer {
-    padding-top: 1rem;
-    border-top: 1px solid #e5e6eb;
-    .footer-btn {
-      background: none;
-      border: none;
-      color: #86909c;
-      font-size: 0.8125rem;
-      display: flex;
-      align-items: center;
-    }
-  }
-}
+/* Sidebar styles removed (moved to MobileSidebar.vue) */
 
 .mobile-header {
   display: flex;
