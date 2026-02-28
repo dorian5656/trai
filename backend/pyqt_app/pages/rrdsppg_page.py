@@ -261,9 +261,9 @@ class RrdsppgPage(QWidget):
         main_layout = QVBoxLayout(self)
         
         # 标题
-        title_label = QLabel("人人都是品牌官-测试工具")
+        title_label = QLabel("📝 人人都是品牌官-测试工具")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         main_layout.addWidget(title_label)
         
         # 图片上传区域
@@ -339,10 +339,10 @@ class RrdsppgPage(QWidget):
         type_hint.setStyleSheet("color: red; font-size: 12px; font-weight: bold; margin-right: 10px;")
         
         self.type_combo = QComboBox()
-        self.type_combo.setMinimumHeight(35)
+        self.type_combo.setMinimumHeight(25)
         self.type_combo.setStyleSheet("""
             QComboBox { font-size: 14px; padding: 5px; }
-            QComboBox QAbstractItemView::item { min-height: 35px; }
+            QComboBox QAbstractItemView::item { min-height: 25px; }
         """)
         self.type_combo.addItem("视频号", config["rrdsppg"].get("type_video", ""))
         self.type_combo.addItem("公众号转发", config["rrdsppg"].get("type_public", ""))
@@ -376,12 +376,12 @@ class RrdsppgPage(QWidget):
         # 操作按钮
         button_layout = QHBoxLayout()
         self.run_button = QPushButton("开始识别")
-        self.run_button.setMinimumHeight(40)
+        self.run_button.setMinimumHeight(30)
         self.run_button.setStyleSheet("font-size: 14px; font-weight: bold;")
         self.run_button.clicked.connect(self.run_ocr)
         
         self.clear_button = QPushButton("清空")
-        self.clear_button.setMinimumHeight(40)
+        self.clear_button.setMinimumHeight(26)
         self.clear_button.setStyleSheet("background-color: #FF4444; color: white; font-weight: bold; font-size: 14px;")
         self.clear_button.clicked.connect(self.clear_all)
         

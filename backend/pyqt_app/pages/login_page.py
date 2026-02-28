@@ -206,13 +206,13 @@ class LoginPage(QWidget):
         btn_layout = QHBoxLayout()
         
         self.login_btn = QPushButton("登录")
-        self.login_btn.setFixedHeight(40)
+        self.login_btn.setFixedHeight(35)
         self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.login_btn.setStyleSheet(self.create_btn_style())
         self.login_btn.clicked.connect(self.handle_login)
         
         self.to_register_btn = QPushButton("去注册")
-        self.to_register_btn.setFixedHeight(40)
+        self.to_register_btn.setFixedHeight(35)
         self.to_register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.to_register_btn.setStyleSheet(self.create_btn_style(color="#4CAF50", hover_color="#388E3C"))
         self.to_register_btn.clicked.connect(self.show_register)
@@ -248,21 +248,21 @@ class LoginPage(QWidget):
 
         self.reg_user_input = QLineEdit()
         self.reg_user_input.setPlaceholderText("用户名")
-        self.reg_user_input.setFixedHeight(40)
+        self.reg_user_input.setFixedHeight(35)
         self.reg_user_input.setStyleSheet(self.create_input_style())
         left_col.addWidget(self.reg_user_input)
 
         self.reg_pass_input = QLineEdit()
         self.reg_pass_input.setPlaceholderText("密码")
         self.reg_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.reg_pass_input.setFixedHeight(40)
+        self.reg_pass_input.setFixedHeight(35)
         self.reg_pass_input.setStyleSheet(self.create_input_style())
         left_col.addWidget(self.reg_pass_input)
         
         self.reg_confirm_input = QLineEdit()
         self.reg_confirm_input.setPlaceholderText("确认密码")
         self.reg_confirm_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.reg_confirm_input.setFixedHeight(40)
+        self.reg_confirm_input.setFixedHeight(35)
         self.reg_confirm_input.setStyleSheet(self.create_input_style())
         left_col.addWidget(self.reg_confirm_input)
 
@@ -274,19 +274,19 @@ class LoginPage(QWidget):
 
         self.reg_fullname_input = QLineEdit()
         self.reg_fullname_input.setPlaceholderText("姓名")
-        self.reg_fullname_input.setFixedHeight(40)
+        self.reg_fullname_input.setFixedHeight(35)
         self.reg_fullname_input.setStyleSheet(self.create_input_style())
         right_col.addWidget(self.reg_fullname_input)
 
         self.reg_email_input = QLineEdit()
         self.reg_email_input.setPlaceholderText("邮箱")
-        self.reg_email_input.setFixedHeight(40)
+        self.reg_email_input.setFixedHeight(35)
         self.reg_email_input.setStyleSheet(self.create_input_style())
         right_col.addWidget(self.reg_email_input)
 
         self.reg_phone_input = QLineEdit()
         self.reg_phone_input.setPlaceholderText("电话")
-        self.reg_phone_input.setFixedHeight(40)
+        self.reg_phone_input.setFixedHeight(35)
         self.reg_phone_input.setStyleSheet(self.create_input_style())
         right_col.addWidget(self.reg_phone_input)
 
@@ -299,13 +299,13 @@ class LoginPage(QWidget):
         btn_layout.setContentsMargins(0, 10, 0, 0)
         
         self.register_btn = QPushButton("注册")
-        self.register_btn.setFixedHeight(45)
+        self.register_btn.setFixedHeight(35)
         self.register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.register_btn.setStyleSheet(self.create_btn_style(color="#4CAF50", hover_color="#388E3C"))
         self.register_btn.clicked.connect(self.handle_register)
         
         self.back_login_btn = QPushButton("返回登录")
-        self.back_login_btn.setFixedHeight(45)
+        self.back_login_btn.setFixedHeight(35)
         self.back_login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.back_login_btn.setStyleSheet(self.create_btn_style(color="#9E9E9E", hover_color="#757575"))
         self.back_login_btn.clicked.connect(self.show_login)

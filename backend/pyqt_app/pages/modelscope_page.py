@@ -222,7 +222,7 @@ class UploadTab(QWidget):
         # 操作按钮
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("开始上传")
-        self.start_btn.setFixedHeight(40)
+        self.start_btn.setFixedHeight(30)
         self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         self.start_btn.clicked.connect(self.start_upload)
         btn_layout.addWidget(self.start_btn)
@@ -308,7 +308,7 @@ class DownloadTab(QWidget):
         # 操作按钮
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("开始下载")
-        self.start_btn.setFixedHeight(40)
+        self.start_btn.setFixedHeight(30)
         self.start_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
         self.start_btn.clicked.connect(self.start_download)
         btn_layout.addWidget(self.start_btn)

@@ -167,8 +167,8 @@ class ImageParsePage(QWidget):
         layout.setSpacing(15)
 
         # 1. 标题
-        title = QLabel("图片内容解析")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
+        title = QLabel("👁️ 图片内容解析")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #333;")
         layout.addWidget(title)
 
         # 2. 图片预览区 (支持拖拽)
@@ -196,7 +196,7 @@ class ImageParsePage(QWidget):
         ops_layout = QHBoxLayout()
         
         upload_btn = QPushButton("📂 上传图片")
-        upload_btn.setFixedSize(120, 40)
+        upload_btn.setFixedSize(120, 30)
         upload_btn.clicked.connect(self.upload_image_dialog)
         upload_btn.setStyleSheet("""
             QPushButton {
@@ -215,7 +215,7 @@ class ImageParsePage(QWidget):
         self.prompt_input = ChatLineEdit()
         self.prompt_input.setPlaceholderText("输入提示词 (默认: 描述这张图片.)，支持 Ctrl+V 粘贴图片")
         self.prompt_input.set_paste_image_callback(self.handle_paste_image)
-        self.prompt_input.setFixedHeight(40)
+        self.prompt_input.setFixedHeight(30)
         self.prompt_input.setStyleSheet("""
             QLineEdit {
                 border: 1px solid #ccc;
@@ -227,7 +227,7 @@ class ImageParsePage(QWidget):
         ops_layout.addWidget(self.prompt_input)
 
         self.parse_btn = QPushButton("开始解析")
-        self.parse_btn.setFixedSize(120, 40)
+        self.parse_btn.setFixedSize(100, 30)
         self.parse_btn.clicked.connect(self.start_analysis)
         self.parse_btn.setStyleSheet("""
             QPushButton {

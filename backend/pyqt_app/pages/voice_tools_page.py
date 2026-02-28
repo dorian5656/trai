@@ -165,7 +165,7 @@ class VoiceToolsPage(QWidget):
         content_layout.addWidget(health_group)
 
         # 2. 音频转文字
-        asr_group = self.create_card("音频转文字 (ASR)")
+        asr_group = self.create_card("音频转文字")
         asr_layout = asr_group.layout()
         
         # 文件选择
