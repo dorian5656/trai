@@ -72,7 +72,7 @@ async def chat_with_image(
 @router.post("/generations", response_model=ResponseModel, summary="文生图 (Image Generation)")
 async def generate_image(
     request: ImageGenRequest = Body(..., description="文生图请求"),
-    # current_user = Depends(get_current_active_user) # Temporarily disabled for testing
+    current_user = Depends(get_current_active_user)
 ):
     """
     文生图接口
@@ -83,13 +83,12 @@ async def generate_image(
             - model (str): 模型名称 (默认 Z-Image)
             - size (str): 图片尺寸
             - n (int): 生成数量
-        # current_user (User): 当前登录用户
+        current_user (User): 当前登录用户
     
     Returns:
         ResponseModel: 统一响应结构 (data=ImageGenResponse)
     """
-    # user_id = getattr(current_user, "username", None) or current_user["username"]
-    user_id = "test_user" # Mock user for testing
+    user_id = getattr(current_user, "username", None) or current_user["username"]
     try:
         result = await ImageManager.generate_image(request, user_id=str(user_id))
         return ResponseHelper.success(result)
