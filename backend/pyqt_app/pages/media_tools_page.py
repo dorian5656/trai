@@ -49,10 +49,12 @@ class VideoToGifWorker(QThread):
         self.token = token
 
     def run(self):
+        file_handle = None
         try:
             # 1. 上传并转换
+            file_handle = open(self.video_path, 'rb')
             files = {
-                'file': (os.path.basename(self.video_path), open(self.video_path, 'rb'), 'video/mp4')
+                'file': (os.path.basename(self.video_path), file_handle, 'video/mp4')
             }
             params = {
                 'fps': self.fps,
@@ -127,6 +129,12 @@ class VideoToGifWorker(QThread):
         except Exception as e:
             logger.exception("Video to GIF error")
             self.finished_signal.emit(False, str(e), "error")
+        finally:
+            if file_handle:
+                try:
+                    file_handle.close()
+                except Exception as e:
+                    logger.warning(f"Failed to close file handle: {e}")
 
 
 class MediaToolsPage(QWidget):
@@ -138,8 +146,8 @@ class MediaToolsPage(QWidget):
         self.movie = None
         self.init_ui()
 
-    def set_auth_token(self, token):
-        self.token = token
+    def set_auth_token(self, token: str):
+        self.token = token or ""
 
     def init_ui(self):
         # 主布局
@@ -496,15 +504,17 @@ class MediaToolsPage(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"保存文件失败: {str(e)}")
 
+    def set_auth_token(self, token: str):
+        self.token = token or ""
+
     def reset_ui(self):
         self.convert_btn.setEnabled(True)
         self.convert_btn.setText("开始转换")
 
     def closeEvent(self, event):
-        # 清理临时文件 (可选)
         if self.temp_gif_path and os.path.exists(self.temp_gif_path):
             try:
                 os.remove(self.temp_gif_path)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to remove temp file {self.temp_gif_path}: {e}")
         super().closeEvent(event)
