@@ -61,7 +61,7 @@ class MediaFunc:
         convert_func: callable, 
         user_id: str, 
         success_msg_type: str = "转换成功",
-        max_size_mb: int = 50,
+        max_size_mb: int = 100,
         **kwargs
     ) -> dict:
         start_time = time.time()
