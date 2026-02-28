@@ -67,3 +67,14 @@ async def get_current_superuser(current_user = Depends(get_current_active_user))
             status_code=status.HTTP_403_FORBIDDEN, detail="权限不足"
         )
     return current_user
+
+async def get_db():
+    """
+    获取数据库会话 (Dependency)
+    """
+    session_factory = PGUtils.get_session_factory()
+    async with session_factory() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
