@@ -268,6 +268,17 @@ class WanT2VWrapper:
                 eps=self.config.eps
             )
             
+            # 修复 meta tensor 问题: 如果模型在 meta device 上，必须先分配内存
+            # 这样 load_state_dict 才能正确加载权重，而不是尝试拷贝到 meta tensor
+            try:
+                is_meta = any(p.device.type == 'meta' for p in self.model.parameters())
+            except:
+                is_meta = False
+                
+            if is_meta:
+                logger.info(f"检测到 WanModel 在 meta device 上，正在使用 to_empty(device={self.device}) 分配内存...")
+                self.model.to_empty(device=self.device)
+            
             # 加载权重
             from safetensors.torch import load_file
             import json

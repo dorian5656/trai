@@ -25,6 +25,8 @@ from backend.app.routers.ai.chat_func import AIManager
 
 # 全局缓存模型 pipeline
 _z_image_pipeline = None
+_sdxl_base_pipeline = None
+_sdxl_refiner_pipeline = None
 
 
 # =============================================================================
@@ -113,6 +115,12 @@ class ImageGenRequest(BaseModel):
     model: str = Field("Z-Image-Turbo", description="模型名称", examples=["Z-Image-Turbo"])
     size: str = Field("1024x1024", description="图片尺寸", examples=["1024x1024"])
     n: int = Field(1, description="生成数量", examples=[1])
+    # SDXL / 高级参数
+    num_inference_steps: int = Field(30, description="推理步数 (默认30)", examples=[30])
+    guidance_scale: float = Field(7.5, description="引导系数 (默认7.5)", examples=[7.5])
+    use_refiner: bool = Field(False, description="是否使用 Refiner 模型优化 (仅SDXL有效)", examples=[False])
+    negative_prompt: Optional[str] = Field(None, description="负向提示词", examples=["low quality, bad anatomy"])
+    style_preset: Optional[str] = Field(None, description="风格预设", examples=["cinematic"])
 
     model_config = {
         "json_schema_extra": {
@@ -120,7 +128,10 @@ class ImageGenRequest(BaseModel):
                 "prompt": "A cute cat playing piano",
                 "model": "Z-Image-Turbo",
                 "size": "1024x1024",
-                "n": 1
+                "n": 1,
+                "num_inference_steps": 30,
+                "guidance_scale": 7.5,
+                "use_refiner": False
             }
         }
     }
@@ -355,6 +366,10 @@ class ImageManager:
         # 如果请求指定 Z-Image 模型，走本地调用
         if "Z-Image" in request.model or "Tongyi-MAI" in request.model:
              return await ImageManager._generate_z_image_local(request, user_id)
+        
+        # 如果请求指定 SDXL 模型，走本地调用
+        if "stable-diffusion-xl" in request.model or "SDXL" in request.model:
+             return await ImageManager._generate_sdxl_local(request, user_id)
 
         # 构造请求体
         payload = {
@@ -682,4 +697,173 @@ class ImageManager:
             image.save(img_byte_arr, format='PNG')
             generated_images_bytes.append(img_byte_arr.getvalue())
             
+        return generated_images_bytes
+
+    @staticmethod
+    async def _generate_sdxl_local(request: ImageGenRequest, user_id: str = "anonymous") -> ImageGenResponse:
+        """
+        本地运行 SDXL 模型 (Base + Refiner)
+        """
+        import asyncio
+        loop = asyncio.get_running_loop()
+        # 在线程池中运行阻塞的 GPU 推理代码
+        images_bytes = await loop.run_in_executor(None, ImageManager._run_sdxl_sync, request)
+        
+        images_data = []
+        for img_bytes in images_bytes:
+            filename = f"sdxl_{uuid.uuid4()}.png"
+            
+            url, object_key, size = await UploadUtils.save_from_bytes(
+                data=img_bytes, 
+                filename=filename, 
+                module="gen", 
+                content_type="image/png"
+            )
+            
+            final_url = url
+            
+            # 记录到 user_images 表
+            try:
+                engine = PGUtils.get_engine()
+                async with engine.begin() as conn:
+                     await conn.execute(
+                        text("""
+                            INSERT INTO user_images (user_id, filename, s3_key, url, size, mime_type, module, source, prompt, meta_data)
+                            VALUES (:user_id, :filename, :s3_key, :url, :size, :mime_type, :module, :source, :prompt, :meta_data)
+                        """),
+                        {
+                            "user_id": user_id,
+                            "filename": filename,
+                            "s3_key": object_key,
+                            "url": final_url,
+                            "size": size,
+                            "mime_type": "image/png",
+                            "module": "gen",
+                            "source": "generated",
+                            "prompt": request.prompt,
+                            "meta_data": json.dumps({
+                                "model": request.model, 
+                                "provider": "sdxl-local",
+                                "steps": request.num_inference_steps,
+                                "refiner": request.use_refiner
+                            })
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"Failed to save generated SDXL image to DB: {e}")
+
+            images_data.append({"url": final_url})
+            
+        return ImageGenResponse(
+            created=int(time.time()),
+            data=images_data
+        )
+
+    @staticmethod
+    def _run_sdxl_sync(request: ImageGenRequest) -> List[bytes]:
+        """
+        SDXL 同步推理逻辑
+        """
+        global _sdxl_base_pipeline, _sdxl_refiner_pipeline
+        import torch
+        from diffusers import DiffusionPipeline
+        
+        # 模型路径配置
+        BASE_MODEL_PATH = "/home/code_dev/trai/backend/app/models/stabilityai/stable-diffusion-xl-base-1.0"
+        REFINER_MODEL_PATH = "/home/code_dev/trai/backend/app/models/stabilityai/stable-diffusion-xl-refiner-1.0"
+        
+        # 1. 加载 Base 模型
+        if _sdxl_base_pipeline is None:
+            logger.info(f"Loading SDXL Base from {BASE_MODEL_PATH}...")
+            if not os.path.exists(BASE_MODEL_PATH):
+                raise FileNotFoundError(f"SDXL Base model not found at {BASE_MODEL_PATH}")
+                
+            _sdxl_base_pipeline = DiffusionPipeline.from_pretrained(
+                BASE_MODEL_PATH,
+                torch_dtype=torch.float16,
+                use_safetensors=True,
+                variant="fp16"
+            )
+            if torch.cuda.is_available():
+                _sdxl_base_pipeline.to("cuda")
+                # 启用编译优化
+                logger.info("Enabling torch.compile for SDXL Base...")
+                try:
+                    _sdxl_base_pipeline.unet = torch.compile(_sdxl_base_pipeline.unet, mode="reduce-overhead", fullgraph=True)
+                except Exception as e:
+                    logger.warning(f"torch.compile failed: {e}")
+            logger.success("SDXL Base loaded.")
+
+        # 2. 加载 Refiner 模型 (按需)
+        if request.use_refiner and _sdxl_refiner_pipeline is None:
+            logger.info(f"Loading SDXL Refiner from {REFINER_MODEL_PATH}...")
+            if not os.path.exists(REFINER_MODEL_PATH):
+                logger.warning("Refiner model not found, skipping refiner step.")
+            else:
+                _sdxl_refiner_pipeline = DiffusionPipeline.from_pretrained(
+                    REFINER_MODEL_PATH,
+                    text_encoder_2=_sdxl_base_pipeline.text_encoder_2,
+                    vae=_sdxl_base_pipeline.vae,
+                    torch_dtype=torch.float16,
+                    use_safetensors=True,
+                    variant="fp16",
+                )
+                if torch.cuda.is_available():
+                    _sdxl_refiner_pipeline.to("cuda")
+                logger.success("SDXL Refiner loaded.")
+
+        # 3. 推理参数
+        width, height = 1024, 1024
+        if request.size and "x" in request.size:
+            try:
+                w, h = request.size.split("x")
+                width, height = int(w), int(h)
+            except:
+                pass
+                
+        num_steps = request.num_inference_steps or 30
+        guidance_scale = request.guidance_scale or 7.5
+        negative_prompt = request.negative_prompt or "low quality, bad anatomy, worst quality, deformed, disfigured, watermark, text"
+
+        generated_images_bytes = []
+        logger.info(f"Generating SDXL image (Refiner={request.use_refiner})...")
+
+        for _ in range(request.n):
+            if request.use_refiner and _sdxl_refiner_pipeline:
+                # 专家混合模式
+                high_noise_frac = 0.8
+                # Base
+                latents = _sdxl_base_pipeline(
+                    prompt=request.prompt,
+                    negative_prompt=negative_prompt,
+                    height=height,
+                    width=width,
+                    num_inference_steps=num_steps,
+                    guidance_scale=guidance_scale,
+                    denoising_end=high_noise_frac,
+                    output_type="latent",
+                ).images
+                # Refiner
+                image = _sdxl_refiner_pipeline(
+                    prompt=request.prompt,
+                    negative_prompt=negative_prompt,
+                    num_inference_steps=num_steps,
+                    denoising_start=high_noise_frac,
+                    image=latents,
+                ).images[0]
+            else:
+                # Base Only
+                image = _sdxl_base_pipeline(
+                    prompt=request.prompt,
+                    negative_prompt=negative_prompt,
+                    height=height,
+                    width=width,
+                    num_inference_steps=num_steps,
+                    guidance_scale=guidance_scale,
+                ).images[0]
+
+            img_byte_arr = BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            generated_images_bytes.append(img_byte_arr.getvalue())
+
         return generated_images_bytes
