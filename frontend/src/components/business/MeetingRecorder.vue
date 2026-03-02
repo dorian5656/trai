@@ -1,546 +1,393 @@
 <!--
 文件名：frontend/src/components/business/MeetingRecorder.vue
-作者：whf
-日期：2026-02-03
-描述：会议记录组件 (实时/文件流式识别)
+作者：whf & zcl
+日期：2026-03-02
+描述：会议记录组件 (多视图弹窗版)
 -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useWebSocketSpeech } from '@/composables/useWebSocketSpeech';
+import { ref, onMounted, nextTick } from 'vue';
 import { icons } from '@/assets/icons';
 import { ElMessage } from 'element-plus';
-import { renderMarkdown } from '@/utils/markdown';
-import { streamChat } from '@/utils/stream';
+import { getMeetingHistory, getMeetingDetail, type Meeting } from '@/api/meeting';
+import CreateMeetingView from './CreateMeetingView.vue';
 
+// --- 组件状态 ---
 const emit = defineEmits(['close']);
+const currentView = ref('history'); // 'history': 历史记录, 'create': 创建, 'detail': 详情
+const selectedMeetingId = ref<string | null>(null);
+const isLoading = ref(false);
+const createViewRef = ref<InstanceType<typeof CreateMeetingView> | null>(null);
 
-const {
-  isRecording,
-  isConnecting,
-  isProcessingFile,
-  resultText,
-  interimText,
-  startMicrophone,
-  stopMicrophone,
-  uploadAudioFile
-} = useWebSocketSpeech();
 
-const fileInputRef = ref<HTMLInputElement | null>(null);
+// --- 历史视图状态 ---
+const historyList = ref<Meeting[]>([]);
 
-const summaryText = ref('');
-const isSummarizing = ref(false);
+// --- 详情视图状态 ---
+const meetingDetail = ref<Meeting | null>(null);
 
-const canGenerateSummary = computed(() => {
-  return !!resultText.value || !!interimText.value;
+// --- 函数 ---
+
+// 视图导航
+const showHistory = async () => {
+  isLoading.value = true;
+  try {
+    const res = await getMeetingHistory();
+    historyList.value = res.items;
+    currentView.value = 'history';
+  } catch (e) {
+    ElMessage.error('加载历史记录失败');
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const showFabOptions = ref(false);
+
+const handleStartRecording = () => {
+  showFabOptions.value = false;
+  currentView.value = 'create';
+  nextTick(() => {
+    createViewRef.value?.startMicrophone();
+  });
+};
+
+const handleStartUpload = () => {
+  showFabOptions.value = false;
+  currentView.value = 'create';
+  nextTick(() => {
+    createViewRef.value?.triggerFileUpload();
+  });
+};
+
+const showDetail = async (id: string) => {
+  selectedMeetingId.value = id;
+  isLoading.value = true;
+  try {
+    meetingDetail.value = await getMeetingDetail(id);
+    currentView.value = 'detail';
+  } catch (e) {
+    ElMessage.error('加载详情失败');
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// 生命周期
+onMounted(() => {
+  showHistory();
 });
-
-const handleFileSelect = (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (input.files && input.files.length > 0) {
-    const file = input.files[0];
-    if (file) {
-      // 简单检查格式
-      if (!file.type.includes('audio') && !file.name.endsWith('.wav') && !file.name.endsWith('.mp3') && !file.name.endsWith('.m4a')) {
-        ElMessage.error('请上传音频文件 (WAV/MP3/M4A)');
-        return;
-      }
-      uploadAudioFile(file);
-      // 清空 input 允许重复选择同一文件
-      input.value = '';
-    }
-  }
-};
-
-const triggerFileUpload = () => {
-  fileInputRef.value?.click();
-};
-
-const handleCopy = () => {
-  if (!resultText.value) return;
-  navigator.clipboard.writeText(resultText.value).then(() => {
-    ElMessage.success('已复制到剪贴板');
-  });
-};
-
-const handleGenerateSummary = async () => {
-  if (!canGenerateSummary.value) {
-    ElMessage.warning('暂无可总结的内容');
-    return;
-  }
-  const baseText = `${resultText.value}${interimText.value ? '\n' + interimText.value : ''}`;
-  const prompt = [
-    '你是一个专业的会议纪要助手。',
-    '请根据下面的逐字稿内容，用中文生成结构化会议纪要，包括：',
-    '1. 会议概述',
-    '2. 重要决策列表',
-    '3. 待办事项列表（尽量包含责任人和完成时间）',
-    '4. 风险与问题列表',
-    '请使用 Markdown 格式输出，条理清晰，便于直接发送给同事查看。',
-    '',
-    '以下是会议逐字稿：',
-    baseText
-  ].join('\n');
-
-  isSummarizing.value = true;
-  summaryText.value = '';
-
-  await streamChat(
-    prompt,
-    (text: string) => {
-      summaryText.value = text;
-    },
-    () => {
-      isSummarizing.value = false;
-    },
-    (err: Error) => {
-      isSummarizing.value = false;
-      ElMessage.error(`生成纪要失败：${err.message || '未知错误'}`);
-    }
-  );
-};
-
-const handleCopySummary = () => {
-  if (!summaryText.value) return;
-  navigator.clipboard.writeText(summaryText.value).then(() => {
-    ElMessage.success('纪要已复制到剪贴板');
-  });
-};
 </script>
 
 <template>
   <div class="meeting-recorder-overlay" @click.self="emit('close')">
     <div class="recorder-card">
+      <!-- 通用头部 -->
       <div class="card-header">
         <div class="title">
-          <span class="icon" v-html="icons.micNormal"></span>
-          会议记录
+          <button v-if="currentView !== 'history'" class="back-btn" @click="showHistory">
+            <span v-html="icons.arrowLeft"></span>
+          </button>
+          <span v-if="currentView === 'history'" class="item-title">会议记录</span>
+          <span v-if="currentView === 'create'" class="item-title">创建新纪要</span>
+          <span v-if="currentView === 'detail'" class="item-title">纪要详情</span>
         </div>
         <button class="close-btn" @click="emit('close')">
           <span v-html="icons.closeSmall"></span>
         </button>
       </div>
 
-      <div class="card-body">
-        <div class="main-layout">
-          <section class="panel transcript-panel">
-            <header class="panel-header">
-              <div class="panel-title">
-                <span class="status-dot" :class="{ active: isRecording }"></span>
-                <span class="title-text">实时转写</span>
-                <span class="status-text" v-if="isRecording">录音中...</span>
-                <span class="status-text" v-else-if="isProcessingFile">转写中...</span>
-              </div>
-              <div class="panel-actions">
-                <button
-                  class="pill-btn"
-                  :class="{ primary: isRecording, disabled: isProcessingFile || isConnecting }"
-                  @click="isRecording ? stopMicrophone() : startMicrophone()"
-                  :disabled="isProcessingFile || isConnecting"
-                >
-                  <span class="btn-icon" v-html="isRecording ? icons.micListening : icons.micNormal"></span>
-                  <span>{{ isRecording ? '停止录音' : '实时录音' }}</span>
-                </button>
-                <button
-                  class="pill-btn"
-                  :class="{ disabled: isRecording }"
-                  @click="triggerFileUpload()"
-                  :disabled="isRecording || isProcessingFile"
-                >
-                  <span class="btn-icon" v-if="isProcessingFile">
-                    <span class="loading-spinner"></span>
-                  </span>
-                  <span class="btn-icon" v-else v-html="icons.attachment"></span>
-                  <span>{{ isProcessingFile ? '转写中...' : '上传音频' }}</span>
-                </button>
-              </div>
-            </header>
-            <div class="panel-body transcript-body">
-              <div v-if="!resultText && !interimText" class="placeholder">
-                <p>点击上方按钮开始录音或上传音频，系统会自动进行文字转写。</p>
-                <p class="sub-text">支持 WAV、MP3、M4A 等常见格式</p>
-              </div>
-              <div v-else class="text-content">
-                <span class="final">{{ resultText }}</span>
-                <span class="interim">{{ interimText }}</span>
-                <span class="cursor" v-if="isRecording || isProcessingFile">|</span>
-              </div>
-            </div>
-            <footer class="panel-footer" v-if="resultText">
-              <button class="link-btn" @click="handleCopy">复制逐字稿</button>
-            </footer>
-          </section>
+      <!-- 加载遮罩 -->
+      <div v-if="isLoading" class="loading-overlay">
+        <span class="loading-spinner"></span>
+        <p>加载中...</p>
+      </div>
 
-          <section class="panel summary-panel">
-            <header class="panel-header">
-              <div class="panel-title">
-                <span class="title-text">智能会议纪要</span>
-              </div>
-              <div class="panel-actions">
-                <button
-                  class="pill-btn primary"
-                  :class="{ disabled: !canGenerateSummary || isSummarizing }"
-                  :disabled="!canGenerateSummary || isSummarizing"
-                  @click="handleGenerateSummary"
-                >
-                  <span>{{ isSummarizing ? '生成中...' : '生成纪要' }}</span>
-                </button>
-                <button
-                  v-if="summaryText"
-                  class="link-btn"
-                  @click="handleCopySummary"
-                >
-                  复制纪要
-                </button>
-              </div>
-            </header>
-            <div class="panel-body summary-body">
-              <div v-if="!summaryText && !isSummarizing" class="summary-placeholder">
-                <p>生成后的结构化会议纪要会展示在这里，便于复制到聊天工具或邮件中。</p>
-              </div>
-              <div
-                v-else
-                class="summary-content markdown-body"
-                v-html="renderMarkdown(summaryText || '正在生成纪要...')"
-              />
+      <!-- 视图 -->
+      <div v-else class="card-body">
+        <!-- 1. 历史视图 -->
+        <div v-if="currentView === 'history'" class="history-view">
+          <div v-if="!historyList.length" class="empty-history">
+            <p>还没有会议记录</p>
+            <p>点击右下角“+”按钮，开始创建你的第一份会议纪要吧！</p>
+          </div>
+          <div v-else>
+            <div v-for="item in historyList" :key="item.id" class="history-item" @click="showDetail(item.id)">
+              <div class="item-title">{{ item.title }}</div>
+              <div class="item-date">{{ item.createdAt }}</div>
             </div>
-          </section>
+          </div>
         </div>
 
-        <input
-          type="file"
-          ref="fileInputRef"
-          style="display: none"
-          accept="audio/*,.wav,.mp3,.m4a"
-          @change="handleFileSelect"
+        <!-- 2. 创建视图 -->
+        <CreateMeetingView
+          v-if="currentView === 'create'"
+          ref="createViewRef"
+          @back="showHistory"
+          @saved="showDetail"
         />
+
+        <!-- 3. 详情视图 -->
+        <div v-if="currentView === 'detail' && meetingDetail" class="detail-view">
+           <h2>{{ meetingDetail.title }}</h2>
+          <small>创建于: {{ meetingDetail.createdAt }}</small>
+
+          <div v-if="meetingDetail.summary" class="detail-section">
+            <h3>会议纪要</h3>
+            <div class="summary-content" v-html="meetingDetail.summary"></div>
+          </div>
+
+          <div class="detail-section">
+            <h3>逐字稿</h3>
+            <p>{{ meetingDetail.text }}</p>
+          </div>
+        </div>
+
+        <!-- 历史视图的悬浮操作按钮 -->
+        <div v-if="currentView === 'history'" class="fab-container">
+          <transition name="fab-options">
+            <div v-if="showFabOptions" class="fab-options">
+              <div class="fab-option-item" @click="handleStartRecording">
+                <div class="fab-option-icon">
+                  <span v-html="icons.micNormal"></span>
+                </div>
+                <span class="fab-option-label">实时录音</span>
+              </div>
+              <div class="fab-option-item" @click="handleStartUpload">
+                <div class="fab-option-icon">
+                  <span v-html="icons.attachment"></span>
+                </div>
+                <span class="fab-option-label">上传音频</span>
+              </div>
+            </div>
+          </transition>
+          <button class="fab-create-new" :class="{ 'rotated': showFabOptions }" @click="showFabOptions = !showFabOptions">
+            <span v-html="icons.plus"></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped lang="scss">
+<style scoped>
 .meeting-recorder-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  backdrop-filter: blur(0.25rem);
 }
 
 .recorder-card {
-  width: 56rem;
-  max-width: 94vw;
-  height: 36rem;
-  max-height: 88vh;
-  background: white;
-  border-radius: 1rem;
+  width: 95vw;
+  max-width: 50rem;
+  height: 85vh;
+  max-height: 60rem;
+  background: #fff;
+  border-radius: 0.875rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.2);
   overflow: hidden;
+}
 
-  .card-header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #f2f3f5;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.card-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f2f3f5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-    .title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #1d2129;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      
-      .icon {
-        width: 1.25rem;
-        height: 1.25rem;
-        color: #F53F3F;
-      }
-    }
+.card-header .title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
 
-    .close-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0.25rem;
-      border-radius: 0.25rem;
-      color: #86909c;
-      transition: all 0.2s;
+.card-header .icon {
+  color: #f53f3f;
+}
 
-      &:hover {
-        background: #f2f3f5;
-        color: #4e5969;
-      }
-      
-      :deep(svg) {
-          width: 1.25rem;
-          height: 1.25rem;
-      }
-    }
-  }
+.card-header .icon,
+.close-btn span {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.close-btn {
+  background: none; border: none; cursor: pointer; padding: 0.25rem;
+  border-radius: 50%;
+}
+.close-btn:hover { background: #f2f3f5; }
+
+.back-btn {
+  background: none; border: none; cursor: pointer; padding: 0.25rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+}
+.back-btn:hover { background: #f2f3f5; }
+.back-btn span { width: 1.25rem; height: 1.25rem; }
 
 .card-body {
   flex: 1;
-  padding: 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden; /* 防止水平滚动条 */
+  position: relative; /* 用于悬浮按钮定位 */
   background: #f7f8fa;
-
-  .main-layout {
-    display: grid;
-    grid-template-columns: 3fr 2fr;
-    gap: 1.25rem;
-    height: 100%;
-
-    @media (max-width: 64rem) {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .panel {
-    background: #ffffff;
-    border-radius: 0.75rem;
-    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.03);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .panel-header {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #f2f3f5;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .panel-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-
-    .title-text {
-      font-size: 0.9375rem;
-      font-weight: 600;
-      color: #1d2129;
-      white-space: nowrap;
-    }
-
-    .status-text {
-      font-size: 0.8125rem;
-      color: #4e5969;
-      white-space: nowrap;
-    }
-  }
-
-  .status-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    background: #c9cdd4;
-
-    &.active {
-      background: #f53f3f;
-      box-shadow: 0 0 0 0.1875rem rgba(245, 63, 63, 0.2);
-    }
-  }
-
-  .panel-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-
-  .pill-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.875rem;
-    border-radius: 999px;
-    border: 1px solid #e5e6eb;
-    background: #ffffff;
-    font-size: 0.8125rem;
-    color: #1d2129;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover:not(.disabled) {
-      border-color: #165dff;
-      color: #165dff;
-      background: #f0f6ff;
-    }
-
-    &.primary {
-      border-color: #165dff;
-      background: #165dff;
-      color: #ffffff;
-    }
-
-    &.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 1rem;
-      height: 1rem;
-    }
-  }
-
-  .link-btn {
-    background: none;
-    border: none;
-    color: #4e5969;
-    cursor: pointer;
-    font-size: 0.8125rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-
-    &:hover {
-      background: #f2f3f5;
-      color: #1d2129;
-    }
-  }
-
-  .panel-body {
-    flex: 1;
-    padding: 0.75rem 1rem 0.75rem;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .transcript-body {
-    .placeholder {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #86909c;
-      text-align: center;
-      padding: 0 1.5rem;
-
-      .sub-text {
-        font-size: 0.75rem;
-        margin-top: 0.5rem;
-        color: #c9cdd4;
-      }
-    }
-
-    .text-content {
-      font-size: 0.9375rem;
-      line-height: 1.8;
-      color: #1d2129;
-      white-space: pre-wrap;
-
-      .final {
-        color: #1d2129;
-      }
-
-      .interim {
-        color: #86909c;
-      }
-
-      .cursor {
-        display: inline-block;
-        width: 0.125rem;
-        height: 1em;
-        background-color: #165dff;
-        animation: blink 1s step-end infinite;
-        vertical-align: text-bottom;
-        margin-left: 0.125rem;
-      }
-    }
-  }
-
-  .summary-body {
-    .summary-placeholder {
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #86909c;
-      font-size: 0.875rem;
-      text-align: center;
-      padding: 0 1rem;
-    }
-
-    .summary-content {
-      font-size: 0.875rem;
-      line-height: 1.7;
-    }
-  }
-
-  .panel-footer {
-    padding: 0.5rem 1rem 0.75rem;
-    border-top: 1px solid #f2f3f5;
-    display: flex;
-    justify-content: flex-end;
-  }
-}
 }
 
-.loading-spinner {
-    width: 1.125rem;
-    height: 1.125rem;
-    border: 0.125rem solid #165DFF;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    display: block;
+.loading-overlay {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 1rem; color: #86909c;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+/* 历史视图 */
+.history-view {
+  padding: 1rem;
+  padding-bottom: 8rem; /* 添加内边距以避免悬浮按钮重叠 */
+}
+.empty-history {
+  text-align: center;
+  color: #86909c;
+  padding-top: 6rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.history-item {
+  background-color: #fff; padding: 1rem; border-radius: 0.5rem;
+  margin-bottom: 0.75rem; cursor: pointer; transition: all 0.2s;
+}
+.history-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.item-title { font-weight: 600; color: #1d2129; margin-bottom: 0.25rem; }
+.item-date { font-size: 0.875rem; color: #86909c; }
+.fab-container {
+  position: absolute;
+  bottom: 4rem;
+  right: 3rem;
 }
 
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+.fab-options {
+  position: absolute;
+  bottom: calc(100% + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
-@media (max-width: 48rem) {
-  .recorder-card {
-    width: 95vw;
-    height: 80vh;
-    border-radius: 0.75rem;
-    .card-header {
-      padding: 0.75rem 1rem;
-      .title {
-        font-size: 1rem;
-        .icon {
-          width: 1.125rem;
-          height: 1.125rem;
-        }
-      }
-      :deep(svg) {
-        width: 1.125rem;
-        height: 1.125rem;
-      }
-    }
-    .card-body {
-      padding: 1rem;
-    }
-  }
+.fab-option-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
 }
 
-
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(245, 63, 63, 0.4); }
-    70% { box-shadow: 0 0 0 0.625rem rgba(245, 63, 63, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(245, 63, 63, 0); }
+.fab-option-label {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.25rem;
+  margin-left: 0.75rem;
+  font-size: 0.8125rem;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  white-space: nowrap;
 }
+
+.fab-option-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  color: #165dff;
+  transition: transform 0.2s;
+}
+
+.fab-option-icon span {
+  width: 1.375rem;
+  height: 1.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fab-option-item:hover .fab-option-icon {
+  transform: scale(1.1);
+}
+
+.fab-create-new {
+  width: 3.5rem; height: 3.5rem;
+  border-radius: 50%; background-color: #165dff; color: white; border: none;
+  font-size: 2rem; 
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.fab-create-new :deep(span) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  transition: transform 0.2s ease-out;
+}
+
+.fab-create-new.rotated :deep(span) {
+  transform: rotate(-45deg);
+}
+
+/* 过渡效果 */
+.fab-options-enter-active,
+.fab-options-leave-active {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.fab-options-enter-from,
+.fab-options-leave-to {
+  transform: translateY(20px) scale(0.9);
+  opacity: 0;
+}
+
+/* 创建视图 */
+.create-view { display: flex; flex-direction: column; height: 100%; padding: 1rem; gap: 1rem; }
+.main-content { flex: 1; overflow-y: auto; background: #fff; padding: 1rem; border-radius: 0.5rem; }
+.placeholder { text-align: center; color: #86909c; padding-top: 4rem; }
+.text-content { white-space: pre-wrap; line-height: 1.7; }
+.final { color: #1d2129; }
+.interim { color: #86909c; }
+.cursor { animation: blink 1s step-end infinite; }
+.summary-section { padding: 1rem; background: #fff; border-radius: 0.5rem; }
+.create-footer { display: flex; justify-content: space-around; padding-top: 1rem; border-top: 1px solid #f2f3f5; }
+
+/* 详情视图 */
+.detail-view { padding: 1.5rem; background: #fff; height: 100%;}
+.detail-view h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+.detail-view small { color: #86909c; margin-bottom: 1.5rem; display: block; }
+.detail-section { margin-top: 1.5rem; }
+.detail-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.detail-section p { line-height: 1.7; color: #4e5969; white-space: pre-wrap; }
+
+/* 通用样式 */
+.pill-btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1rem; border-radius: 999px; border: 1px solid #e5e6eb; background: #ffffff; font-size: 0.875rem; cursor: pointer; }
+.pill-btn.primary { border-color: #165dff; background: #165dff; color: #ffffff; }
+.pill-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading-spinner { width: 1.5rem; height: 1.5rem; border: 0.1875rem solid #165DFF; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: 0; } }
 </style>

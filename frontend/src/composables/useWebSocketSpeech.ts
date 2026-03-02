@@ -187,7 +187,7 @@ export function useWebSocketSpeech() {
   };
 
   // 停止麦克风录音
-  const stopMicrophone = () => {
+  const stopMicrophone = (onStop?: (finalText: string) => void) => {
     if (processor && audioContext) {
       processor.disconnect();
       audioContext.close();
@@ -204,12 +204,17 @@ export function useWebSocketSpeech() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ is_speaking: false }));
       // 延迟关闭，等待最后结果
-      setTimeout(() => closeWebSocket(), 1000);
+    setTimeout(() => {
+      if (onStop) {
+        onStop(resultText.value);
+      }
+      closeWebSocket();
+    }, 1000);
     }
   };
 
   // HTTP 文件上传转写
-  const uploadAudioFile = async (file: File) => {
+  const uploadAudioFile = async (file: File, onComplete?: (text: string) => void) => {
     if (isProcessingFile.value) return;
     
     try {
@@ -234,6 +239,9 @@ export function useWebSocketSpeech() {
         resultText.value = res.text;
         interimText.value = '';
         ElMessage.success('转写完成');
+        if (onComplete) {
+          onComplete(res.text);
+        }
       } else {
         throw new Error('未返回有效识别结果');
       }
