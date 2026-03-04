@@ -36,10 +36,15 @@ export const getMeetingDetail = async (id: string): Promise<Meeting> => {
 
 export const createMeeting = async (data: { title: string, text: string, summary?: string }): Promise<Meeting> => {
   console.log('Creating mock meeting');
+  console.log('Creating mock meeting');
+  const today = new Date().toISOString().split('T')[0];
+  if (!today) {
+      throw new Error("Could not generate date string");
+  }
   const newMeeting: Meeting = {
     id: String(Date.now()),
     ...data,
-    createdAt: new Date().toISOString().split('T')[0],
+    createdAt: today,
   };
   mockHistory.unshift(newMeeting);
   return Promise.resolve(newMeeting);

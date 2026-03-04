@@ -14,6 +14,7 @@ const WS_URL = `${WS_BASE_URL}${API_BASE_URL}/speech/ws/transcribe`;
 export function useWebSocketSpeech() {
   const isConnected = ref(false);
   const isRecording = ref(false);
+  const isPaused = ref(false); // 新增暂停状态
   const isConnecting = ref(false);
   const isProcessingFile = ref(false);
   const resultText = ref('');
@@ -24,7 +25,8 @@ export function useWebSocketSpeech() {
   let audioContext: AudioContext | null = null;
   let processor: ScriptProcessorNode | null = null;
   let stream: MediaStream | null = null;
-  let fileReaderInterval: any = null;
+  let source: MediaStreamAudioSourceNode | null = null; // 提升 source 作用域
+  let heartbeatInterval: any = null; // 心跳定时器
 
   // 初始化 WebSocket
   const connectWebSocket = (): Promise<void> => {
@@ -55,13 +57,9 @@ export function useWebSocketSpeech() {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.text) {
-              if (data.is_final) {
-                resultText.value += data.text;
-                interimText.value = '';
-              } else {
-                interimText.value = data.text;
-              }
+            // 后端发来的是完整稿件，直接覆盖即可
+            if (data.text !== undefined) {
+              resultText.value = data.text;
             }
           } catch {}
         };
@@ -83,6 +81,7 @@ export function useWebSocketSpeech() {
         ws.onclose = () => {
           isConnected.value = false;
           isRecording.value = false;
+      isPaused.value = false; // 关闭时重置暂停状态
           isProcessingFile.value = false;
         };
       } catch (e) {
@@ -163,7 +162,7 @@ export function useWebSocketSpeech() {
       processor.connect(audioContext.destination);
 
       processor.onaudioprocess = (e) => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (isPaused.value || !ws || ws.readyState !== WebSocket.OPEN) return;
         
         const inputData = e.inputBuffer.getChannelData(0);
         // 重采样到 16000
@@ -172,6 +171,7 @@ export function useWebSocketSpeech() {
       };
 
       isRecording.value = true;
+      isPaused.value = false; // 开始时确保不是暂停状态
     } catch (e: any) {
       console.error('Microphone Error:', e);
       if (e && (e.message === '网络连接异常：无法建立语音实时录音通道，请检查后端服务是否已启动以及端口配置' || e.message === 'WebSocket 连接错误')) {
@@ -186,30 +186,77 @@ export function useWebSocketSpeech() {
     }
   };
 
+  // 暂停麦克风
+  const pauseMicrophone = () => {
+    if (!isRecording.value || isPaused.value) return;
+    isPaused.value = true;
+    if (source && processor) {
+      source.disconnect(processor);
+    }
+    // 发送暂停信令到后端
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: 'pause' }));
+    }
+  };
+
+  // 恢复麦克风
+  const resumeMicrophone = () => {
+    if (!isRecording.value || !isPaused.value) return;
+    isPaused.value = false;
+    if (source && processor && audioContext) {
+      source.connect(processor);
+      processor.connect(audioContext.destination); // Ensure connection to destination
+    }
+    // 发送恢复信令到后端
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: 'resume' }));
+    }
+  };
+
   // 停止麦克风录音
   const stopMicrophone = (onStop?: (finalText: string) => void) => {
-    if (processor && audioContext) {
+    if (source && processor) {
+      source.disconnect();
+    }
+    if (processor) {
       processor.disconnect();
-      audioContext.close();
       processor = null;
+    }
+    if (audioContext) {
+      audioContext.close();
       audioContext = null;
     }
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       stream = null;
     }
+    source = null;
     isRecording.value = false;
+    isPaused.value = false;
+    // 清除可能存在的心跳
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+    // 清除可能存在的心跳
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
     
     // 发送结束信号
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ is_speaking: false }));
       // 延迟关闭，等待最后结果
-    setTimeout(() => {
-      if (onStop) {
-        onStop(resultText.value);
-      }
-      closeWebSocket();
-    }, 1000);
+      setTimeout(() => {
+        if (onStop) {
+          onStop(resultText.value);
+        }
+        closeWebSocket();
+      }, 1000);
+    } else if (onStop) {
+      // 如果 ws 已经关闭，直接回调
+      onStop(resultText.value);
     }
   };
 
@@ -259,12 +306,15 @@ export function useWebSocketSpeech() {
   return {
     isConnected,
     isRecording,
+    isPaused,
     isConnecting,
     isProcessingFile,
     resultText,
     interimText,
     errorMsg,
     startMicrophone,
+    pauseMicrophone,
+    resumeMicrophone,
     stopMicrophone,
     uploadAudioFile
   };
