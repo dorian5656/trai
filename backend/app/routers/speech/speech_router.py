@@ -60,6 +60,9 @@ async def websocket_transcribe(websocket: WebSocket):
     """
     await speech_service.handle_websocket(websocket)
 
+
+
+
 @router.get("/health", summary="语音服务健康检查")
 async def health_check():
     """

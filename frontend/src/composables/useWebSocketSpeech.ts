@@ -11,7 +11,7 @@ import { ElMessage } from 'element-plus';
 
 const WS_URL = `${WS_BASE_URL}${API_BASE_URL}/speech/ws/transcribe`;
 
-export function useWebSocketSpeech() {
+export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
   const isConnected = ref(false);
   const isRecording = ref(false);
   const isPaused = ref(false); // 新增暂停状态
@@ -32,8 +32,8 @@ export function useWebSocketSpeech() {
   const connectWebSocket = (): Promise<void> => {
     const candidates = (() => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const sameOrigin = `${proto}://${location.host}${API_BASE_URL}/speech/ws/transcribe`;
-      const primary = WS_URL;
+      const sameOrigin = `${proto}://${location.host}${API_BASE_URL}${endpoint}`;
+      const primary = `${WS_BASE_URL}${API_BASE_URL}${endpoint}`;
       const arr = [primary, sameOrigin];
       return Array.from(new Set(arr));
     })();

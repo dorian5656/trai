@@ -15,12 +15,14 @@ import asyncio
 import numpy as np
 from pathlib import Path
 from fastapi import UploadFile, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 # 引入项目配置和日志
 from backend.app.config import settings
 from backend.app.utils.logger import logger
 from backend.app.utils.upload_utils import UploadUtils
 from backend.app.utils.pg_utils import Base
+from backend.app.utils.iflytek_asr_client import IFlytekASRClient
 from backend.app.utils.ocr_utils import OcrHelper
 from backend.app.routers.upload.upload_func import UserAudio
 from sqlalchemy import Column, String, Float, DateTime, Text, Boolean, text
@@ -44,12 +46,14 @@ class SpeechLog(Base):
 
 # 引入模型相关库
 try:
+    import torch
     from funasr import AutoModel
     from modelscope import snapshot_download
 except ImportError:
-    logger.error("缺少 funasr 或 modelscope 依赖，请执行: pip install funasr modelscope")
+    logger.error("缺少 funasr 或 modelscope 依赖，请执行: pip install funasr modelscope torch")
     AutoModel = None
     snapshot_download = None
+    torch = None
 
 class SpeechManager:
     """
@@ -62,6 +66,7 @@ class SpeechManager:
 
     # 模型配置
     MODELS = {
+        "asr-streaming": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch-streaming",
         "asr": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         "vad": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
         "punc": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
@@ -282,70 +287,153 @@ class SpeechManager:
 
     async def handle_websocket(self, websocket: WebSocket):
         """
-        WebSocket 实时转写处理
+        WebSocket 实时转写处理 (讯飞版) - 最终修复版
+        严格区分中间结果与最终结果，确保文本正确累积。
+        新增了后端心跳维持，以防止讯飞 15s 超时断开。
         """
         await websocket.accept()
         logger.info(f"🔌 [Speech] WebSocket 连接建立: {websocket.client}")
 
-        if not self._model:
-            await self.initialize()
-            if not self._model:
-                await websocket.close(code=1011, reason="模型未加载")
-                return
+        # --- 为每个连接维护独立的状态 ---
+        final_transcript_parts = []
+        interim_transcript = ""
+        last_speaker_id = None
+        keep_alive_task = None
 
-        audio_buffer = bytearray()
+        # 1. 定义回调与心跳函数
+        async def on_result_from_iflytek(result_data: dict):
+            """处理从讯飞收到的识别结果，并维护完整稿件"""
+            nonlocal last_speaker_id, interim_transcript
+            try:
+                st_data = result_data.get("cn", {}).get("st", {})
+                result_type = st_data.get("type")
+                if result_type is None: return
+
+                current_text_parts = []
+                current_sentence_speaker = None
+                rt_data = st_data.get("rt", [])
+                if rt_data:
+                    for part in rt_data:
+                        ws_data = part.get("ws", [])
+                        for word_info in ws_data:
+                            cw_data = word_info.get("cw", [])
+                            for char_info in cw_data:
+                                current_text_parts.append(char_info.get("w", ""))
+                                # 实时追踪本句的说话人ID
+                                rl = char_info.get("rl")
+                                if rl and rl != "0":
+                                    current_sentence_speaker = rl
+                
+                current_text = "".join(current_text_parts)
+                speaker_prefix = ""
+
+                # 核心逻辑：判断是否发生了说话人切换
+                if current_sentence_speaker and current_sentence_speaker != last_speaker_id:
+                    speaker_prefix = f"\n\n发言人 {current_sentence_speaker}: "
+                    last_speaker_id = current_sentence_speaker
+                    # 如果切换了说话人，之前的中间结果需要作废，因为属于上一个人
+                    interim_transcript = ""
+
+                if result_type == "0": # 确定性结果
+                    final_transcript_parts.append(speaker_prefix + current_text)
+                    interim_transcript = "" # 清空草稿
+                elif result_type == "1": # 中间结果
+                    # 如果是新说话人，interim_transcript 已被清空，speaker_prefix会带上新前缀
+                    # 如果是同一人，speaker_prefix为空，直接更新草稿
+                    interim_transcript = speaker_prefix + current_text
+
+                # 拼接完整稿件并发送 (最终稿 + 当前草稿)
+                full_transcript = "".join(final_transcript_parts) + interim_transcript
+                await websocket.send_text(json.dumps({"text": full_transcript}))
+                    
+            except Exception as e:
+                logger.error(f"处理讯飞结果时出错: {e} | {traceback.format_exc()}")
+
+        async def on_error_from_iflytek(error_message):
+            """处理从讯飞收到的错误"""
+            logger.error(f"讯飞客户端报告错误: {error_message}")
+            if websocket.client_state != WebSocketState.DISCONNECTED:
+                try:
+                    await websocket.close(code=1011, reason=f"ASR service error: {error_message}")
+                except RuntimeError:
+                    pass
+
+        async def send_keep_alive(iflytek_client):
+            """每10秒发送一次静音数据以维持与讯飞的连接。"""
+            silent_chunk = b'\x00' * 1280  # 1280字节的静音数据
+            while True:
+                try:
+                    await asyncio.sleep(10)
+                    if iflytek_client._is_connected:
+                        logger.info("🎤 [Speech] 发送静音心跳包维持连接...")
+                        await iflytek_client.send_audio(silent_chunk)
+                except asyncio.CancelledError:
+                    logger.info("🎤 [Speech] 静音心跳任务已取消。")
+                    break
+                except Exception as e:
+                    logger.error(f"🎤 [Speech] 静音心跳任务异常: {e}")
+                    break
+
+        # 2. 初始化并连接讯飞客户端
+        iflytek_client = IFlytekASRClient(
+            on_result_callback=on_result_from_iflytek,
+            on_error_callback=on_error_from_iflytek
+        )
+        await iflytek_client.connect()
+
+        if not iflytek_client._is_connected:
+            await websocket.close(code=1011, reason="无法连接到讯飞服务")
+            return
+
+        # 3. 循环处理客户端消息
         try:
             while True:
                 message = await websocket.receive()
                 
-                if "text" in message:
+                if "bytes" in message:
+                    if keep_alive_task and not keep_alive_task.done():
+                        logger.info("🎤 [Speech] 收到音频数据，停止静音心跳。")
+                        keep_alive_task.cancel()
+                        keep_alive_task = None
+                    audio_chunk = message["bytes"]
+                    await iflytek_client.send_audio(audio_chunk)
+                
+                elif "text" in message:
                     try:
                         data = json.loads(message["text"])
-                        # 支持结束信号
-                        if not data.get("is_speaking", True):
-                            break
-                    except:
-                        pass
-                
-                elif "bytes" in message:
-                    audio_chunk = message["bytes"]
-                    audio_buffer.extend(audio_chunk)
-                    
-                    # 简单的缓冲策略：每积攒一定量数据进行一次快速推理 (模拟流式，实际是伪流式)
-                    # 原 1.py 逻辑：len(audio_buffer) % 32000 < len(audio_chunk)
-                    # 这里的逻辑是大约每 1-2 秒的数据推一次
-                    if len(audio_buffer) % 32000 < len(audio_chunk):
-                        audio_np = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32)
-                        # 注意：AutoModel 的 generate 在 CPU 上可能较慢，频繁调用会阻塞
-                        # 这里沿用原逻辑
-                        res = self._model.generate(input=audio_np, batch_size_s=300)
-                        text = res[0].get("text", "") if (res and len(res) > 0) else ""
+                        action = data.get("action")
+
+                        if action == "pause":
+                            if not keep_alive_task or keep_alive_task.done():
+                                logger.info("🎤 [Speech] 前端请求暂停，启动静音心跳任务。")
+                                keep_alive_task = asyncio.create_task(send_keep_alive(iflytek_client))
+                        elif action == "resume":
+                            if keep_alive_task and not keep_alive_task.done():
+                                logger.info("🎤 [Speech] 前端请求恢复，停止静音心跳任务。")
+                                keep_alive_task.cancel()
+                                keep_alive_task = None
                         
-                        if text:
-                            await websocket.send_text(json.dumps({
-                                "text": text,
-                                "mode": "2pass-online",
-                                "is_final": False
-                            }))
+                        if data.get("is_speaking") is False:
+                            logger.info("收到前端结束信号，准备关闭连接。")
+                            break
+                    except json.JSONDecodeError:
+                        logger.warning(f"收到无法解析的文本消息: {message['text']}")
 
         except WebSocketDisconnect:
-            logger.info("🔌 [Speech] WebSocket 连接断开")
+            logger.info("🔌 [Speech] 前端 WebSocket 连接断开")
         except Exception as e:
-            logger.error(f"❌ [Speech] WebSocket 异常: {e}")
+            logger.error(f"❌ [Speech] WebSocket 代理异常: {e}")
         finally:
-            # 最终处理（处理剩余 buffer）
-            if len(audio_buffer) > 0 and self._model:
-                try:
-                    audio_np = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32)
-                    res = self._model.generate(input=audio_np, batch_size_s=300)
-                    text = res[0].get("text", "") if (res and len(res) > 0) else ""
-                    await websocket.send_text(json.dumps({
-                        "text": text,
-                        "mode": "2pass-offline",
-                        "is_final": True
-                    }))
-                except Exception as e:
-                    logger.error(f"❌ [Speech] 最终推理失败: {e}")
+            if keep_alive_task and not keep_alive_task.done():
+                keep_alive_task.cancel()
+            await iflytek_client.close()
+            if websocket.client_state != WebSocketState.DISCONNECTED:
+                await websocket.close()
+            logger.info("讯飞代理会话结束。")
 
 # 全局单例
 speech_service = SpeechManager()
+
+
+
+

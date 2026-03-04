@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     S3_REGION_NAME: str = os.getenv("S3_REGION_NAME", "us-east-1")
     S3_PUBLIC_DOMAIN: str = os.getenv("S3_PUBLIC_DOMAIN", "")
 
+    # iFlytek ASR 配置
+    IFLYTEK_APPID: str = os.getenv("IFLYTEK_APPID", "")
+    IFLYTEK_API_KEY: str = os.getenv("IFLYTEK_API_KEY", "")
+    IFLYTEK_API_SECRET: str = os.getenv("IFLYTEK_API_SECRET", "")
+
     # Dify AI 配置
     DIFY_API_BASE_URL: str = os.getenv("DIFY_API_BASE_URL", "http://192.168.1.2:8098/v1")
     
