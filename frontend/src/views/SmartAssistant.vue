@@ -336,8 +336,7 @@ const handleScrollLock = (event: WheelEvent) => {
   const { scrollTop, scrollHeight, clientHeight } = element;
   const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
   if ((event.deltaY > 0 && isAtBottom) || (event.deltaY < 0 && scrollTop === 0)) {
-    // 阻止滚动冒泡到父页面
-    // event.preventDefault(); 
+    event.preventDefault();
   }
 };
 
@@ -498,13 +497,15 @@ $shadow: rgba(0, 0, 0, 0.15);
   
   /* 移动端适配 */
   @include mobile {
-    height: auto;
+    height: 100vh;
     min-height: 100vh;
-    overflow: visible;
-    position: relative;
+    overflow: hidden;
+    position: fixed;
     
     :global(html[data-iframe="true"]) & {
+      height: 100%;
       min-height: 25rem;
+      position: relative;
     }
   }
 }
@@ -620,6 +621,9 @@ $shadow: rgba(0, 0, 0, 0.15);
   flex: 1;
   overflow-y: auto;
   padding: 1.25rem 0;
+  min-height: 0; /* 确保在 flex 容器中正确收缩 */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
   
   @include mobile {
      margin-bottom: 1.25rem;

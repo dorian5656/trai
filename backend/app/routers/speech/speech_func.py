@@ -66,7 +66,6 @@ class SpeechManager:
 
     # 模型配置
     MODELS = {
-        "asr-streaming": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch-streaming",
         "asr": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         "vad": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
         "punc": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
@@ -433,7 +432,3 @@ class SpeechManager:
 
 # 全局单例
 speech_service = SpeechManager()
-
-
-
-
