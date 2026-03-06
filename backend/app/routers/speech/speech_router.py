@@ -6,12 +6,34 @@
 # 描述：语音识别路由定义
 
 from fastapi import APIRouter, UploadFile, File, WebSocket, BackgroundTasks, Depends
+from backend.app.utils.dependencies import get_current_active_user, get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.routers.speech.speech_func import speech_service
 from backend.app.utils.logger import logger
 from backend.app.utils.dependencies import get_current_active_user, get_db
 
+
+
+
+
 router = APIRouter()
+
+@router.post("/transcribe_file", summary="上传音频文件进行转写(QwenASR)")
+async def transcribe_file(
+    current_user = Depends(get_current_active_user),
+    file: UploadFile = File(...),
+):
+    """
+    使用QwenASR上传音频文件进行语音转文字
+
+    Args:
+        current_user (User): 当前用户
+        file (UploadFile): 音频文件
+
+    Returns:
+        dict: 转写结果
+    """
+    return await speech_service.transcribe_audio_file(user_id=str(current_user.id), file=file)
 
 @router.on_event("startup")
 async def startup_event():

@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     RRDSPPG_OCR_FILTER_REMOVE_PUNCTUATION: bool = False
     RRDSPPG_OCR_FILTER_REMOVE_BEFORE_KEYWORD: str = ""
     RRDSPPG_OCR_FILTER_REMOVE_AFTER_KEYWORD: str = ""
+
+    @property
+    def QWEN_ASR_MODEL_PATH(self) -> Path:
+        """Qwen-ASR 模型路径"""
+        return self.BASE_DIR / "app" / "models" / "Qwen" / "Qwen3-ASR-1___7B"
+
+    QWEN_ASR_DEVICE: str = "cuda:1"
     
     # RRDSPPG YOLO 配置
     RRDSPPG_YOLO_REQUIRED_CLASSES: str = ""
