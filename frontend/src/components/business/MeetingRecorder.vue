@@ -42,6 +42,7 @@ const showHistory = async () => {
 };
 
 const showFabOptions = ref(false);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 const handleStartRecording = () => {
   showFabOptions.value = false;
@@ -53,10 +54,31 @@ const handleStartRecording = () => {
 
 const handleStartUpload = () => {
   showFabOptions.value = false;
-  currentView.value = 'create';
-  nextTick(() => {
-    createViewRef.value?.triggerFileUpload();
-  });
+  // 直接触发文件选择框
+  fileInputRef.value?.click();
+};
+
+const handleFileSelect = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files[0]) {
+    // 保存文件引用
+    const selectedFile = input.files[0];
+    console.log('选择的文件:', selectedFile.name, selectedFile.size, selectedFile.type);
+    
+    // 切换到创建视图
+    currentView.value = 'create';
+    // 在视图切换后，先设置视图状态为recording，再上传文件
+    nextTick(() => {
+      createViewRef.value?.setViewState('recording');
+      createViewRef.value?.uploadAudioFile(selectedFile, (text) => {
+        console.log('转写完成，文本:', text);
+        // 转写完成后切换到finished视图
+        createViewRef.value?.setViewState('finished');
+      });
+    });
+    // 清空input，允许再次选择同一文件
+    input.value = '';
+  }
 };
 
 const showDetail = async (id: string) => {
@@ -160,10 +182,13 @@ onMounted(() => {
               </div>
             </div>
           </transition>
-          <button class="fab-create-new" :class="{ 'rotated': showFabOptions }" @click="showFabOptions = !showFabOptions">
+          <button class="fab-create-new" :class="{'rotated': showFabOptions}" @click="showFabOptions = !showFabOptions">
             <span v-html="icons.plus"></span>
           </button>
         </div>
+        
+        <!-- 文件输入框 -->
+        <input type="file" ref="fileInputRef" @change="handleFileSelect" accept="audio/*" style="display: none" />
       </div>
     </div>
   </div>

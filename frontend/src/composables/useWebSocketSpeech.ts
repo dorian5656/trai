@@ -264,6 +264,10 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
   const uploadAudioFile = async (file: File, onComplete?: (text: string) => void) => {
     if (isProcessingFile.value) return;
     
+    // 调试日志
+    console.log('uploadAudioFile 被调用:', file);
+    console.log('文件信息:', file.name, file.size, file.type);
+    
     try {
       isProcessingFile.value = true;
       resultText.value = '';
@@ -271,14 +275,21 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
 
       const formData = new FormData();
       formData.append('file', file);
+      
+      // 验证 FormData
+      console.log('FormData 内容:');
+      for (const [key, value] of formData.entries()) {
+        console.log(key, value);
+      }
 
       // 调用后端 HTTP 接口 (自动鉴权)
+      // 注意：Content-Type 由请求拦截器自动处理，不需要手动设置
       const res: any = await request.post('speech/transcribe', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
         timeout: 100000 // 长超时
       });
+
+      // 调试日志
+      console.log('后端返回的原始数据:', res);
 
       // request.ts 已经解包了 data
       // 后端返回结构: { text: "...", url: "...", id: "..." }

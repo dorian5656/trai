@@ -30,6 +30,8 @@ export class ErrorHandler {
           return this.createError(ErrorType.NOT_FOUND, '请求的资源不存在', error, status);
         case 400:
           return this.createError(ErrorType.BAD_REQUEST, '请求参数错误', error, status);
+        case 422:
+          return this.createError(ErrorType.VALIDATION_ERROR, '请求参数校验失败，请检查登录状态', error, status);
         case 500:
           return this.createError(ErrorType.SERVER_ERROR, '服务器内部错误', error, status);
         default:

@@ -114,6 +114,9 @@ const triggerFileUpload = () => {
 const handleFileSelect = (event: Event) => {
   const input = event.target as HTMLInputElement;
   if (input.files && input.files[0]) {
+    // 先切换到创建视图
+    currentView.value = 'recording';
+    // 然后上传音频文件
     uploadAudioFile(input.files[0], (text) => {
       resultText.value = text;
       currentView.value = 'finished';
@@ -178,10 +181,17 @@ const saveAndFinish = async () => {
   }
 };
 
+// 设置视图状态的方法（供父组件调用）
+const setViewState = (view: 'initial' | 'recording' | 'finished') => {
+  currentView.value = view;
+};
+
 // 暴露给父组件的方法
 defineExpose({
   startMicrophone: handleStartRecording, // 暴露新的启动函数
-  triggerFileUpload
+  triggerFileUpload,
+  uploadAudioFile,
+  setViewState
 });
 </script>
 
