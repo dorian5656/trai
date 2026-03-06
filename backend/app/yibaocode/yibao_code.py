@@ -1094,6 +1094,7 @@ class MedicalConsumableImporter:
             # {"company": "河南驼人鑫安医疗器械有限公司", "username": "xinangongsi123", "password": "xinan123"},
             # {"company": "河南驼人医疗用品有限公司", "username": "trylyp05", "password": "trylyp123456"},
             {"company": "河南驼人新辉医疗科技有限公司", "username": "TRXH453600", "password": "Aa123456"},
+            {"company": "河南驼人三瑞医疗器械有限公司", "username": "TUORENSANRUI", "password": "TRws8605321#"},
         ]
         
         total_accounts = len(accounts)
