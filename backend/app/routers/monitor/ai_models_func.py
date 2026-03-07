@@ -25,6 +25,11 @@ class ModelManager:
         """
         初始化：建表、扫描、同步
         """
+        # 0. 自动创建默认模型文件夹
+        target_dirs = ["Tongyi-MAI", "yolo", "iic"]
+        for d in target_dirs:
+            (cls.MODEL_BASE_DIR / d).mkdir(parents=True, exist_ok=True)
+
         # 1. 确保表存在 (现在由 DBInitializer 在启动时统一处理，这里仅作为保险或手动调用入口)
         # 实际生产中通常由 DBInitializer 统一初始化，这里可以跳过
         pass

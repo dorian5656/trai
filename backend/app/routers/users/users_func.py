@@ -49,18 +49,38 @@ class UserAudit(BaseModel):
     """
     用户审核请求模型
     """
-    username: str = Field(..., description="待审核用户名")
-    is_active: bool = Field(..., description="审核结果 (True:通过, False:拒绝/禁用)")
-    remark: Optional[str] = Field(None, description="审核备注")
+    username: str = Field(..., description="待审核用户名", examples=["A8888"])
+    is_active: bool = Field(..., description="审核结果 (True:通过, False:拒绝/禁用)", examples=[True])
+    remark: Optional[str] = Field(None, description="审核备注", examples=["Approved by admin"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "A8888",
+                "is_active": True,
+                "remark": "Approved"
+            }
+        }
+    }
 
 # 修改密码请求
 class PasswordChange(BaseModel):
     """
     修改密码请求模型
     """
-    old_password: str = Field(..., description="旧密码")
-    new_password: str = Field(..., min_length=6, description="新密码 (至少6位)")
-    reason: str = Field(..., min_length=1, description="修改密码原因")
+    old_password: str = Field(..., description="旧密码", examples=["oldpassword"])
+    new_password: str = Field(..., min_length=6, description="新密码 (至少6位)", examples=["newpassword"])
+    reason: str = Field(..., min_length=1, description="修改密码原因", examples=["Routine change"])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "old_password": "oldpassword",
+                "new_password": "newpassword",
+                "reason": "Routine change"
+            }
+        }
+    }
 
 class UsersFunc:
     """
@@ -83,14 +103,30 @@ class UsersFunc:
                 {"skip": skip, "limit": limit}
             )
             users = result.mappings().all()
-            return [UserResponse(**user) for user in users]
+            # 批量转换
+            user_list = []
+            for user in users:
+                u_dict = dict(user)
+                u_dict["id"] = str(u_dict["id"])
+                u_dict["created_at"] = str(u_dict["created_at"])
+                if "updated_at" in u_dict and u_dict["updated_at"]:
+                    u_dict["updated_at"] = str(u_dict["updated_at"])
+                user_list.append(UserResponse(**u_dict))
+            return user_list
 
     @staticmethod
     async def get_me(current_user: UserResponse) -> UserResponse:
         """
         获取当前用户信息
         """
-        return current_user
+        # 手动转换 UUID 和 datetime 为字符串
+        user_dict = dict(current_user)
+        user_dict["id"] = str(user_dict["id"])
+        user_dict["created_at"] = str(user_dict["created_at"])
+        if "updated_at" in user_dict and user_dict["updated_at"]:
+            user_dict["updated_at"] = str(user_dict["updated_at"])
+            
+        return UserResponse(**user_dict)
 
     @staticmethod
     async def audit_user(audit_data: UserAudit):

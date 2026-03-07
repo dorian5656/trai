@@ -133,7 +133,8 @@ class DifyApp:
         last_id: Optional[str] = None,
         limit: int = 20,
         sort_by: str = "-updated_at",
-        app_name: str = "guanwang"
+        app_name: str = "guanwang",
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         获取会话列表
@@ -148,6 +149,94 @@ class DifyApp:
             params["last_id"] = last_id
             
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, headers=DifyApp._get_headers(app_name))
+            response = await client.get(url, params=params, headers=DifyApp._get_headers(app_name, api_key))
             response.raise_for_status()
             return response.json()
+
+    @staticmethod
+    async def get_conversation_messages(
+        conversation_id: str,
+        user: str,
+        first_id: Optional[str] = None,
+        limit: int = 20,
+        app_name: str = "guanwang",
+        api_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        获取会话历史消息
+        
+        :param conversation_id: 会话 ID
+        :param user: 用户标识
+        :param first_id: 当前页第一条记录的 ID (游标)，默认 null
+        :param limit: 返回条数，默认 20
+        """
+        url = f"{DifyApp._get_base_url()}/messages"
+        params = {
+            "conversation_id": conversation_id,
+            "user": user,
+            "limit": limit
+        }
+        if first_id:
+            params["first_id"] = first_id
+            
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=DifyApp._get_headers(app_name, api_key))
+            response.raise_for_status()
+            return response.json()
+
+    @staticmethod
+    async def rename_conversation(
+        conversation_id: str,
+        user: str,
+        name: Optional[str] = None,
+        auto_generate: bool = False,
+        app_name: str = "guanwang",
+        api_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        会话重命名
+        
+        :param conversation_id: 会话 ID
+        :param user: 用户标识
+        :param name: 新名称 (auto_generate=False 时必填)
+        :param auto_generate: 是否自动生成标题
+        """
+        url = f"{DifyApp._get_base_url()}/conversations/{conversation_id}/name"
+        payload = {
+            "user": user,
+            "auto_generate": auto_generate
+        }
+        if name:
+            payload["name"] = name
+            
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=DifyApp._get_headers(app_name, api_key))
+            response.raise_for_status()
+            return response.json()
+
+    @staticmethod
+    async def delete_conversation(
+        conversation_id: str,
+        user: str,
+        app_name: str = "guanwang",
+        api_key: Optional[str] = None
+    ) -> bool:
+        """
+        删除会话
+        
+        :param conversation_id: 会话 ID
+        :param user: 用户标识
+        :return: 是否成功
+        """
+        url = f"{DifyApp._get_base_url()}/conversations/{conversation_id}"
+        payload = {"user": user}
+        
+        async with httpx.AsyncClient() as client:
+            # DELETE 请求带 body 需要使用 content 或 json 参数? 
+            # httpx.delete 不直接支持 json 参数，需使用 request 或 build_request
+            # 或者部分客户端支持。Dify 文档说请求体是 json。
+            # httpx.delete(url, ...) 确实没有 json 参数。
+            # 使用 client.request("DELETE", url, json=payload, ...)
+            response = await client.request("DELETE", url, json=payload, headers=DifyApp._get_headers(app_name, api_key))
+            response.raise_for_status()
+            return True
