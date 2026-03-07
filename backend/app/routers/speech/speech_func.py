@@ -193,10 +193,8 @@ class SpeechManager:
 
 
         async def handle_error(err):
-            """处理错误并关闭连接"""
+            """处理错误，记录日志但不主动关闭连接（由 finally 统一处理）"""
             logger.error(f"讯飞客户端报错: {err}")
-            if websocket.client_state == WebSocketState.CONNECTED:
-                await websocket.close(code=1011, reason=err)
 
         iflytek_client = IFlytekASRClient(
             on_result_callback=lambda res: asyncio.create_task(forward_result_to_client(res)),
@@ -208,18 +206,66 @@ class SpeechManager:
             await websocket.close(code=1011, reason="无法连接到讯飞服务")
             return
 
+        is_paused = False
+        silence_task = None
+        silence_audio = b'\x00' * 1280
+
+        async def send_silence_periodically():
+            """暂停期间定期发送静音音频，维持与讯飞的连接"""
+            while is_paused and iflytek_client._is_connected:
+                try:
+                    await iflytek_client.send_audio(silence_audio)
+                    await asyncio.sleep(0.04)
+                except Exception as e:
+                    logger.error(f"发送静音音频失败: {e}")
+                    break
+
+        last_receive_time = asyncio.get_event_loop().time()
+        
         try:
             while True:
-                message = await websocket.receive()
+                try:
+                    message = await asyncio.wait_for(
+                        websocket.receive(),
+                        timeout=14.0
+                    )
+                    last_receive_time = asyncio.get_event_loop().time()
+                except asyncio.TimeoutError:
+                    # 14 秒未收到数据，发送静音维持连接
+                    logger.debug("⚠️ [Speech] 前端超过 14 秒未发送音频，发送静音数据维持连接")
+                    await iflytek_client.send_audio(silence_audio)
+                    continue
+                    
                 if "bytes" in message:
-                    await iflytek_client.send_audio(message["bytes"])
-                elif "text" in message and json.loads(message["text"]).get("is_speaking") is False:
-                    break
+                    if not is_paused:
+                        await iflytek_client.send_audio(message["bytes"])
+                elif "text" in message:
+                    text_data = json.loads(message["text"])
+                    action = text_data.get("action")
+                    
+                    if action == "pause":
+                        is_paused = True
+                        silence_task = asyncio.create_task(send_silence_periodically())
+                        logger.info("⏸️ [Speech] 录音已暂停，开始发送静音维持连接")
+                    elif action == "resume":
+                        is_paused = False
+                        if silence_task:
+                            silence_task.cancel()
+                            try:
+                                await silence_task
+                            except asyncio.CancelledError:
+                                pass
+                            silence_task = None
+                        logger.info("▶️ [Speech] 录音已恢复")
+                    elif text_data.get("is_speaking") is False:
+                        break
         except WebSocketDisconnect:
             logger.info("🔌 [Speech] 前端 WebSocket 连接断开")
         except Exception as e:
             logger.error(f"❌ [Speech] WebSocket 代理异常: {e}")
         finally:
+            if silence_task:
+                silence_task.cancel()
             await iflytek_client.close()
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.close()

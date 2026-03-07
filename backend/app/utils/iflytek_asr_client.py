@@ -164,17 +164,15 @@ class IFlytekASRClient:
         """
         关闭与讯飞的连接。
         """
-        if not self._is_connected or not self.websocket:
+        if not self.websocket:
             return
 
         logger.info("正在关闭与讯飞的连接...")
         try:
-            # 发送结束帧
-            if self._session_id:
+            if self._is_connected and self._session_id:
                 await self.websocket.send(json.dumps({"end": True, "sessionId": self._session_id}))
             
-            # 等待服务器关闭连接
-            if self._receiver_task:
+            if self._receiver_task and not self._receiver_task.done():
                 await asyncio.wait_for(self._receiver_task, timeout=5.0)
 
         except asyncio.TimeoutError:
@@ -183,7 +181,10 @@ class IFlytekASRClient:
             logger.error(f"关闭讯飞连接时出错: {e}")
         finally:
             if self.websocket:
-                await self.websocket.close()
+                try:
+                    await self.websocket.close()
+                except Exception:
+                    pass
             self._is_connected = False
             logger.info("与讯飞的连接已关闭。")
 
