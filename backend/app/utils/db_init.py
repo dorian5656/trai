@@ -975,6 +975,45 @@ class DBInitializer:
         except Exception as e:
             logger.error(f"初始化 {table_name} 失败: {e}")
             raise e
+    
+    async def init_meetings_table(self, conn):
+        """
+        初始化会议记录表 (meetings)
+        """
+        table_name = "meetings"
+        ddl = """
+        CREATE TABLE IF NOT EXISTS meetings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(50) NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            text TEXT,
+            summary TEXT,
+            is_deleted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai'),
+            updated_at TIMESTAMP(0) NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Shanghai')
+        );
+        COMMENT ON TABLE meetings IS '会议记录表';
+        COMMENT ON COLUMN meetings.id IS '主键ID';
+        COMMENT ON COLUMN meetings.user_id IS '用户ID';
+        COMMENT ON COLUMN meetings.title IS '会议标题';
+        COMMENT ON COLUMN meetings.text IS '会议逐字稿';
+        COMMENT ON COLUMN meetings.summary IS '会议纪要';
+        COMMENT ON COLUMN meetings.is_deleted IS '是否删除';
+        COMMENT ON COLUMN meetings.created_at IS '创建时间';
+        COMMENT ON COLUMN meetings.updated_at IS '更新时间';
+        """
+        
+        try:
+            await conn.execute(ddl)
+            # 索引
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_meetings_user_id ON meetings(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_meetings_created_at ON meetings(created_at DESC)")
+            
+            logger.success(f"表 {table_name} 初始化成功")
+            await self._update_table_registry(conn, table_name, "会议记录表")
+        except Exception as e:
+            logger.error(f"初始化 {table_name} 失败: {e}")
+            raise e
 
 
 
@@ -1134,6 +1173,8 @@ class DBInitializer:
             # 6.5 初始化 Dify 应用表
             await self.init_dify_apps_table(conn)
 
+            # 6.6 初始化会议记录表
+            await self.init_meetings_table(conn)
 
             
             # 7. 初始化超级管理员
