@@ -7,3 +7,4 @@ export * from './user';
 export * from './contact';
 export * from './customer';
 export * from './rrdsppg';
+export * from './speech';

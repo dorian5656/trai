@@ -17,6 +17,8 @@ export const ErrorType = {
   NOT_FOUND: 'NOT_FOUND',
   /** 请求参数错误（400） */
   BAD_REQUEST: 'BAD_REQUEST',
+  /** 校验错误（422） */
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
   /** 服务器内部错误（500） */
   SERVER_ERROR: 'SERVER_ERROR',
   /** 业务逻辑错误 */

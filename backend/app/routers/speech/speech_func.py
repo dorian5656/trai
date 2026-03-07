@@ -143,9 +143,64 @@ class SpeechManager:
         """
         await websocket.accept()
         logger.info(f"🔌 [Speech] WebSocket 连接建立: {websocket.client}")
+
+        # 用于追踪当前说话人
+        current_speaker_id = 0
+
+        async def forward_result_to_client(res):
+            """解析讯飞结果，处理说话人角色，并转发给前端"""
+            nonlocal current_speaker_id
+            try:
+                logger.info(f"🎤 [讯飞原始结果]: {res}")
+                st = res.get("cn", {}).get("st", {})
+                if not st:
+                    return
+
+                text_parts = []
+                new_speaker_id = current_speaker_id
+                speaker_has_changed_in_this_message = False
+
+                # 预扫描，检查并更新说话人ID
+                for rt_item in st.get("rt", []):
+                    for ws_item in rt_item.get("ws", []):
+                        for cw_item in ws_item.get("cw", []):
+                            text_parts.append(cw_item.get("w", ""))
+                            rl = int(cw_item.get("rl", 0))
+                            if rl > 0 and rl != new_speaker_id:
+                                new_speaker_id = rl
+                                speaker_has_changed_in_this_message = True
+                
+                combined_text = "".join(text_parts)
+
+                # 只有在 speaker 确实改变时才更新全局状态
+                if speaker_has_changed_in_this_message:
+                    current_speaker_id = new_speaker_id
+
+                # 构建发送给前端的新数据结构
+                new_payload = {
+                    "type": st.get("type"), # '0' or '1'
+                    "text": combined_text,
+                    "speaker": new_speaker_id, # 使用本次消息中最新的 speaker_id
+                    "speaker_changed": speaker_has_changed_in_this_message
+                }
+
+                logger.info(f"🎤 [讯飞结果-处理后]: {json.dumps(new_payload, ensure_ascii=False)}")
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    await websocket.send_text(json.dumps(new_payload))
+
+            except Exception as e:
+                logger.error(f"解析并转发讯飞结果时出错: {e}", exc_info=True)
+
+
+        async def handle_error(err):
+            """处理错误并关闭连接"""
+            logger.error(f"讯飞客户端报错: {err}")
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.close(code=1011, reason=err)
+
         iflytek_client = IFlytekASRClient(
-            on_result_callback=lambda res: asyncio.create_task(websocket.send_text(json.dumps(res))),
-            on_error_callback=lambda err: asyncio.create_task(websocket.close(code=1011, reason=err))
+            on_result_callback=lambda res: asyncio.create_task(forward_result_to_client(res)),
+            on_error_callback=lambda err: asyncio.create_task(handle_error(err))
         )
         await iflytek_client.connect()
 
@@ -169,6 +224,113 @@ class SpeechManager:
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.close()
             logger.info("讯飞代理会话结束。")
+
+    async def get_transcriptions(self, user_id, db, page=1, size=10, start_time=None, end_time=None, status=None):
+        """
+        获取语音识别结果列表
+        """
+        try:
+            from sqlalchemy import select, and_, or_
+            from sqlalchemy.sql import func
+
+            # 构建查询
+            query = select(SpeechLog).where(SpeechLog.user_id == user_id)
+
+            # 添加时间范围过滤
+            if start_time:
+                query = query.where(SpeechLog.created_at >= start_time)
+            if end_time:
+                query = query.where(SpeechLog.created_at <= end_time)
+
+            # 添加状态过滤
+            if status:
+                query = query.where(SpeechLog.status == status)
+
+            # 计算总数
+            count_query = select(func.count()).select_from(query.subquery())
+            total = await db.scalar(count_query)
+
+            # 分页
+            offset = (page - 1) * size
+            query = query.order_by(SpeechLog.created_at.desc()).offset(offset).limit(size)
+
+            # 执行查询
+            result = await db.execute(query)
+            logs = result.scalars().all()
+
+            # 构建响应数据
+            items = []
+            for log in logs:
+                items.append({
+                    "id": str(log.id),
+                    "audio_url": log.audio_url,
+                    "recognition_text": log.recognition_text,
+                    "duration": log.duration,
+                    "model_version": log.model_version,
+                    "status": log.status,
+                    "error_msg": log.error_msg,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                    "updated_at": log.updated_at.isoformat() if log.updated_at else None
+                })
+
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "items": items,
+                    "page": page,
+                    "size": size,
+                    "total": total
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"获取语音识别结果列表失败: {e}")
+            return {"code": 500, "msg": f"获取失败: {str(e)}"}
+
+    async def get_transcription(self, transcription_id, user_id, db):
+        """
+        获取单个语音识别结果详情
+        """
+        try:
+            from sqlalchemy import select, and_
+
+            # 构建查询
+            query = select(SpeechLog).where(
+                and_(
+                    SpeechLog.id == transcription_id,
+                    SpeechLog.user_id == user_id
+                )
+            )
+
+            # 执行查询
+            result = await db.execute(query)
+            log = result.scalar_one_or_none()
+
+            if not log:
+                return {"code": 404, "msg": "识别记录不存在"}
+
+            # 构建响应数据
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "id": str(log.id),
+                    "audio_url": log.audio_url,
+                    "s3_key": log.s3_key,
+                    "recognition_text": log.recognition_text,
+                    "duration": log.duration,
+                    "model_version": log.model_version,
+                    "status": log.status,
+                    "error_msg": log.error_msg,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                    "updated_at": log.updated_at.isoformat() if log.updated_at else None
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"获取语音识别结果详情失败: {e}")
+            return {"code": 500, "msg": f"获取失败: {str(e)}"}
 
 # 全局单例
 speech_service = SpeechManager()

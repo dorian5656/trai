@@ -5,12 +5,13 @@
 # 日期：2026-01-30
 # 描述：语音识别路由定义
 
-from fastapi import APIRouter, UploadFile, File, WebSocket, BackgroundTasks, Depends
+from fastapi import APIRouter, UploadFile, File, WebSocket, BackgroundTasks, Depends, Query
 from backend.app.utils.dependencies import get_current_active_user, get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.routers.speech.speech_func import speech_service
 from backend.app.utils.logger import logger
 from backend.app.utils.dependencies import get_current_active_user, get_db
+from datetime import datetime
 
 
 
@@ -104,3 +105,61 @@ async def health_check():
         "model_loaded": is_loaded,
         "model_path": str(speech_service.BASE_MODEL_DIR)
     }
+
+@router.get("/transcriptions", summary="获取语音识别结果列表")
+async def get_transcriptions(
+    current_user = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(10, ge=1, le=100, description="每页数量"),
+    start_time: datetime = Query(None, description="开始时间"),
+    end_time: datetime = Query(None, description="结束时间"),
+    status: str = Query(None, description="状态过滤")
+):
+    """
+    获取语音识别结果列表
+
+    Args:
+        current_user (User): 当前用户
+        db (AsyncSession): 数据库会话
+        page (int): 页码，默认1
+        size (int): 每页数量，默认10
+        start_time (datetime): 开始时间
+        end_time (datetime): 结束时间
+        status (str): 状态过滤
+
+    Returns:
+        dict: 识别结果列表和分页信息
+    """
+    return await speech_service.get_transcriptions(
+        user_id=str(current_user.id),
+        db=db,
+        page=page,
+        size=size,
+        start_time=start_time,
+        end_time=end_time,
+        status=status
+    )
+
+@router.get("/transcriptions/{transcription_id}", summary="获取单个语音识别结果")
+async def get_transcription(
+    transcription_id: str,
+    current_user = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取单个语音识别结果详情
+
+    Args:
+        transcription_id (str): 识别记录ID
+        current_user (User): 当前用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        dict: 识别结果详情
+    """
+    return await speech_service.get_transcription(
+        transcription_id=transcription_id,
+        user_id=str(current_user.id),
+        db=db
+    )

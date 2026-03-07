@@ -23,9 +23,9 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
 
   let ws: WebSocket | null = null;
   let audioContext: AudioContext | null = null;
-  let processor: ScriptProcessorNode | null = null;
+  let workletNode: AudioWorkletNode | null = null;
   let stream: MediaStream | null = null;
-  let source: MediaStreamAudioSourceNode | null = null; // 提升 source 作用域
+  let source: MediaStreamAudioSourceNode | null = null;
   let heartbeatInterval: any = null; // 心跳定时器
 
   // 初始化 WebSocket
@@ -57,11 +57,27 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            // 后端发来的是完整稿件，直接覆盖即可
-            if (data.text !== undefined) {
-              resultText.value = data.text;
+
+            if (data && typeof data.speaker !== 'undefined') {
+              const { type, text, speaker, speaker_changed } = data;
+
+              if (type === '1') {
+                interimText.value = text;
+              } else if (type === '0') {
+                let prefix = '';
+                
+                if (speaker_changed) {
+                  // 仅当说话人切换时，才换行并添加前缀
+                  prefix = (resultText.value === '') ? `发言人 ${speaker}: ` : `\n发言人 ${speaker}: `;
+                }
+                
+                resultText.value += prefix + text;
+                interimText.value = '';
+              }
             }
-          } catch {}
+          } catch (e) {
+            console.error('解析消息失败:', e);
+          }
         };
 
         ws.onerror = (e) => {
@@ -107,38 +123,6 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
     isConnected.value = false;
   };
 
-  // 重采样并转换 float32 -> int16
-  const downsampleBuffer = (buffer: Float32Array, sampleRate: number, outSampleRate: number): Int16Array => {
-    if (outSampleRate === sampleRate) {
-      return convertFloat32ToInt16(buffer);
-    }
-    const compression = sampleRate / outSampleRate;
-    const length = buffer.length / compression;
-    const result = new Int16Array(length);
-    let index = 0;
-    let j = 0;
-    while (index < length) {
-      const temp = buffer[Math.floor(j)] ?? 0; // 简单的最近邻插值，更好的方法是线性插值或滤波
-      // floatTo16BitPCM
-      let s = Math.max(-1, Math.min(1, temp));
-      result[index] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      index++;
-      j += compression;
-    }
-    return result;
-  };
-
-  const convertFloat32ToInt16 = (buffer: Float32Array): Int16Array => {
-    let l = buffer.length;
-    let buf = new Int16Array(l);
-    while (l--) {
-      const value = buffer[l] ?? 0;
-      let s = Math.max(-1, Math.min(1, value));
-      buf[l] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return buf;
-  };
-
   // 开始麦克风录音
   const startMicrophone = async () => {
     try {
@@ -152,23 +136,27 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
 
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const source = audioContext.createMediaStreamSource(stream);
       
-      // 使用 ScriptProcessorNode (已被废弃但兼容性好) 或 AudioWorklet
-      // 这里使用 ScriptProcessorNode 简单实现
-      processor = audioContext.createScriptProcessor(4096, 1, 1);
+      // 加载 AudioWorklet 模块
+      try {
+        await audioContext.audioWorklet.addModule('/audio-processor.js');
+      } catch (e) {
+        console.error('加载 AudioWorklet 模块失败:', e);
+        ElMessage.error('加载音频处理模块失败，请刷新页面重试。');
+        throw e;
+      }
 
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      source = audioContext.createMediaStreamSource(stream);
+      workletNode = new AudioWorkletNode(audioContext, 'audio-processor');
 
-      processor.onaudioprocess = (e) => {
+      // 监听来自 worklet 的消息（处理后的音频数据）
+      workletNode.port.onmessage = (event) => {
         if (isPaused.value || !ws || ws.readyState !== WebSocket.OPEN) return;
-        
-        const inputData = e.inputBuffer.getChannelData(0);
-        // 重采样到 16000
-        const pcm16 = downsampleBuffer(inputData, audioContext!.sampleRate, 16000);
-        ws.send(pcm16.buffer);
+        // event.data is the ArrayBuffer of the Int16Array
+        ws.send(event.data);
       };
+      
+      source.connect(workletNode);
 
       isRecording.value = true;
       isPaused.value = false; // 开始时确保不是暂停状态
@@ -190,9 +178,6 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
   const pauseMicrophone = () => {
     if (!isRecording.value || isPaused.value) return;
     isPaused.value = true;
-    if (source && processor) {
-      source.disconnect(processor);
-    }
     // 发送暂停信令到后端
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ action: 'pause' }));
@@ -203,10 +188,6 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
   const resumeMicrophone = () => {
     if (!isRecording.value || !isPaused.value) return;
     isPaused.value = false;
-    if (source && processor && audioContext) {
-      source.connect(processor);
-      processor.connect(audioContext.destination); // Ensure connection to destination
-    }
     // 发送恢复信令到后端
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ action: 'resume' }));
@@ -215,29 +196,20 @@ export function useWebSocketSpeech(endpoint: string = '/speech/ws/transcribe') {
 
   // 停止麦克风录音
   const stopMicrophone = (onStop?: (finalText: string) => void) => {
-    if (source && processor) {
-      source.disconnect();
-    }
-    if (processor) {
-      processor.disconnect();
-      processor = null;
-    }
-    if (audioContext) {
-      audioContext.close();
-      audioContext = null;
-    }
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       stream = null;
     }
+    if (audioContext) {
+      audioContext.close().then(() => {
+        audioContext = null;
+      });
+    }
     source = null;
+    workletNode = null;
+
     isRecording.value = false;
     isPaused.value = false;
-    // 清除可能存在的心跳
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      heartbeatInterval = null;
-    }
     // 清除可能存在的心跳
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
