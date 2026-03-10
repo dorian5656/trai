@@ -58,6 +58,9 @@ class HardwareMonitor:
                 # 温度
                 temperature = gpu.find('temperature')
                 gpu_temp = temperature.find('gpu_temp').text if temperature is not None else "N/A"
+                # 修复温度格式问题: 添加 ° 符号
+                if gpu_temp != "N/A" and "°" not in gpu_temp:
+                    gpu_temp = gpu_temp.replace("C", "°C")
                 
                 gpus.append({
                     "product_name": product_name,

@@ -208,10 +208,9 @@ class WeComService:
                         )
                     else:
                         # 插入
-                        # 默认密码 hash (假设默认密码 123456)
-                        # 这里直接存个占位符，因为企业微信登录通常走 OAuth，不走密码
-                        # 但为了满足非空约束
-                        default_pwd_hash = "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWrn3ILAWO.opgn7jo7q.0s/0C6X.G" # 123456
+                        # 默认密码 hash (使用 get_password_hash 生成)
+                        from backend.app.utils.security import get_password_hash
+                        default_pwd_hash = get_password_hash('123456')
                         
                         await conn.execute(
                             text("""

@@ -32,7 +32,7 @@ class AIUtils:
         found_models = []
         # 遍历所有子目录
         for root, dirs, files in os.walk(models_dir):
-            # 检查关键配置文件
+            # 1. 检查 Transformer/Diffuser 模型 (目录即模型)
             if "model_index.json" in files or "config.json" in files:
                 # 排除根目录
                 if Path(root) == models_dir:
@@ -44,11 +44,20 @@ class AIUtils:
                 model_name = str(rel_path).replace("\\", "/")
                 found_models.append(model_name)
                 
-                # 已找到模型，不再遍历其子目录 (假设模型不嵌套)
-                # 修改 dirs 列表以停止遍历子目录
-                # 但要注意有些模型结构是嵌套的，比如 Qwen/Tongyi-MAI/Z-Image-Turbo
-                # 如果当前目录是模型根目录，通常不需要再深入，除非是包含子组件
-                # 简单起见，我们记录下来即可，不做复杂的剪枝
+                # 已找到模型，不再遍历其子目录 (简单剪枝)
+                # dirs.clear() # 暂不清除，允许嵌套
+                continue
+
+            # 2. 检查单文件模型 (如 YOLO .pt, ONNX .onnx)
+            for file in files:
+                if file.lower().endswith((".pt", ".pth", ".onnx", ".bin")):
+                    # 排除 model_index.json 同级的一些权重文件 (避免重复)
+                    # 但由于上面有 continue，这里执行到的通常是不含 config.json 的目录
+                    
+                    rel_path = Path(root) / file
+                    rel_path_from_models = rel_path.relative_to(models_dir)
+                    model_name = str(rel_path_from_models).replace("\\", "/")
+                    found_models.append(model_name)
                 
         return sorted(found_models)
 

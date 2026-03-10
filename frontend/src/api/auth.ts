@@ -48,3 +48,11 @@ export interface RegisterParams {
 export const register = (data: RegisterParams) => {
   return request.post<any, any>('/auth/register', data);
 };
+
+/**
+ * 企业微信静默登录
+ * @param code OAuth2 code
+ */
+export const wecomLogin = (code: string) => {
+  return request.post<any, LoginResult>('/auth/wecom-login', { code });
+};
