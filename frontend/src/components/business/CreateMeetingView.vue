@@ -11,7 +11,12 @@ import { icons } from '@/assets/icons';
 import { ElMessage } from 'element-plus';
 import { renderMarkdown } from '@/utils/markdown';
 import { streamChat } from '@/utils/stream';
-import { createMeeting } from '@/api/meeting';
+import { createMeeting, addMeetingRecord, type Meeting } from '@/api/meeting';
+import { useUserStore } from '@/stores/user';
+
+const userStore = useUserStore();
+
+
 
 // --- 组件状态定义 ---
 const emit = defineEmits(['saved', 'back']);
@@ -77,7 +82,7 @@ onUnmounted(() => {
 });
 
 // --- 视图状态和交互处理 ---
-const currentView = ref('initial'); // 'initial', 'recording', 'finished'
+const currentView = ref('initial'); // 'initial', 'recording', 'processing', 'finished'
 
 const handleStartRecording = async () => {
   await startMicrophone();
@@ -165,14 +170,63 @@ const saveAndFinish = async () => {
     ElMessage.warning('没有可保存的内容');
     return;
   }
+
+
+
   isLoading.value = true;
   try {
+    // 1. 创建一个会议外壳
     const newMeeting = await createMeeting({
-      title: resultText.value.substring(0, 20) + '...',
-      text: resultText.value,
-      summary: summaryText.value
-    });
-    ElMessage.success('保存成功');
+      title: `会议_${new Date().toLocaleString()}`,
+      start_time: new Date().toISOString()
+    }) as unknown as Meeting;
+    ElMessage.success('会议创建成功，正在保存记录...');
+
+    // 2. 解析逐字稿并分条添加记录
+    if (newMeeting && newMeeting.id) {
+      const currentUser = userStore.userInfo;
+      if (!currentUser) {
+        ElMessage.error('无法获取用户信息，请重新登录后再试');
+        return;
+      }
+
+      // 1. 预处理文本，为开头没有发言人的内容加上默认发言人
+      let processedText = resultText.value.trim();
+      if (!processedText) {
+        ElMessage.warning('没有实际内容可保存。');
+        return;
+      }
+      // 使用更通用的正则表达式匹配 "任意字符:" 的模式
+      if (!processedText.match(/^[\s\S]+?:\s/)) {
+        processedText = `发言人 1: ${processedText}`;
+      }
+
+      // 2. 将文本分割成 "发言人: 内容" 的段落
+      // 正则表达式：匹配一个换行符，且该换行符后面紧跟着 "任意字符:" 的模式
+      const segments = processedText.split(/\n(?=[\s\S]+?:\s)/g);
+
+      // 3. 遍历并保存每个段落
+      for (const segment of segments) {
+        const separatorIndex = segment.indexOf(':');
+        if (separatorIndex !== -1) {
+          const speakerName = segment.substring(0, separatorIndex).trim();
+          const content = segment.substring(separatorIndex + 1).trim();
+
+          if (content) {
+            await addMeetingRecord({
+              meeting_id: newMeeting.id,
+              user_id: currentUser.username,
+              speaker_name: speakerName,
+              content: content,
+              record_time: new Date().toISOString(), // 注意：时间戳是保存时间，而非实际发言时间
+            });
+          }
+        }
+      }
+
+      ElMessage.success('会议记录保存成功');
+    }
+
     emit('saved', newMeeting.id);
   } catch (e) {
     ElMessage.error('保存失败');
@@ -182,7 +236,7 @@ const saveAndFinish = async () => {
 };
 
 // 设置视图状态的方法（供父组件调用）
-const setViewState = (view: 'initial' | 'recording' | 'finished') => {
+const setViewState = (view: 'initial' | 'recording' | 'processing' | 'finished') => {
   currentView.value = view;
 };
 
@@ -213,8 +267,8 @@ defineExpose({
         <p>{{ resultText }}</p>
       </div>
       
-      <!-- 底部控制栏 -->
-      <div class="footer-controls">
+      <!-- 底部控制栏 (仅在录音时显示) -->
+      <div v-if="currentView === 'recording'" class="footer-controls">
         <div class="timer">
           <span class="status-dot" :class="{ 'paused': isPaused }"></span>
           {{ formattedTime }}
@@ -230,8 +284,14 @@ defineExpose({
         </div>
       </div>
     </div>
-    
-    <!-- 3. 完成后的操作 (暂时放在这里，后续可以集成到 finished 视图中) -->
+
+    <!-- 3. 上传处理中视图 -->
+    <div v-if="currentView === 'processing'" class="processing-view">
+      <span class="loading-spinner"></span>
+      <p>正在识别音频，请稍候...</p>
+    </div>
+
+    <!-- 4. 完成后的操作 -->
     <div v-if="currentView === 'finished'" class="finished-actions">
         <button class="pill-btn" @click="emit('back')">返回</button>
         <button class="pill-btn primary" @click="saveAndFinish" :disabled="!resultText">保存</button>
@@ -290,6 +350,22 @@ defineExpose({
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 上传处理中视图 */
+.processing-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1.5rem;
+  color: #4e5969;
+}
+.processing-view .loading-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-width: 4px;
 }
 .transcription-panel {
   flex: 1;
