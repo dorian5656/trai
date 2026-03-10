@@ -5,25 +5,48 @@
 描述：会议记录组件 (多视图弹窗版)
 -->
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, computed, watch } from 'vue';
+import { MoreFilled } from '@element-plus/icons-vue';
 import { icons } from '@/assets/icons';
-import { ElMessage } from 'element-plus';
-import { getMeetingHistory, getMeetingDetail, type Meeting } from '@/api/meeting';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { getMeetingList, getMeetingDetail, updateMeetingRecord, deleteMeeting, updateMeeting, type Meeting, type MeetingRecord } from '@/api/meeting';
 import CreateMeetingView from './CreateMeetingView.vue';
 
 // --- 组件状态 ---
 const emit = defineEmits(['close']);
 const currentView = ref('history'); // 'history': 历史记录, 'create': 创建, 'detail': 详情
-const selectedMeetingId = ref<string | null>(null);
 const isLoading = ref(false);
 const createViewRef = ref<InstanceType<typeof CreateMeetingView> | null>(null);
-
 
 // --- 历史视图状态 ---
 const historyList = ref<Meeting[]>([]);
 
 // --- 详情视图状态 ---
 const meetingDetail = ref<Meeting | null>(null);
+const editingRecordId = ref<number | null>(null);
+const editingContent = ref('');
+const editBubbleRef = ref<HTMLElement | null>(null);
+
+// 将发言记录按发言人分组
+const groupedRecords = computed(() => {
+  if (!meetingDetail.value || !meetingDetail.value.records) return [];
+
+  const groups: { speaker_name: string; records: MeetingRecord[] }[] = [];
+  let currentGroup: { speaker_name: string; records: MeetingRecord[] } | null = null;
+
+  for (const record of meetingDetail.value.records) {
+    if (!currentGroup || currentGroup.speaker_name !== record.speaker_name) {
+      currentGroup = {
+        speaker_name: record.speaker_name,
+        records: [record],
+      };
+      groups.push(currentGroup);
+    } else {
+      currentGroup.records.push(record);
+    }
+  }
+  return groups;
+});
 
 // --- 函数 ---
 
@@ -31,8 +54,8 @@ const meetingDetail = ref<Meeting | null>(null);
 const showHistory = async () => {
   isLoading.value = true;
   try {
-    const res = await getMeetingHistory();
-    historyList.value = res.items;
+    const res = await getMeetingList({}) as unknown as { items: Meeting[]; total: number; page: number; size: number };
+    historyList.value = res?.items || []; // 确保 res.items 存在
     currentView.value = 'history';
   } catch (e) {
     ElMessage.error('加载历史记录失败');
@@ -54,45 +77,133 @@ const handleStartRecording = () => {
 
 const handleStartUpload = () => {
   showFabOptions.value = false;
-  // 直接触发文件选择框
   fileInputRef.value?.click();
 };
 
 const handleFileSelect = (event: Event) => {
   const input = event.target as HTMLInputElement;
   if (input.files && input.files[0]) {
-    // 保存文件引用
     const selectedFile = input.files[0];
-    console.log('选择的文件:', selectedFile.name, selectedFile.size, selectedFile.type);
-    
-    // 切换到创建视图
     currentView.value = 'create';
-    // 在视图切换后，先设置视图状态为recording，再上传文件
     nextTick(() => {
-      createViewRef.value?.setViewState('recording');
+      createViewRef.value?.setViewState('processing');
       createViewRef.value?.uploadAudioFile(selectedFile, (text) => {
-        console.log('转写完成，文本:', text);
-        // 转写完成后切换到finished视图
         createViewRef.value?.setViewState('finished');
       });
     });
-    // 清空input，允许再次选择同一文件
     input.value = '';
   }
 };
 
-const showDetail = async (id: string) => {
-  selectedMeetingId.value = id;
+const showDetail = async (id: number) => {
   isLoading.value = true;
   try {
-    meetingDetail.value = await getMeetingDetail(id);
-    currentView.value = 'detail';
+    const detail = await getMeetingDetail(id) as unknown as Meeting;
+    if (detail) {
+      meetingDetail.value = detail;
+      currentView.value = 'detail';
+    } else {
+      ElMessage.error('获取会议详情失败或数据格式错误');
+      meetingDetail.value = null; // 清空旧数据
+    }
   } catch (e) {
     ElMessage.error('加载详情失败');
   } finally {
     isLoading.value = false;
   }
 };
+
+// 编辑功能
+const startEditing = (record: MeetingRecord) => {
+  editingRecordId.value = record.id;
+  editingContent.value = record.content;
+};
+
+const cancelEditing = () => {
+  editingRecordId.value = null;
+  editingContent.value = '';
+};
+
+const saveChanges = async () => {
+  if (editingRecordId.value === null) return;
+
+  try {
+    await updateMeetingRecord({ record_id: editingRecordId.value, content: editingContent.value });
+    ElMessage.success('更新成功');
+    // 更新视图中的数据，以防用户后续不保存直接取消
+    if (meetingDetail.value && meetingDetail.value.records) {
+      const record = meetingDetail.value.records.find(r => r.id === editingRecordId.value);
+      if (record) {
+        record.content = editingContent.value;
+      }
+    }
+    cancelEditing(); // 保存成功后退出编辑模式
+  } catch (error) {
+    ElMessage.error('更新失败');
+  }
+};
+
+const handleRename = (meeting: Meeting) => {
+  ElMessageBox.prompt('请输入新的会议标题', '重命名', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputValue: meeting.meeting_title,
+    inputValidator: (val) => !!val,
+    inputErrorMessage: '标题不能为空',
+  }).then(async ({ value }) => {
+    try {
+      await updateMeeting({ meeting_id: meeting.id, title: value });
+      ElMessage.success('重命名成功');
+      meeting.meeting_title = value; // 直接更新视图
+    } catch (error) {
+      ElMessage.error('重命名失败');
+    }
+  }).catch(() => {});
+};
+
+const handleCommand = (command: string, meeting: Meeting) => {
+  if (command === 'rename') {
+    handleRename(meeting);
+  } else if (command === 'delete') {
+    handleDelete(meeting.id);
+  }
+};
+
+const handleDelete = (meetingId: number) => {
+  ElMessageBox.confirm('确定要删除这个会议记录吗？此操作不可恢复。', '确认删除', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(async () => {
+    try {
+      await deleteMeeting(meetingId);
+      ElMessage.success('删除成功');
+      historyList.value = historyList.value.filter(m => m.id !== meetingId);
+    } catch (error) {
+      ElMessage.error('删除失败');
+    }
+  }).catch(() => {});
+};
+
+// --- 点击外部退出编辑的逻辑 ---
+const handleOutsideClick = (event: MouseEvent) => {
+  if (editBubbleRef.value && !editBubbleRef.value.contains(event.target as Node)) {
+    cancelEditing();
+  }
+};
+
+watch(editingRecordId, (newId, oldId) => {
+  if (newId !== null && oldId === null) {
+    // 进入编辑模式时，添加监听器
+    nextTick(() => {
+      document.addEventListener('click', handleOutsideClick, true);
+    });
+  } else if (newId === null && oldId !== null) {
+    // 退出编辑模式时，移除监听器
+    document.removeEventListener('click', handleOutsideClick, true);
+  }
+});
+
 
 // 生命周期
 onMounted(() => {
@@ -133,9 +244,22 @@ onMounted(() => {
             <p>点击右下角“+”按钮，开始创建你的第一份会议纪要吧！</p>
           </div>
           <div v-else>
-            <div v-for="item in historyList" :key="item.id" class="history-item" @click="showDetail(item.id)">
-              <div class="item-title">{{ item.title }}</div>
-              <div class="item-date">{{ item.createdAt }}</div>
+            <div v-for="item in historyList" :key="item.id" class="history-item">
+              <div class="item-info" @click="showDetail(item.id)">
+                <div class="item-title">{{ item.meeting_title }}</div>
+                <div class="item-date">{{ new Date(item.start_time).toLocaleString() }}</div>
+              </div>
+              <div class="item-actions">
+                <el-dropdown trigger="click" @command="(command) => handleCommand(command, item)">
+                  <el-button type="info" :icon="MoreFilled" circle text />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided><span class="danger">删除</span></el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </div>
           </div>
         </div>
@@ -150,17 +274,38 @@ onMounted(() => {
 
         <!-- 3. 详情视图 -->
         <div v-if="currentView === 'detail' && meetingDetail" class="detail-view">
-           <h2>{{ meetingDetail.title }}</h2>
-          <small>创建于: {{ meetingDetail.createdAt }}</small>
-
-          <div v-if="meetingDetail.summary" class="detail-section">
-            <h3>会议纪要</h3>
-            <div class="summary-content" v-html="meetingDetail.summary"></div>
-          </div>
+           <h2>{{ meetingDetail.meeting_title }}</h2>
+          <small>会议时间: {{ new Date(meetingDetail.start_time).toLocaleString() }}</small>
 
           <div class="detail-section">
-            <h3>逐字稿</h3>
-            <p>{{ meetingDetail.text }}</p>
+            <h3>会议记录</h3>
+            <div v-if="!groupedRecords.length" class="empty-records">
+              <p>本次会议暂无发言记录。</p>
+            </div>
+            <div v-else class="records-list">
+              <div v-for="(group, index) in groupedRecords" :key="index" class="speaker-group">
+                <div class="speaker-info">
+                  <span class="avatar">{{ group.speaker_name.charAt(0) }}</span>
+                  <strong class="speaker-name">{{ group.speaker_name }}</strong>
+                </div>
+                <div class="speech-bubbles">
+                  <div v-for="record in group.records" :key="record.id" class="bubble" @click="startEditing(record)">
+                    <div v-if="editingRecordId === record.id" ref="editBubbleRef">
+                      <el-input
+                        v-model="editingContent"
+                        type="textarea"
+                        autosize
+                      />
+                      <div class="edit-actions">
+                        <el-button type="primary" size="small" @click.stop="saveChanges">保存</el-button>
+                        <el-button size="small" @click.stop="cancelEditing">取消</el-button>
+                      </div>
+                    </div>
+                    <p v-else>{{ record.content }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -195,6 +340,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
+* {
+  -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+}
 .meeting-recorder-overlay {
   position: fixed;
   top: 0;
@@ -290,9 +438,14 @@ onMounted(() => {
 }
 .history-item {
   background-color: #fff; padding: 1rem; border-radius: 0.5rem;
-  margin-bottom: 0.75rem; cursor: pointer; transition: all 0.2s;
+  margin-bottom: 0.75rem; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.item-info { flex: 1; cursor: pointer; }
 .history-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+.el-dropdown-menu__item--divided { border-top: 1px solid #f2f3f5; }
+.el-dropdown-menu__item:has(span.danger) { color: #f53f3f; }
 .item-title { font-weight: 600; color: #1d2129; margin-bottom: 0.25rem; }
 .item-date { font-size: 0.875rem; color: #86909c; }
 .fab-container {
@@ -407,6 +560,32 @@ onMounted(() => {
 .detail-section { margin-top: 1.5rem; }
 .detail-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
 .detail-section p { line-height: 1.7; color: #4e5969; white-space: pre-wrap; }
+
+/* 新增的编辑样式 */
+.records-list { display: flex; flex-direction: column; gap: 1.5rem; }
+.speaker-group { display: flex; gap: 1rem; }
+.speaker-info { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.avatar { width: 2.5rem; height: 2.5rem; border-radius: 50%; background-color: #e5e6eb; color: #4e5969; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+.speaker-name { font-size: 0.875rem; color: #86909c; max-width: 4rem; text-align: center; }
+.speech-bubbles { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.bubble {
+  background-color: #f7f8fa;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.bubble p { margin: 0; white-space: pre-wrap; line-height: 1.6; }
+.bubble:hover { background-color: #f2f3f5; }
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.empty-records { text-align: center; color: #86909c; padding: 4rem 0; }
+
 
 /* 通用样式 */
 .pill-btn { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1rem; border-radius: 999px; border: 1px solid #e5e6eb; background: #ffffff; font-size: 0.875rem; cursor: pointer; }
