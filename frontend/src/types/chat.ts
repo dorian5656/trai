@@ -18,3 +18,14 @@ export interface ChatSession {
   messages: Message[];
   updatedAt: number;
 }
+
+export interface DifyConversation {
+  id: string;
+  name: string;
+  inputs: Record<string, any>;
+  status: string;
+  introduction: string;
+  created_at: number;
+  updated_at: number;
+  is_temp?: boolean;
+}

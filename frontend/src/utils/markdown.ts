@@ -7,11 +7,11 @@ import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css'; // 选择一个代码高亮主题
 
-const md = new MarkdownIt({
+const md: any = new MarkdownIt({
   html: false, // 禁用 HTML 标签以防 XSS
   linkify: true, // 自动识别链接
   typographer: true,
-  highlight: function (str, lang) {
+  highlight: function (str: string, lang: string) {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
